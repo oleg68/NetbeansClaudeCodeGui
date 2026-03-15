@@ -1,0 +1,8 @@
+target/
+*.nbm
+*.class
+*.iml
+.idea/
+nbproject/private/
+build/
+dist/
