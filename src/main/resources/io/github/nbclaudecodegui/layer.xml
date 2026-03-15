@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.2//EN"
     "http://www.netbeans.org/dtds/filesystem-1_2.dtd">
-<filesystem/>
+<filesystem>
+    <folder name="OptionsDialog">
+        <file name="ClaudeCodeGUI.instance">
+            <attr methodvalue="org.netbeans.spi.options.OptionsCategory.createCategory"
+                  name="instanceCreate"/>
+            <attr name="controller"
+                  newvalue="io.github.nbclaudecodegui.settings.ClaudeCodeOptionsPanelController"/>
+            <attr bundlevalue="io.github.nbclaudecodegui.Bundle#OptionsCategory_Name_ClaudeCodeGUI"
+                  name="categoryName"/>
+            <attr name="iconBase"
+                  stringvalue="io/github/nbclaudecodegui/icons/claude-icon-32.png"/>
+            <attr bundlevalue="io.github.nbclaudecodegui.Bundle#OptionsCategory_Keywords_ClaudeCodeGUI"
+                  name="keywords"/>
+            <attr name="keywordsCategory" stringvalue="ClaudeCodeGUI"/>
+            <attr name="position" intvalue="1500"/>
+        </file>
+    </folder>
+</filesystem>
