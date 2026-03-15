@@ -9,22 +9,14 @@ import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 
 /**
- * Registers and manages the Claude Code top-level options page in
- * Tools → Options.
+ * Manages the Claude Code top-level options page in Tools → Options.
  *
- * <p>The page is identified by the category id {@code "ClaudeCodeGUI"} and
- * can be opened programmatically via:
+ * <p>Registered via {@code layer.xml} (OptionsDialog/ClaudeCodeGUI.instance).
+ * The page can be opened programmatically via:
  * <pre>{@code
  * OptionsDisplayer.getDefault().open("ClaudeCodeGUI");
  * }</pre>
  */
-@OptionsPanelController.TopLevelRegistration(
-        id = "ClaudeCodeGUI",
-        categoryName = "Claude Code",
-        iconBase = "io/github/nbclaudecodegui/icons/claude-icon-32.png",
-        keywords = "claude code ai",
-        keywordsCategory = "Claude Code"
-)
 public final class ClaudeCodeOptionsPanelController extends OptionsPanelController {
 
     private ClaudeCodeOptionsPanel panel;
