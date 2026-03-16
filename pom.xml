@@ -6,7 +6,7 @@
 
     <groupId>io.github.nbclaudecodegui</groupId>
     <artifactId>nb-claude-code-gui</artifactId>
-    <version>0.2.5-SNAPSHOT</version>
+    <version>0.3.3-SNAPSHOT</version>
     <packaging>nbm</packaging>
     <name>Claude Code GUI</name>
     <description>NetBeans plugin that provides a GUI for Claude Code CLI — run claude code sessions directly inside the IDE.</description>
@@ -35,6 +35,101 @@
                 <version>3.14.0</version>
                 <configuration>
                     <parameters>true</parameters>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.netbeans.api</groupId>
+                            <artifactId>org-openide-awt</artifactId>
+                            <version>${netbeans.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.netbeans.api</groupId>
+                            <artifactId>org-openide-windows</artifactId>
+                            <version>${netbeans.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.netbeans.api</groupId>
+                            <artifactId>org-openide-util</artifactId>
+                            <version>${netbeans.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.netbeans.api</groupId>
+                            <artifactId>org-openide-util-lookup</artifactId>
+                            <version>${netbeans.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.netbeans.api</groupId>
+                            <artifactId>org-openide-filesystems</artifactId>
+                            <version>${netbeans.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!--
+                Generates claude-icon.png (16x16) and claude-icon-32.png (32x32)
+                from the source SVG at generate-resources phase using Apache Batik.
+                The SVG is excluded from the final JAR (see maven-resources-plugin below).
+            -->
+            <plugin>
+                <groupId>org.codehaus.gmaven</groupId>
+                <artifactId>groovy-maven-plugin</artifactId>
+                <version>2.1.1</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.xmlgraphics</groupId>
+                        <artifactId>batik-transcoder</artifactId>
+                        <version>1.17</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.apache.xmlgraphics</groupId>
+                        <artifactId>batik-codec</artifactId>
+                        <version>1.17</version>
+                    </dependency>
+                </dependencies>
+                <executions>
+                    <execution>
+                        <id>generate-icons</id>
+                        <phase>generate-resources</phase>
+                        <goals><goal>execute</goal></goals>
+                        <configuration>
+                            <source>
+                                import org.apache.batik.transcoder.image.PNGTranscoder
+                                import org.apache.batik.transcoder.TranscoderInput
+                                import org.apache.batik.transcoder.TranscoderOutput
+
+                                def svg = new File(project.basedir,
+                                    'src/main/resources/io/github/nbclaudecodegui/icons/cc-gui-icon.svg')
+                                def out = new File(project.build.outputDirectory,
+                                    'io/github/nbclaudecodegui/icons')
+                                out.mkdirs()
+
+                                [['claude-icon.png', 16f], ['claude-icon-32.png', 32f]].each { name, size ->
+                                    def t = new PNGTranscoder()
+                                    t.addTranscodingHint(PNGTranscoder.KEY_WIDTH, size)
+                                    t.addTranscodingHint(PNGTranscoder.KEY_HEIGHT, size)
+                                    def os = new FileOutputStream(new File(out, name))
+                                    t.transcode(new TranscoderInput(svg.toURI().toString()),
+                                                new TranscoderOutput(os))
+                                    os.close()
+                                    log.info("Generated ${name} (${size as int}px)")
+                                }
+                            </source>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <resources>
+                        <resource>
+                            <directory>src/main/resources</directory>
+                            <excludes>
+                                <exclude>**/*.svg</exclude>
+                            </excludes>
+                        </resource>
+                    </resources>
                 </configuration>
             </plugin>
             <plugin>
@@ -101,6 +196,16 @@
         <dependency>
             <groupId>org.netbeans.api</groupId>
             <artifactId>org-openide-util-ui</artifactId>
+            <version>${netbeans.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.netbeans.api</groupId>
+            <artifactId>org-openide-windows</artifactId>
+            <version>${netbeans.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.netbeans.api</groupId>
+            <artifactId>org-openide-awt</artifactId>
             <version>${netbeans.version}</version>
         </dependency>
 
