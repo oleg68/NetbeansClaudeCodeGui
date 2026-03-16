@@ -5,8 +5,6 @@ import java.awt.Component;
 import java.io.File;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
 import org.openide.awt.ActionID;
 import org.openide.awt.ActionReference;
 import org.openide.util.NbBundle.Messages;
@@ -151,16 +149,16 @@ public final class ClaudeCodeTopComponent extends TopComponent {
      */
     @Override
     public boolean canClose() {
-        if (!hasActiveSessions()) {
-            return true;
+        // Ask each panel — each may show its own confirmation if a process is running
+        for (int i = 0; i < tabbedPane.getTabCount() - 1; i++) {
+            Component comp = tabbedPane.getComponentAt(i);
+            if (comp instanceof ClaudeSessionPanel panel) {
+                if (!panel.canClose()) {
+                    return false;
+                }
+            }
         }
-        NotifyDescriptor nd = new NotifyDescriptor.Confirmation(
-                org.openide.util.NbBundle.getMessage(
-                        ClaudeCodeTopComponent.class, "MSG_ConfirmClose"),
-                org.openide.util.NbBundle.getMessage(
-                        ClaudeCodeTopComponent.class, "TTL_ConfirmClose"),
-                NotifyDescriptor.YES_NO_OPTION);
-        return DialogDisplayer.getDefault().notify(nd) == NotifyDescriptor.YES_OPTION;
+        return true;
     }
 
     @Override
@@ -272,18 +270,19 @@ public final class ClaudeCodeTopComponent extends TopComponent {
     @Override
     protected void componentClosed() {
         super.componentClosed();
+        stopAllProcesses();
         resetTabs();
     }
 
-    /** Returns {@code true} if any session panel has a locked (confirmed) directory. */
-    private boolean hasActiveSessions() {
+    /** Stops all running Claude processes before the window is closed/reset. */
+    private void stopAllProcesses() {
         for (int i = 0; i < tabbedPane.getTabCount() - 1; i++) {
             Component comp = tabbedPane.getComponentAt(i);
-            if (comp instanceof ClaudeSessionPanel
-                    && ((ClaudeSessionPanel) comp).isLocked()) {
-                return true;
+            if (comp instanceof ClaudeSessionPanel panel) {
+                panel.stopProcess();
             }
         }
-        return false;
     }
+
+
 }

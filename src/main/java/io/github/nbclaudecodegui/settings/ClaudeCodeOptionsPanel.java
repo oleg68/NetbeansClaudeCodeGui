@@ -4,21 +4,49 @@ import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 
 /**
  * Settings panel displayed inside Tools → Options → Claude Code.
  *
- * <p>Currently exposes a single field: the path to the {@code claude} CLI
- * executable. Additional fields will be added in subsequent stages.
+ * <p>Exposes:
+ * <ul>
+ *   <li>Path to the {@code claude} CLI executable</li>
+ *   <li>Send prompt key (radio buttons, mutually exclusive with newline key)</li>
+ *   <li>Insert newline key (radio buttons, mutually exclusive with send key)</li>
+ * </ul>
  */
 public final class ClaudeCodeOptionsPanel extends JPanel {
 
+    private static final String[] KEY_VALUES = {
+        ClaudeCodePreferences.ENTER,
+        ClaudeCodePreferences.SHIFT_ENTER,
+        ClaudeCodePreferences.CTRL_ENTER,
+        ClaudeCodePreferences.ALT_ENTER
+    };
+    private static final String[] KEY_LABELS = {
+        "Enter", "Shift+Enter", "Ctrl+Enter", "Alt+Enter"
+    };
+
     private JTextField executablePathField;
+    private javax.swing.JCheckBox debugCheckBox;
+
+    /** send-key radio buttons: value → button */
+    private final Map<String, JRadioButton> sendRadios = new LinkedHashMap<>();
+    /** newline-key radio buttons: value → button */
+    private final Map<String, JRadioButton> newlineRadios = new LinkedHashMap<>();
+
+    private final ButtonGroup sendGroup    = new ButtonGroup();
+    private final ButtonGroup newlineGroup = new ButtonGroup();
 
     /**
      * Creates the panel and initialises all UI components.
@@ -31,72 +59,193 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         setLayout(new BorderLayout());
 
         JPanel form = new JPanel(new GridBagLayout());
-        GridBagConstraints labelConstraints = new GridBagConstraints();
-        labelConstraints.gridx = 0;
-        labelConstraints.gridy = 0;
-        labelConstraints.anchor = GridBagConstraints.WEST;
-        labelConstraints.insets = new Insets(8, 8, 4, 8);
+        int row = 0;
 
-        GridBagConstraints fieldConstraints = new GridBagConstraints();
-        fieldConstraints.gridx = 1;
-        fieldConstraints.gridy = 0;
-        fieldConstraints.fill = GridBagConstraints.HORIZONTAL;
-        fieldConstraints.weightx = 1.0;
-        fieldConstraints.insets = new Insets(8, 0, 4, 4);
-
-        GridBagConstraints browseConstraints = new GridBagConstraints();
-        browseConstraints.gridx = 2;
-        browseConstraints.gridy = 0;
-        browseConstraints.insets = new Insets(8, 0, 4, 8);
-
-        form.add(new JLabel("Claude CLI path:"), labelConstraints);
-
+        // --- executable path ---
+        form.add(new JLabel("Claude CLI path:"), gbc(0, row, false));
         executablePathField = new JTextField(30);
-        executablePathField.setToolTipText("Leave empty to use 'claude' from PATH");
-        form.add(executablePathField, fieldConstraints);
-
-        JButton browseButton = new JButton("Browse...");
+        executablePathField.setToolTipText("Leave empty to detect 'claude' from PATH");
+        form.add(executablePathField, gbcFill(1, row));
+        JButton browseButton = new JButton("Browse\u2026");
         browseButton.addActionListener(e -> {
             JFileChooser chooser = new JFileChooser();
             chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-                executablePathField.setText(chooser.getSelectedFile().getAbsolutePath());
+                executablePathField.setText(
+                        chooser.getSelectedFile().getAbsolutePath());
             }
         });
-        form.add(browseButton, browseConstraints);
+        form.add(browseButton, gbc(2, row, false));
+        row++;
 
-        // spacer row to push form to the top
+        // --- send key ---
+        JPanel sendPanel = buildKeyPanel("Send prompt:", sendRadios, sendGroup);
+        GridBagConstraints sendGbc = new GridBagConstraints();
+        sendGbc.gridx = 0; sendGbc.gridy = row;
+        sendGbc.gridwidth = 3;
+        sendGbc.anchor = GridBagConstraints.WEST;
+        sendGbc.insets = new Insets(12, 8, 4, 8);
+        form.add(sendPanel, sendGbc);
+        row++;
+
+        // --- newline key ---
+        JPanel newlinePanel = buildKeyPanel("Insert newline:", newlineRadios, newlineGroup);
+        GridBagConstraints nlGbc = new GridBagConstraints();
+        nlGbc.gridx = 0; nlGbc.gridy = row;
+        nlGbc.gridwidth = 3;
+        nlGbc.anchor = GridBagConstraints.WEST;
+        nlGbc.insets = new Insets(4, 8, 4, 8);
+        form.add(newlinePanel, nlGbc);
+        row++;
+
+        // mutual exclusion: selecting in one group disables that option in the other
+        for (int i = 0; i < KEY_VALUES.length; i++) {
+            final String val = KEY_VALUES[i];
+            sendRadios.get(val).addActionListener(e -> syncExclusion(val, true));
+            newlineRadios.get(val).addActionListener(e -> syncExclusion(val, false));
+        }
+
+        // --- debug mode ---
+        debugCheckBox = new javax.swing.JCheckBox("Debug mode (log all claude I/O to NetBeans log and output area)");
+        GridBagConstraints dbgGbc = new GridBagConstraints();
+        dbgGbc.gridx = 0; dbgGbc.gridy = row;
+        dbgGbc.gridwidth = 3;
+        dbgGbc.anchor = GridBagConstraints.WEST;
+        dbgGbc.insets = new Insets(4, 8, 4, 8);
+        form.add(debugCheckBox, dbgGbc);
+        row++;
+
+        // spacer
         GridBagConstraints spacer = new GridBagConstraints();
-        spacer.gridx = 0;
-        spacer.gridy = 1;
-        spacer.gridwidth = 3;
-        spacer.weighty = 1.0;
+        spacer.gridx = 0; spacer.gridy = row;
+        spacer.gridwidth = 3; spacer.weighty = 1.0;
         spacer.fill = GridBagConstraints.VERTICAL;
         form.add(new JPanel(), spacer);
 
         add(form, BorderLayout.CENTER);
     }
 
+    private JPanel buildKeyPanel(String title,
+            Map<String, JRadioButton> radios, ButtonGroup group) {
+        JPanel panel = new JPanel(new java.awt.FlowLayout(
+                java.awt.FlowLayout.LEFT, 8, 0));
+        panel.setBorder(BorderFactory.createTitledBorder(title));
+        for (int i = 0; i < KEY_VALUES.length; i++) {
+            JRadioButton rb = new JRadioButton(KEY_LABELS[i]);
+            radios.put(KEY_VALUES[i], rb);
+            group.add(rb);
+            panel.add(rb);
+        }
+        return panel;
+    }
+
+    /**
+     * Called when a radio button is selected: disables that value in the
+     * opposite group (and re-enables the previously-disabled one).
+     *
+     * @param selectedValue the just-selected key value
+     * @param inSendGroup   {@code true} if the event came from the send group
+     */
+    private void syncExclusion(String selectedValue, boolean inSendGroup) {
+        Map<String, JRadioButton> opposite =
+                inSendGroup ? newlineRadios : sendRadios;
+
+        // re-enable all in opposite group first
+        opposite.values().forEach(rb -> rb.setEnabled(true));
+
+        // disable the one that matches the selected value
+        JRadioButton toDisable = opposite.get(selectedValue);
+        if (toDisable != null) {
+            toDisable.setEnabled(false);
+            // if it was selected, move selection to the first available option
+            if (toDisable.isSelected()) {
+                ButtonGroup grp = inSendGroup ? newlineGroup : sendGroup;
+                for (JRadioButton rb : opposite.values()) {
+                    if (rb.isEnabled()) {
+                        rb.setSelected(true);
+                        grp.setSelected(rb.getModel(), true);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // load / store / valid
+    // -------------------------------------------------------------------------
+
     /**
      * Loads current preference values into the UI controls.
      */
     void load() {
-        executablePathField.setText(ClaudeCodePreferences.getClaudeExecutablePath());
+        executablePathField.setText(
+                ClaudeCodePreferences.getClaudeExecutablePath());
+        debugCheckBox.setSelected(ClaudeCodePreferences.isDebugMode());
+
+        String sendVal    = ClaudeCodePreferences.getSendKey();
+        String newlineVal = ClaudeCodePreferences.getNewlineKey();
+
+        selectRadio(sendRadios,    sendGroup,    sendVal);
+        selectRadio(newlineRadios, newlineGroup, newlineVal);
+
+        // apply mutual exclusion for the loaded values
+        syncExclusion(sendVal, true);
+        syncExclusion(newlineVal, false);
     }
 
     /**
      * Persists the values currently shown in the UI controls to preferences.
      */
     void store() {
-        ClaudeCodePreferences.setClaudeExecutablePath(executablePathField.getText().trim());
+        ClaudeCodePreferences.setClaudeExecutablePath(
+                executablePathField.getText().trim());
+        ClaudeCodePreferences.setDebugMode(debugCheckBox.isSelected());
+        ClaudeCodePreferences.setSendKey(selectedValue(sendRadios));
+        ClaudeCodePreferences.setNewlineKey(selectedValue(newlineRadios));
     }
 
     /**
      * Validates the current panel state.
      *
-     * @return {@code true} — the panel is always considered valid at this stage
+     * @return {@code true} — the panel is always valid
      */
     boolean valid() {
         return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // helpers
+    // -------------------------------------------------------------------------
+
+    private static void selectRadio(Map<String, JRadioButton> radios,
+            ButtonGroup group, String value) {
+        JRadioButton rb = radios.get(value);
+        if (rb != null) {
+            rb.setSelected(true);
+            group.setSelected(rb.getModel(), true);
+        }
+    }
+
+    private static String selectedValue(Map<String, JRadioButton> radios) {
+        for (Map.Entry<String, JRadioButton> e : radios.entrySet()) {
+            if (e.getValue().isSelected()) return e.getKey();
+        }
+        return ClaudeCodePreferences.DEFAULT_SEND_KEY;
+    }
+
+    private static GridBagConstraints gbc(int x, int y, boolean fill) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = x; c.gridy = y;
+        c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(8, x == 0 ? 8 : 0, 4, x == 2 ? 8 : 4);
+        return c;
+    }
+
+    private static GridBagConstraints gbcFill(int x, int y) {
+        GridBagConstraints c = gbc(x, y, true);
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1.0;
+        return c;
     }
 }

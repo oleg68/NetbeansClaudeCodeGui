@@ -1,28 +1,41 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.process.ClaudeProcess;
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.prefs.Preferences;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
-import javax.swing.JList;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
-import javax.swing.SwingConstants;
+import javax.swing.JList;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -30,22 +43,23 @@ import org.openide.util.NbPreferences;
 /**
  * Panel representing a single Claude Code session tab.
  *
- * <p>The top bar contains:
- * <ol>
- *   <li>A non-editable <em>project</em> combo box — lists open projects;
- *       selecting one copies its root path into the path combo.</li>
- *   <li>An editable <em>path</em> combo box — pre-populated with the last 10
- *       non-project paths from history (project paths are not stored).</li>
- *   <li>A <strong>…</strong> browse button.</li>
- *   <li>An <strong>Open</strong> button — validates, saves non-project path to
- *       history, and locks all controls except Settings.</li>
- *   <li>A <strong>⚙</strong> settings button (always active).</li>
- * </ol>
- *
- * <p>When created with {@code locked=true} (e.g. from the context menu) all
- * controls except Settings are immediately disabled.
+ * <p>Top bar: project combo → path combo → Browse → Open → ⚙.
+ * After Open: {@link ClaudeProcess} starts automatically; controls lock.
+ * Chat area: output (raw JSON) above, input below with Send button.
+ * Slash-commands: typing {@code /} shows a popup menu of known commands.
  */
 public final class ClaudeSessionPanel extends JPanel {
+
+    // -------------------------------------------------------------------------
+    // slash-commands
+    // -------------------------------------------------------------------------
+
+    private static final String[] SLASH_COMMANDS = {
+        "/help", "/clear", "/exit", "/init", "/review", "/bug",
+        "/compact", "/config", "/cost", "/doctor", "/login",
+        "/logout", "/memory", "/model", "/permissions", "/pr_comments",
+        "/release-notes", "/status", "/terminal-setup", "/vim"
+    };
 
     // -------------------------------------------------------------------------
     // history persistence
@@ -81,13 +95,19 @@ public final class ClaudeSessionPanel extends JPanel {
     // -------------------------------------------------------------------------
 
     private final JComboBox<ProjectItem> projectCombo;
-    private final JComboBox<String> pathCombo;
-    private final JButton browseButton;
-    private final JButton openButton;
-    private final JLabel errorLabel;
-    private final JLabel placeholderLabel;
+    private final JComboBox<String>      pathCombo;
+    private final JButton                browseButton;
+    private final JButton                openButton;
+    private final JLabel                 errorLabel;
+    private final JLabel                 placeholderLabel;
 
-    private File confirmedDirectory;
+    private final JTextArea outputArea;
+    private final JTextArea inputArea;
+    private final JButton   sendButton;
+
+    private boolean suppressProjectListener;
+    private File    confirmedDirectory;
+    private ClaudeProcess claudeProcess;
 
     /** Listener notified when the confirmed working directory changes. */
     public interface DirectoryListener {
@@ -99,16 +119,13 @@ public final class ClaudeSessionPanel extends JPanel {
         void directorySelected(File dir);
     }
 
-    private boolean suppressProjectListener;
     private DirectoryListener directoryListener;
 
     // -------------------------------------------------------------------------
     // constructors
     // -------------------------------------------------------------------------
 
-    /**
-     * Creates a session panel with no pre-set directory (selector active).
-     */
+    /** Creates a session panel with no pre-set directory (selector active). */
     public ClaudeSessionPanel() {
         this(null, false);
     }
@@ -118,6 +135,7 @@ public final class ClaudeSessionPanel extends JPanel {
      *
      * @param directory pre-set directory, or {@code null} for none
      * @param locked    {@code true} to lock the directory control immediately
+     *                  and start the process
      */
     public ClaudeSessionPanel(File directory, boolean locked) {
         super(new BorderLayout());
@@ -172,15 +190,40 @@ public final class ClaudeSessionPanel extends JPanel {
         top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
         add(top, BorderLayout.NORTH);
 
-        // --- placeholder content ---
+        // --- placeholder ---
         placeholderLabel = new JLabel(
                 NbBundle.getMessage(ClaudeSessionPanel.class, "LBL_SelectDir"),
-                SwingConstants.CENTER);
+                javax.swing.SwingConstants.CENTER);
         placeholderLabel.setForeground(Color.GRAY);
         add(placeholderLabel, BorderLayout.CENTER);
 
+        // --- output area (hidden until process starts) ---
+        outputArea = new JTextArea();
+        outputArea.setEditable(false);
+        outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        outputArea.setLineWrap(true);
+        outputArea.setWrapStyleWord(false);
+        outputArea.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.TEXT_CURSOR));
+        installOutputContextMenu(outputArea);
+
+        // --- input area + send button ---
+        inputArea = new JTextArea(4, 40);
+        inputArea.setLineWrap(true);
+        inputArea.setWrapStyleWord(true);
+        inputArea.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e)  { onInputChanged(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e)  { onInputChanged(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) {}
+        });
+
+        sendButton = new JButton("Send");
+        sendButton.addActionListener(e -> sendPrompt());
+
+        bindSendKeys();
+
         if (locked) {
             setControlsLocked(true);
+            startProcess();
         }
     }
 
@@ -188,31 +231,51 @@ public final class ClaudeSessionPanel extends JPanel {
     // public API
     // -------------------------------------------------------------------------
 
-    /**
-     * Sets the listener notified when a directory is confirmed.
-     *
-     * @param listener the listener, or {@code null} to remove
-     */
+    /** Sets the listener notified when a directory is confirmed. */
     public void setDirectoryListener(DirectoryListener listener) {
         this.directoryListener = listener;
     }
 
-    /**
-     * Returns the confirmed working directory, or {@code null} if none.
-     *
-     * @return the confirmed directory
-     */
+    /** Returns the confirmed working directory, or {@code null} if none. */
     public File getConfirmedDirectory() {
         return confirmedDirectory;
     }
 
-    /**
-     * Returns whether the directory controls are locked.
-     *
-     * @return {@code true} if locked
-     */
+    /** Returns {@code true} if the directory controls are locked. */
     public boolean isLocked() {
         return !openButton.isEnabled();
+    }
+
+    /**
+     * Asks for confirmation (if the process is running) and stops the process.
+     *
+     * @return {@code true} if the tab may be closed
+     */
+    public boolean canClose() {
+        if (claudeProcess == null || !claudeProcess.isRunning()) {
+            return true;
+        }
+        NotifyDescriptor nd = new NotifyDescriptor.Confirmation(
+                "Stop the Claude Code session in '"
+                        + (confirmedDirectory != null
+                                ? confirmedDirectory.getName() : "?")
+                        + "' and close this tab?",
+                "Close Session",
+                NotifyDescriptor.YES_NO_OPTION);
+        if (DialogDisplayer.getDefault().notify(nd) == NotifyDescriptor.YES_OPTION) {
+            claudeProcess.stop();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Stops the process unconditionally (called when the whole window closes).
+     */
+    public void stopProcess() {
+        if (claudeProcess != null) {
+            claudeProcess.stop();
+        }
     }
 
     /**
@@ -236,7 +299,7 @@ public final class ClaudeSessionPanel extends JPanel {
     }
 
     // -------------------------------------------------------------------------
-    // private helpers
+    // top bar handlers
     // -------------------------------------------------------------------------
 
     private void onProjectSelected() {
@@ -247,24 +310,6 @@ public final class ClaudeSessionPanel extends JPanel {
             if (dir != null) {
                 pathCombo.setSelectedItem(dir.getAbsolutePath());
             }
-        }
-    }
-
-    private void preselectProjectForDirectory(File directory) {
-        suppressProjectListener = true;
-        try {
-            for (int i = 0; i < projectCombo.getItemCount(); i++) {
-                ProjectItem item = projectCombo.getItemAt(i);
-                if (item.project() != null) {
-                    File projDir = FileUtil.toFile(item.project().getProjectDirectory());
-                    if (directory.equals(projDir)) {
-                        projectCombo.setSelectedIndex(i);
-                        return;
-                    }
-                }
-            }
-        } finally {
-            suppressProjectListener = false;
         }
     }
 
@@ -294,9 +339,7 @@ public final class ClaudeSessionPanel extends JPanel {
             return;
         }
 
-        // save to history only if not a project directory
-        boolean isProject = isProjectDirectory(dir);
-        if (!isProject) {
+        if (!isProjectDirectory(dir)) {
             saveToHistory(dir.getAbsolutePath());
         }
 
@@ -304,21 +347,171 @@ public final class ClaudeSessionPanel extends JPanel {
         confirmedDirectory = dir;
         setControlsLocked(true);
         placeholderLabel.setVisible(false);
-        revalidate();
-        repaint();
+
         if (directoryListener != null) {
             directoryListener.directorySelected(dir);
         }
+
+        startProcess();
     }
 
-    private boolean isProjectDirectory(File dir) {
-        for (Project p : OpenProjects.getDefault().getOpenProjects()) {
-            if (dir.equals(FileUtil.toFile(p.getProjectDirectory()))) {
-                return true;
+    // -------------------------------------------------------------------------
+    // process management
+    // -------------------------------------------------------------------------
+
+    private void startProcess() {
+        if (confirmedDirectory == null) return;
+
+        showChatUI();
+
+        claudeProcess = new ClaudeProcess(line ->
+                SwingUtilities.invokeLater(() -> appendOutput(line)));
+        claudeProcess.setDebugConsumer(line ->
+                SwingUtilities.invokeLater(() -> appendOutput(line)));
+
+        claudeProcess.start(confirmedDirectory.getAbsolutePath());
+        appendOutput("ready — type a message and press Send");
+    }
+
+    private void showChatUI() {
+        remove(placeholderLabel);
+
+        JScrollPane outputScroll = new JScrollPane(outputArea);
+        outputScroll.setBorder(null);
+
+        JScrollPane inputScroll = new JScrollPane(inputArea);
+        inputScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+
+        JPanel sendRow = new JPanel(new BorderLayout(4, 0));
+        sendRow.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        sendRow.add(inputScroll, BorderLayout.CENTER);
+        sendRow.add(sendButton, BorderLayout.EAST);
+
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.add(sendRow, BorderLayout.CENTER);
+
+        add(outputScroll, BorderLayout.CENTER);
+        add(bottom, BorderLayout.SOUTH);
+
+        revalidate();
+        repaint();
+        inputArea.requestFocusInWindow();
+    }
+
+    private void appendOutput(String line) {
+        outputArea.append(line);
+        outputArea.append("\n");
+        outputArea.setCaretPosition(outputArea.getDocument().getLength());
+    }
+
+    // -------------------------------------------------------------------------
+    // input / send
+    // -------------------------------------------------------------------------
+
+    private void sendPrompt() {
+        String text = inputArea.getText();
+        if (text.isBlank()) return;
+        if (claudeProcess == null) {
+            appendOutput("[not ready]");
+            return;
+        }
+        if (claudeProcess.isRunning()) {
+            appendOutput("[busy — previous message still processing]");
+            return;
+        }
+        inputArea.setText("");
+        inputArea.setBackground(Color.WHITE);
+        sendButton.setEnabled(false);
+
+        Thread t = new Thread(() -> {
+            try {
+                claudeProcess.sendInput(text);
+            } catch (IOException ex) {
+                SwingUtilities.invokeLater(() ->
+                        appendOutput("[send error: " + ex.getMessage() + "]"));
+            } finally {
+                SwingUtilities.invokeLater(() -> sendButton.setEnabled(true));
+            }
+        }, "claude-send");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Binds send/newline keys according to current preferences.
+     * Reads preferences fresh each time so changes take effect on next use.
+     */
+    private void bindSendKeys() {
+        // Remove old bindings by using named keys we control
+        inputArea.getInputMap().put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enter-action");
+        inputArea.getInputMap().put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "shift-enter-action");
+        inputArea.getInputMap().put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.CTRL_DOWN_MASK), "ctrl-enter-action");
+        inputArea.getInputMap().put(
+                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.ALT_DOWN_MASK), "alt-enter-action");
+
+        inputArea.getActionMap().put("enter-action",       keyAction(ClaudeCodePreferences.ENTER));
+        inputArea.getActionMap().put("shift-enter-action", keyAction(ClaudeCodePreferences.SHIFT_ENTER));
+        inputArea.getActionMap().put("ctrl-enter-action",  keyAction(ClaudeCodePreferences.CTRL_ENTER));
+        inputArea.getActionMap().put("alt-enter-action",   keyAction(ClaudeCodePreferences.ALT_ENTER));
+    }
+
+    private AbstractAction keyAction(final String keyValue) {
+        return new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                String sendKey    = ClaudeCodePreferences.getSendKey();
+                String newlineKey = ClaudeCodePreferences.getNewlineKey();
+                if (keyValue.equals(sendKey)) {
+                    sendPrompt();
+                } else if (keyValue.equals(newlineKey)) {
+                    inputArea.insert("\n", inputArea.getCaretPosition());
+                }
+            }
+        };
+    }
+
+    // -------------------------------------------------------------------------
+    // slash-command popup
+    // -------------------------------------------------------------------------
+
+    private void onInputChanged() {
+        String text = inputArea.getText();
+        boolean isSlash = text.startsWith("/");
+        inputArea.setBackground(isSlash
+                ? new Color(255, 255, 224)   // light yellow
+                : Color.WHITE);
+
+        if (isSlash) {
+            showSlashPopup(text);
+        }
+    }
+
+    private void showSlashPopup(String prefix) {
+        JPopupMenu popup = new JPopupMenu();
+        boolean any = false;
+        for (String cmd : SLASH_COMMANDS) {
+            if (cmd.startsWith(prefix) || "/".equals(prefix)) {
+                JMenuItem item = new JMenuItem(cmd);
+                item.addActionListener(e -> {
+                    inputArea.setText(cmd + " ");
+                    inputArea.setCaretPosition(inputArea.getText().length());
+                    inputArea.setBackground(new Color(255, 255, 224));
+                });
+                popup.add(item);
+                any = true;
             }
         }
-        return false;
+        if (any) {
+            popup.show(inputArea, 0, inputArea.getHeight());
+        }
     }
+
+    // -------------------------------------------------------------------------
+    // helpers
+    // -------------------------------------------------------------------------
 
     private void setControlsLocked(boolean locked) {
         projectCombo.setEnabled(!locked);
@@ -334,9 +527,18 @@ public final class ClaudeSessionPanel extends JPanel {
         repaint();
     }
 
+    private boolean isProjectDirectory(File dir) {
+        for (Project p : OpenProjects.getDefault().getOpenProjects()) {
+            if (dir.equals(FileUtil.toFile(p.getProjectDirectory()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void populateProjectCombo() {
         DefaultComboBoxModel<ProjectItem> model = new DefaultComboBoxModel<>();
-        model.addElement(new ProjectItem(null, // placeholder
+        model.addElement(new ProjectItem(null,
                 NbBundle.getMessage(ClaudeSessionPanel.class, "LBL_SelectProject")));
         for (Project p : OpenProjects.getDefault().getOpenProjects()) {
             model.addElement(new ProjectItem(p,
@@ -351,31 +553,76 @@ public final class ClaudeSessionPanel extends JPanel {
         }
     }
 
+    private void preselectProjectForDirectory(File directory) {
+        suppressProjectListener = true;
+        try {
+            for (int i = 0; i < projectCombo.getItemCount(); i++) {
+                ProjectItem item = projectCombo.getItemAt(i);
+                if (item.project() != null) {
+                    File projDir = FileUtil.toFile(item.project().getProjectDirectory());
+                    if (directory.equals(projDir)) {
+                        projectCombo.setSelectedIndex(i);
+                        return;
+                    }
+                }
+            }
+        } finally {
+            suppressProjectListener = false;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // output area context menu
+    // -------------------------------------------------------------------------
+
+    private static void installOutputContextMenu(JTextArea area) {
+        JPopupMenu menu = new JPopupMenu();
+
+        JMenuItem copy = new JMenuItem("Copy");
+        copy.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_C, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        copy.addActionListener(e -> area.copy());
+
+        JMenuItem selectAll = new JMenuItem("Select All");
+        selectAll.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_A, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        selectAll.addActionListener(e -> area.selectAll());
+
+        menu.add(copy);
+        menu.addSeparator();
+        menu.add(selectAll);
+
+        // enable Copy only when there is a selection
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                copy.setEnabled(area.getSelectedText() != null);
+            }
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
+
+        area.setComponentPopupMenu(menu);
+    }
+
     // -------------------------------------------------------------------------
     // inner types
     // -------------------------------------------------------------------------
 
-    /** Item in the project combo box. */
     private record ProjectItem(Project project, String label) {
         @Override public String toString() { return label; }
     }
 
-    /** Renders the placeholder item in gray. */
     private static final class ProjectItemRenderer
             extends JLabel implements ListCellRenderer<ProjectItem> {
 
-        ProjectItemRenderer() {
-            setOpaque(true);
-        }
+        ProjectItemRenderer() { setOpaque(true); }
 
         @Override
         public Component getListCellRendererComponent(
-                JList<? extends ProjectItem> list,
-                ProjectItem value, int index,
-                boolean isSelected, boolean cellHasFocus) {
-
+                JList<? extends ProjectItem> list, ProjectItem value,
+                int index, boolean isSelected, boolean cellHasFocus) {
             setText(value == null ? "" : value.label());
-            boolean placeholder = (value == null || value.project() == null);
+            boolean placeholder = value == null || value.project() == null;
             setForeground(placeholder
                     ? (isSelected ? list.getSelectionForeground() : Color.GRAY)
                     : (isSelected ? list.getSelectionForeground() : list.getForeground()));
