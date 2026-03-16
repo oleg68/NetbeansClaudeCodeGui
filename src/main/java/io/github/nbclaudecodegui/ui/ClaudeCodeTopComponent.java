@@ -137,6 +137,7 @@ public final class ClaudeCodeTopComponent extends TopComponent {
                 }
             }
 
+            tc.removeInitialEmptyTab();
             tc.addSessionTab(dir, locked);
             tc.tabbedPane.setSelectedIndex(tc.tabbedPane.getTabCount() - 2);
         });
@@ -172,6 +173,26 @@ public final class ClaudeCodeTopComponent extends TopComponent {
     // -------------------------------------------------------------------------
 
     /**
+     * Removes the initial empty "New Session" tab when it is the only session
+     * tab and has no confirmed directory. Called before adding a project tab
+     * so that opening from the context menu does not leave a spurious empty tab.
+     */
+    void removeInitialEmptyTab() {
+        if (tabbedPane.getTabCount() != 2) {
+            return;
+        }
+        Component comp = tabbedPane.getComponentAt(0);
+        if (comp instanceof ClaudeSessionPanel panel && !panel.isLocked()) {
+            addingTab = true;
+            try {
+                tabbedPane.removeTabAt(0);
+            } finally {
+                addingTab = false;
+            }
+        }
+    }
+
+    /**
      * Inserts a new session tab before the "+" tab.
      *
      * @param dir    pre-set directory, or {@code null} for empty
@@ -185,7 +206,12 @@ public final class ClaudeCodeTopComponent extends TopComponent {
                 && PLUS_TAB_TITLE.equals(tabbedPane.getTitleAt(insertAt - 1))) {
             insertAt--;
         }
-        tabbedPane.insertTab(title, null, panel, null, insertAt);
+        addingTab = true;
+        try {
+            tabbedPane.insertTab(title, null, panel, null, insertAt);
+        } finally {
+            addingTab = false;
+        }
 
         final int tabIndex = insertAt;
         TabHeader header = new TabHeader(tabbedPane, title,

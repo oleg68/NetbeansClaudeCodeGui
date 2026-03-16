@@ -247,4 +247,34 @@ class ClaudeCodeTopComponentTest {
         assertEquals(TopComponent.PERSISTENCE_ALWAYS, tc.getPersistenceType(),
                 "Persistence must be ALWAYS so the window remembers its docked position");
     }
+
+    // -------------------------------------------------------------------------
+    // Bug fix: opening from context menu creates two tabs
+    // -------------------------------------------------------------------------
+
+    /**
+     * When a project tab is added to a window that has only the initial empty
+     * "New Session" tab, the empty tab must be removed — leaving exactly one
+     * project tab plus the "+" tab.
+     */
+    @Test
+    void testOpenForDirectoryReplacesInitialEmptyTab() throws java.io.IOException {
+        ClaudeCodeTopComponent tc = new ClaudeCodeTopComponent();
+        assertEquals(2, tc.tabbedPane.getTabCount(), "initial: [NewSession, +]");
+
+        java.io.File tmpDir = java.nio.file.Files.createTempDirectory("claude-open-test").toFile();
+        tmpDir.deleteOnExit();
+        try {
+            tc.removeInitialEmptyTab();
+            tc.addSessionTab(tmpDir, true);
+
+            assertEquals(2, tc.tabbedPane.getTabCount(),
+                    "after opening project: must have exactly [ProjectTab, +]");
+            assertEquals("+", tc.tabbedPane.getTitleAt(1));
+            ClaudeSessionPanel panel = (ClaudeSessionPanel) tc.tabbedPane.getComponentAt(0);
+            assertTrue(panel.isLocked(), "project tab must be locked");
+        } finally {
+            tmpDir.delete();
+        }
+    }
 }
