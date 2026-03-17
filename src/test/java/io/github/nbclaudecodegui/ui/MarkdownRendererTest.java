@@ -1,0 +1,182 @@
+package io.github.nbclaudecodegui.ui;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Unit tests for {@link MarkdownRenderer}'s markdown-to-HTML conversion.
+ */
+class MarkdownRendererTest {
+
+    // -------------------------------------------------------------------------
+    // esc()
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testEscapeAmpersand() {
+        assertEquals("a &amp; b", MarkdownRenderer.esc("a & b"));
+    }
+
+    @Test
+    void testEscapeLtGt() {
+        assertEquals("&lt;div&gt;", MarkdownRenderer.esc("<div>"));
+    }
+
+    @Test
+    void testEscapeQuote() {
+        assertEquals("say &quot;hi&quot;", MarkdownRenderer.esc("say \"hi\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // inlineToHtml()
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testBold() {
+        assertEquals("<b>hello</b>", MarkdownRenderer.inlineToHtml("**hello**"));
+    }
+
+    @Test
+    void testItalic() {
+        assertEquals("<em>hello</em>", MarkdownRenderer.inlineToHtml("*hello*"));
+    }
+
+    @Test
+    void testBoldItalic() {
+        assertEquals("<b><em>hi</em></b>", MarkdownRenderer.inlineToHtml("***hi***"));
+    }
+
+    @Test
+    void testInlineCode() {
+        assertEquals("<code>foo()</code>", MarkdownRenderer.inlineToHtml("`foo()`"));
+    }
+
+    @Test
+    void testMixedInline() {
+        String result = MarkdownRenderer.inlineToHtml("Use **bold** and `code`");
+        assertTrue(result.contains("<b>bold</b>"), "should contain bold");
+        assertTrue(result.contains("<code>code</code>"), "should contain code");
+        assertTrue(result.contains("Use "), "should contain prefix text");
+    }
+
+    @Test
+    void testPlainTextEscaped() {
+        assertEquals("a &amp; b &lt;c&gt;", MarkdownRenderer.inlineToHtml("a & b <c>"));
+    }
+
+    // -------------------------------------------------------------------------
+    // toHtml() — block elements
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testHeadings() {
+        String html = MarkdownRenderer.toHtml("# H1\n## H2\n### H3");
+        assertTrue(html.contains("<h1>H1</h1>"), "h1");
+        assertTrue(html.contains("<h2>H2</h2>"), "h2");
+        assertTrue(html.contains("<h3>H3</h3>"), "h3");
+    }
+
+    @Test
+    void testUnorderedList() {
+        String html = MarkdownRenderer.toHtml("- alpha\n- beta\n- gamma");
+        assertTrue(html.contains("<ul>"),  "ul open");
+        assertTrue(html.contains("</ul>"), "ul close");
+        assertTrue(html.contains("<li>alpha</li>"), "item alpha");
+        assertTrue(html.contains("<li>beta</li>"),  "item beta");
+        assertTrue(html.contains("<li>gamma</li>"), "item gamma");
+    }
+
+    @Test
+    void testOrderedList() {
+        String html = MarkdownRenderer.toHtml("1. first\n2. second");
+        assertTrue(html.contains("<ol>"),  "ol open");
+        assertTrue(html.contains("<li>first</li>"),  "item first");
+        assertTrue(html.contains("<li>second</li>"), "item second");
+    }
+
+    @Test
+    void testBlockquote() {
+        String html = MarkdownRenderer.toHtml("> some quote\n> continued");
+        assertTrue(html.contains("<blockquote>"), "blockquote open");
+        assertTrue(html.contains("some quote"),   "content line 1");
+        assertTrue(html.contains("continued"),    "content line 2");
+    }
+
+    @Test
+    void testFencedCodeBlock() {
+        String html = MarkdownRenderer.toHtml("```java\nSystem.out.println();\n```");
+        assertTrue(html.contains("<pre>"), "pre open");
+        assertTrue(html.contains("System.out.println();"), "code content");
+    }
+
+    @Test
+    void testCodeBlockHtmlEscaped() {
+        String html = MarkdownRenderer.toHtml("```\na < b && c > d\n```");
+        assertTrue(html.contains("&lt;"), "< escaped");
+        assertTrue(html.contains("&amp;"), "& escaped");
+    }
+
+    @Test
+    void testParagraph() {
+        String html = MarkdownRenderer.toHtml("Hello world");
+        assertTrue(html.contains("<p>"), "paragraph");
+        assertTrue(html.contains("Hello world"), "content");
+    }
+
+    // -------------------------------------------------------------------------
+    // toHtml() — tables
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testBasicTable() {
+        String md = "| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |";
+        String html = MarkdownRenderer.toHtml(md);
+
+        assertTrue(html.contains("<table>"),  "table open");
+        assertTrue(html.contains("</table>"), "table close");
+        assertTrue(html.contains("<th>"),     "th present");
+        assertTrue(html.contains("<td>"),     "td present");
+        assertTrue(html.contains("Name"),     "header Name");
+        assertTrue(html.contains("Age"),      "header Age");
+        assertTrue(html.contains("Alice"),    "cell Alice");
+        assertTrue(html.contains("Bob"),      "cell Bob");
+        assertTrue(html.contains("30"),       "cell 30");
+        assertTrue(html.contains("25"),       "cell 25");
+    }
+
+    @Test
+    void testTableHeaderRow() {
+        String md = "| Col1 | Col2 | Col3 |\n|------|------|------|\n| a | b | c |";
+        String html = MarkdownRenderer.toHtml(md);
+
+        // Header cells must be <th>, data cells must be <td>
+        assertTrue(html.indexOf("<th>") < html.indexOf("<td>"),
+                "th should come before td");
+        assertTrue(html.contains("<th>Col1</th>"), "th Col1");
+        assertTrue(html.contains("<td>a</td>"),    "td a");
+    }
+
+    @Test
+    void testTableWithInlineMarkdown() {
+        String md = "| **Bold** | `code` |\n|----------|--------|\n| value | val2 |";
+        String html = MarkdownRenderer.toHtml(md);
+        assertTrue(html.contains("<b>Bold</b>"),    "bold in header");
+        assertTrue(html.contains("<code>code</code>"), "code in header");
+    }
+
+    @Test
+    void testTableHtmlEscapedCells() {
+        String md = "| A<B | C&D |\n|-----|-----|\n| x | y |";
+        String html = MarkdownRenderer.toHtml(md);
+        assertTrue(html.contains("A&lt;B"), "< escaped in cell");
+        assertTrue(html.contains("C&amp;D"), "& escaped in cell");
+    }
+
+    @Test
+    void testTableFollowedByParagraph() {
+        String md = "| X |\n|---|\n| v |\n\nSome text after.";
+        String html = MarkdownRenderer.toHtml(md);
+        assertTrue(html.contains("<table>"),         "table present");
+        assertTrue(html.contains("Some text after"), "paragraph after table");
+    }
+}

@@ -6,7 +6,6 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
@@ -24,9 +23,11 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JEditorPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
+import javax.swing.text.JTextComponent;
 import javax.swing.ListCellRenderer;
 import javax.swing.JList;
 import javax.swing.SwingUtilities;
@@ -101,9 +102,11 @@ public final class ClaudeSessionPanel extends JPanel {
     private final JLabel                 errorLabel;
     private final JLabel                 placeholderLabel;
 
-    private final JTextArea outputArea;
+    private final JEditorPane outputPane;
     private final JTextArea inputArea;
     private final JButton   sendButton;
+    private final JButton   stopButton;
+    private final PromptResponsePanel promptResponsePanel;
 
     private boolean suppressProjectListener;
     private File    confirmedDirectory;
@@ -197,14 +200,9 @@ public final class ClaudeSessionPanel extends JPanel {
         placeholderLabel.setForeground(Color.GRAY);
         add(placeholderLabel, BorderLayout.CENTER);
 
-        // --- output area (hidden until process starts) ---
-        outputArea = new JTextArea();
-        outputArea.setEditable(false);
-        outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        outputArea.setLineWrap(true);
-        outputArea.setWrapStyleWord(false);
-        outputArea.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.TEXT_CURSOR));
-        installOutputContextMenu(outputArea);
+        // --- output pane (hidden until process starts) ---
+        outputPane = MarkdownRenderer.createOutputPane();
+        installOutputContextMenu(outputPane);
 
         // --- input area + send button ---
         inputArea = new JTextArea(4, 40);
@@ -218,6 +216,16 @@ public final class ClaudeSessionPanel extends JPanel {
 
         sendButton = new JButton("Send");
         sendButton.addActionListener(e -> sendPrompt());
+
+        stopButton = new JButton("Cancel");
+        stopButton.setEnabled(false);
+        stopButton.addActionListener(e -> {
+            if (claudeProcess != null) {
+                claudeProcess.stop();
+            }
+        });
+
+        promptResponsePanel = new PromptResponsePanel();
 
         bindSendKeys();
 
@@ -364,30 +372,50 @@ public final class ClaudeSessionPanel extends JPanel {
 
         showChatUI();
 
-        claudeProcess = new ClaudeProcess(line ->
-                SwingUtilities.invokeLater(() -> appendOutput(line)));
+        claudeProcess = new ClaudeProcess(text ->
+                SwingUtilities.invokeLater(() -> appendAssistantResponse(text)));
         claudeProcess.setDebugConsumer(line ->
-                SwingUtilities.invokeLater(() -> appendOutput(line)));
+                SwingUtilities.invokeLater(() -> MarkdownRenderer.appendInfo(outputPane, line)));
+        claudeProcess.setPromptConsumer(req ->
+                SwingUtilities.invokeLater(() -> {
+                    setInputEnabled(false);
+                    promptResponsePanel.show(req, answer -> {
+                        setInputEnabled(true);
+                        try {
+                            claudeProcess.sendResponse(answer);
+                        } catch (IllegalStateException ex) {
+                            MarkdownRenderer.appendInfo(outputPane,
+                                    "[send error: " + ex.getMessage() + "]");
+                        }
+                    });
+                }));
+        claudeProcess.setResponseDoneCallback(() ->
+                SwingUtilities.invokeLater(() -> setInputEnabled(true)));
 
         claudeProcess.start(confirmedDirectory.getAbsolutePath());
-        appendOutput("ready — type a message and press Send");
+        MarkdownRenderer.appendInfo(outputPane, "ready — type a message and press Send");
     }
 
     private void showChatUI() {
         remove(placeholderLabel);
 
-        JScrollPane outputScroll = new JScrollPane(outputArea);
+        JScrollPane outputScroll = new JScrollPane(outputPane);
         outputScroll.setBorder(null);
 
         JScrollPane inputScroll = new JScrollPane(inputArea);
         inputScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
 
+        JPanel buttonCol = new JPanel(new BorderLayout(0, 2));
+        buttonCol.add(sendButton, BorderLayout.NORTH);
+        buttonCol.add(stopButton, BorderLayout.SOUTH);
+
         JPanel sendRow = new JPanel(new BorderLayout(4, 0));
         sendRow.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         sendRow.add(inputScroll, BorderLayout.CENTER);
-        sendRow.add(sendButton, BorderLayout.EAST);
+        sendRow.add(buttonCol, BorderLayout.EAST);
 
         JPanel bottom = new JPanel(new BorderLayout());
+        bottom.add(promptResponsePanel, BorderLayout.NORTH);
         bottom.add(sendRow, BorderLayout.CENTER);
 
         add(outputScroll, BorderLayout.CENTER);
@@ -398,10 +426,8 @@ public final class ClaudeSessionPanel extends JPanel {
         inputArea.requestFocusInWindow();
     }
 
-    private void appendOutput(String line) {
-        outputArea.append(line);
-        outputArea.append("\n");
-        outputArea.setCaretPosition(outputArea.getDocument().getLength());
+    private void appendAssistantResponse(String text) {
+        MarkdownRenderer.appendAssistantResponse(outputPane, text);
     }
 
     // -------------------------------------------------------------------------
@@ -412,29 +438,37 @@ public final class ClaudeSessionPanel extends JPanel {
         String text = inputArea.getText();
         if (text.isBlank()) return;
         if (claudeProcess == null) {
-            appendOutput("[not ready]");
+            MarkdownRenderer.appendInfo(outputPane, "[not ready]");
             return;
         }
         if (claudeProcess.isRunning()) {
-            appendOutput("[busy — previous message still processing]");
+            MarkdownRenderer.appendInfo(outputPane, "[busy — previous message still processing]");
             return;
         }
+        MarkdownRenderer.appendUserMessage(outputPane, text);
         inputArea.setText("");
         inputArea.setBackground(Color.WHITE);
-        sendButton.setEnabled(false);
+        setInputEnabled(false);
 
         Thread t = new Thread(() -> {
             try {
                 claudeProcess.sendInput(text);
             } catch (IOException ex) {
                 SwingUtilities.invokeLater(() ->
-                        appendOutput("[send error: " + ex.getMessage() + "]"));
+                        MarkdownRenderer.appendInfo(outputPane,
+                                "[send error: " + ex.getMessage() + "]"));
             } finally {
-                SwingUtilities.invokeLater(() -> sendButton.setEnabled(true));
+                SwingUtilities.invokeLater(() -> setInputEnabled(true));
             }
         }, "claude-send");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void setInputEnabled(boolean enabled) {
+        inputArea.setEnabled(enabled);
+        sendButton.setEnabled(enabled);
+        stopButton.setEnabled(!enabled);
     }
 
     /**
@@ -575,18 +609,18 @@ public final class ClaudeSessionPanel extends JPanel {
     // output area context menu
     // -------------------------------------------------------------------------
 
-    private static void installOutputContextMenu(JTextArea area) {
+    private static void installOutputContextMenu(JTextComponent pane) {
         JPopupMenu menu = new JPopupMenu();
 
         JMenuItem copy = new JMenuItem("Copy");
         copy.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
                 java.awt.event.KeyEvent.VK_C, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        copy.addActionListener(e -> area.copy());
+        copy.addActionListener(e -> pane.copy());
 
         JMenuItem selectAll = new JMenuItem("Select All");
         selectAll.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
                 java.awt.event.KeyEvent.VK_A, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        selectAll.addActionListener(e -> area.selectAll());
+        selectAll.addActionListener(e -> pane.selectAll());
 
         menu.add(copy);
         menu.addSeparator();
@@ -595,13 +629,13 @@ public final class ClaudeSessionPanel extends JPanel {
         // enable Copy only when there is a selection
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
-                copy.setEnabled(area.getSelectedText() != null);
+                copy.setEnabled(pane.getSelectedText() != null);
             }
             @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
             @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
         });
 
-        area.setComponentPopupMenu(menu);
+        pane.setComponentPopupMenu(menu);
     }
 
     // -------------------------------------------------------------------------
