@@ -1,6 +1,6 @@
 package io.github.nbclaudecodegui.actions;
 
-import io.github.nbclaudecodegui.ui.ClaudeCodeTopComponent;
+import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import javax.swing.AbstractAction;
@@ -19,15 +19,10 @@ import org.openide.util.NbBundle.Messages;
 import org.openide.util.actions.Presenter;
 
 /**
- * Context-menu action that opens a Claude Code session for the selected
- * project.
+ * Context-menu action that opens a Claude Code session for the selected project.
  *
- * <p>Registered on {@code Projects/Actions} (project nodes in the Projects
- * Explorer). Non-project directories can be opened manually via the
- * "New Session" tab using the directory selector.
- *
- * <p>If a locked tab already exists for the project directory the first
- * matching tab is focused. Otherwise a new locked tab is created.
+ * <p>If a session for the project directory is already open, it is focused.
+ * Otherwise a new {@link ClaudeSessionTopComponent} is created.
  */
 @ActionID(
     category = "Project",
@@ -56,7 +51,7 @@ public final class OpenWithClaudeAction extends AbstractAction
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        ClaudeCodeTopComponent.openWindow();
+        ClaudeSessionTopComponent.openNewOrFocus();
     }
 
     @Override
@@ -74,8 +69,7 @@ public final class OpenWithClaudeAction extends AbstractAction
 
     /**
      * Context-specific action instance — implements {@link Presenter.Popup}
-     * so that the icon appears in the context menu
-     * (see NetBeans DevFAQ: DevFaqAddIconToContextMenu).
+     * so that the icon appears in the context menu.
      */
     private static final class ContextAction extends AbstractAction
             implements Presenter.Popup {
@@ -94,7 +88,7 @@ public final class OpenWithClaudeAction extends AbstractAction
         @Override
         public void actionPerformed(ActionEvent e) {
             if (directory != null) {
-                ClaudeCodeTopComponent.openForDirectory(directory, true);
+                ClaudeSessionTopComponent.openForDirectory(directory);
             }
         }
 

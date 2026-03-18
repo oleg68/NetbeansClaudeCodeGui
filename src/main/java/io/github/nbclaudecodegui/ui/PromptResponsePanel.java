@@ -1,6 +1,5 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.process.ClaudeProcess.PromptRequest;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.event.KeyAdapter;
@@ -27,6 +26,10 @@ import javax.swing.JTextField;
  * </pre>
  */
 public final class PromptResponsePanel extends JPanel {
+
+    /** Represents an interactive question from claude (kept for hybrid mode). */
+    public record PromptRequest(String text, java.util.List<String> options) {}
+
 
     private final JPanel  buttonRow;
     private final JTextField answerField;

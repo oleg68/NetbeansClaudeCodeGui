@@ -1,6 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.process.ClaudeProcess.PromptRequest;
+import io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest;
 import java.awt.Component;
 import java.util.ArrayList;
 import java.util.List;

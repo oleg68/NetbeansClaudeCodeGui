@@ -1,42 +1,41 @@
 package io.github.nbclaudecodegui.ui;
 
+import com.jediterm.terminal.ui.JediTermWidget;
+import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
+import com.pty4j.PtyProcess;
 import io.github.nbclaudecodegui.process.ClaudeProcess;
+import io.github.nbclaudecodegui.process.PtyTtyConnector;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.event.ActionEvent;
+import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.prefs.Preferences;
-import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
-import javax.swing.JMenuItem;
+import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JEditorPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
-import javax.swing.text.JTextComponent;
 import javax.swing.ListCellRenderer;
-import javax.swing.JList;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
@@ -44,23 +43,10 @@ import org.openide.util.NbPreferences;
 /**
  * Panel representing a single Claude Code session tab.
  *
- * <p>Top bar: project combo → path combo → Browse → Open → ⚙.
- * After Open: {@link ClaudeProcess} starts automatically; controls lock.
- * Chat area: output (raw JSON) above, input below with Send button.
- * Slash-commands: typing {@code /} shows a popup menu of known commands.
+ * <p>Top bar: project combo, path combo, Browse, Open, Settings.
+ * After Open: an embedded JediTerm terminal runs the Claude TUI.
  */
 public final class ClaudeSessionPanel extends JPanel {
-
-    // -------------------------------------------------------------------------
-    // slash-commands
-    // -------------------------------------------------------------------------
-
-    private static final String[] SLASH_COMMANDS = {
-        "/help", "/clear", "/exit", "/init", "/review", "/bug",
-        "/compact", "/config", "/cost", "/doctor", "/login",
-        "/logout", "/memory", "/model", "/permissions", "/pr_comments",
-        "/release-notes", "/status", "/terminal-setup", "/vim"
-    };
 
     // -------------------------------------------------------------------------
     // history persistence
@@ -102,11 +88,13 @@ public final class ClaudeSessionPanel extends JPanel {
     private final JLabel                 errorLabel;
     private final JLabel                 placeholderLabel;
 
-    private final JEditorPane outputPane;
-    private final JTextArea inputArea;
-    private final JButton   sendButton;
-    private final JButton   stopButton;
-    private final PromptResponsePanel promptResponsePanel;
+    private JediTermWidget terminalWidget;
+    private JPanel         topBar;
+    private JPanel         inputPanel;
+    private JTextArea      inputArea;
+    private JButton        sendButton;
+    private JButton        cancelButton;
+    private PtyTtyConnector connector;
 
     private boolean suppressProjectListener;
     private File    confirmedDirectory;
@@ -187,11 +175,11 @@ public final class ClaudeSessionPanel extends JPanel {
         controlBar.add(openButton);
         controlBar.add(settingsButton);
 
-        JPanel top = new JPanel(new BorderLayout());
-        top.add(controlBar, BorderLayout.CENTER);
-        top.add(errorLabel, BorderLayout.SOUTH);
-        top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
-        add(top, BorderLayout.NORTH);
+        topBar = new JPanel(new BorderLayout());
+        topBar.add(controlBar, BorderLayout.CENTER);
+        topBar.add(errorLabel, BorderLayout.SOUTH);
+        topBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
+        add(topBar, BorderLayout.NORTH);
 
         // --- placeholder ---
         placeholderLabel = new JLabel(
@@ -200,34 +188,32 @@ public final class ClaudeSessionPanel extends JPanel {
         placeholderLabel.setForeground(Color.GRAY);
         add(placeholderLabel, BorderLayout.CENTER);
 
-        // --- output pane (hidden until process starts) ---
-        outputPane = MarkdownRenderer.createOutputPane();
-        installOutputContextMenu(outputPane);
-
-        // --- input area + send button ---
-        inputArea = new JTextArea(4, 40);
+        // --- input panel (shown after session starts) ---
+        inputArea = new JTextArea(3, 40);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
-        inputArea.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            @Override public void insertUpdate(javax.swing.event.DocumentEvent e)  { onInputChanged(); }
-            @Override public void removeUpdate(javax.swing.event.DocumentEvent e)  { onInputChanged(); }
-            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) {}
-        });
+        bindSendKey(inputArea);
 
-        sendButton = new JButton("Send");
+        sendButton   = new JButton("Send");
+        cancelButton = new JButton("Cancel");
         sendButton.addActionListener(e -> sendPrompt());
+        cancelButton.addActionListener(e -> cancelPrompt());
 
-        stopButton = new JButton("Cancel");
-        stopButton.setEnabled(false);
-        stopButton.addActionListener(e -> {
-            if (claudeProcess != null) {
-                claudeProcess.stop();
-            }
-        });
+        JPanel buttonCol = new JPanel();
+        buttonCol.setLayout(new BoxLayout(buttonCol, BoxLayout.Y_AXIS));
+        sendButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        cancelButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        buttonCol.add(sendButton);
+        buttonCol.add(Box.createRigidArea(new Dimension(0, 4)));
+        buttonCol.add(cancelButton);
+        buttonCol.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
-        promptResponsePanel = new PromptResponsePanel();
-
-        bindSendKeys();
+        inputPanel = new JPanel(new BorderLayout());
+        inputPanel.add(new JScrollPane(inputArea), BorderLayout.CENTER);
+        inputPanel.add(buttonCol, BorderLayout.EAST);
+        inputPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
+        inputPanel.setVisible(false);
+        add(inputPanel, BorderLayout.SOUTH);
 
         if (locked) {
             setControlsLocked(true);
@@ -259,36 +245,107 @@ public final class ClaudeSessionPanel extends JPanel {
      *
      * @return {@code true} if the tab may be closed
      */
+    /**
+     * Returns {@code true} if this panel has no running process.
+     *
+     * <p>Close-time confirmation and process termination are handled by
+     * {@code ClaudeSessionTopComponent} rather than here.
+     *
+     * @return {@code true} if no PTY process is running
+     */
     public boolean canClose() {
-        if (claudeProcess == null || !claudeProcess.isRunning()) {
-            return true;
+        return claudeProcess == null || !claudeProcess.isRunning();
+    }
+
+    /**
+     * Returns {@code true} if a PTY process is currently running.
+     */
+    public boolean hasLiveProcess() {
+        return claudeProcess != null && claudeProcess.isRunning();
+    }
+
+    /**
+     * Starts the session for {@code dir} programmatically without UI dialogs.
+     *
+     * <p>Used when a directory is known (e.g. restored from persistence or
+     * opened from the context menu) and the session should start immediately.
+     *
+     * @param dir the working directory
+     */
+    public void autoStart(File dir) {
+        if (dir == null || !dir.isDirectory()) return;
+        confirmedDirectory = dir;
+        pathCombo.setSelectedItem(dir.getAbsolutePath());
+        setControlsLocked(true);
+        placeholderLabel.setVisible(false);
+        if (directoryListener != null) {
+            directoryListener.directorySelected(dir);
         }
-        NotifyDescriptor nd = new NotifyDescriptor.Confirmation(
-                "Stop the Claude Code session in '"
-                        + (confirmedDirectory != null
-                                ? confirmedDirectory.getName() : "?")
-                        + "' and close this tab?",
-                "Close Session",
-                NotifyDescriptor.YES_NO_OPTION);
-        if (DialogDisplayer.getDefault().notify(nd) == NotifyDescriptor.YES_OPTION) {
-            claudeProcess.stop();
-            return true;
+        startProcess();
+    }
+
+    /**
+     * Removes the terminal widget from the layout without destroying the PTY.
+     *
+     * <p>Called when the TopComponent window is closed/hidden but the process
+     * should remain alive (e.g. ResetWindows). Use {@link #reattachTerminal()}
+     * to make the widget visible again.
+     */
+    public void detachTerminal() {
+        if (terminalWidget != null) {
+            remove(terminalWidget);
+            revalidate();
+            repaint();
         }
-        return false;
+    }
+
+    /**
+     * Re-adds the terminal widget to the layout after a detach.
+     *
+     * <p>Called when the TopComponent is reopened and the process is still alive.
+     */
+    public void reattachTerminal() {
+        if (terminalWidget != null) {
+            add(terminalWidget, BorderLayout.CENTER);
+            revalidate();
+            repaint();
+            terminalWidget.requestFocusInWindow();
+        }
+    }
+
+    /**
+     * Moves keyboard focus to the prompt input area if a session is active,
+     * or to the terminal widget otherwise.
+     *
+     * <p>Called from {@code ClaudeSessionTopComponent.componentActivated()} so
+     * that the user can type immediately after switching to this window.
+     */
+    public void requestFocusOnInput() {
+        if (inputPanel.isVisible() && inputArea != null) {
+            inputArea.requestFocusInWindow();
+        } else if (terminalWidget != null) {
+            terminalWidget.requestFocusInWindow();
+        }
     }
 
     /**
      * Stops the process unconditionally (called when the whole window closes).
      */
     public void stopProcess() {
+        if (terminalWidget != null) {
+            terminalWidget.close();
+            terminalWidget = null;
+        }
         if (claudeProcess != null) {
             claudeProcess.stop();
         }
+        connector = null;
+        inputPanel.setVisible(false);
+        topBar.setVisible(true);
     }
 
     /**
-     * Resolves the tab label for a directory: project display name when the
-     * path matches an open project root, otherwise the directory basename.
+     * Resolves the tab label for a directory.
      *
      * @param dir the working directory
      * @return the resolved label
@@ -370,177 +427,97 @@ public final class ClaudeSessionPanel extends JPanel {
     private void startProcess() {
         if (confirmedDirectory == null) return;
 
-        showChatUI();
+        claudeProcess = new ClaudeProcess();
 
-        claudeProcess = new ClaudeProcess(text ->
-                SwingUtilities.invokeLater(() -> appendAssistantResponse(text)));
-        claudeProcess.setDebugConsumer(line ->
-                SwingUtilities.invokeLater(() -> MarkdownRenderer.appendInfo(outputPane, line)));
-        claudeProcess.setPromptConsumer(req ->
+        try {
+            PtyProcess process = claudeProcess.start(confirmedDirectory.getAbsolutePath());
+            showChatUI(process);
+
+            Thread waiter = new Thread(() -> {
+                try {
+                    process.waitFor();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
                 SwingUtilities.invokeLater(() -> {
-                    setInputEnabled(false);
-                    promptResponsePanel.show(req, answer -> {
-                        setInputEnabled(true);
-                        try {
-                            claudeProcess.sendResponse(answer);
-                        } catch (IllegalStateException ex) {
-                            MarkdownRenderer.appendInfo(outputPane,
-                                    "[send error: " + ex.getMessage() + "]");
-                        }
-                    });
-                }));
-        claudeProcess.setResponseDoneCallback(() ->
-                SwingUtilities.invokeLater(() -> setInputEnabled(true)));
-
-        claudeProcess.start(confirmedDirectory.getAbsolutePath());
-        MarkdownRenderer.appendInfo(outputPane, "ready — type a message and press Send");
+                    if (terminalWidget != null) {
+                        // Process ended; terminal keeps showing last output
+                    }
+                });
+            }, "claude-waiter");
+            waiter.setDaemon(true);
+            waiter.start();
+        } catch (IOException ex) {
+            showError("Failed to start claude: " + ex.getMessage());
+        }
     }
 
-    private void showChatUI() {
+    private void showChatUI(PtyProcess process) {
         remove(placeholderLabel);
 
-        JScrollPane outputScroll = new JScrollPane(outputPane);
-        outputScroll.setBorder(null);
+        connector = new PtyTtyConnector(process);
+        JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
+        widget.setTtyConnector(connector);
+        widget.start();
+        this.terminalWidget = widget;
 
-        JScrollPane inputScroll = new JScrollPane(inputArea);
-        inputScroll.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        topBar.setVisible(false);
+        inputPanel.setVisible(true);
 
-        JPanel buttonCol = new JPanel(new BorderLayout(0, 2));
-        buttonCol.add(sendButton, BorderLayout.NORTH);
-        buttonCol.add(stopButton, BorderLayout.SOUTH);
-
-        JPanel sendRow = new JPanel(new BorderLayout(4, 0));
-        sendRow.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
-        sendRow.add(inputScroll, BorderLayout.CENTER);
-        sendRow.add(buttonCol, BorderLayout.EAST);
-
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.add(promptResponsePanel, BorderLayout.NORTH);
-        bottom.add(sendRow, BorderLayout.CENTER);
-
-        add(outputScroll, BorderLayout.CENTER);
-        add(bottom, BorderLayout.SOUTH);
-
+        add(widget, BorderLayout.CENTER);
         revalidate();
         repaint();
-        inputArea.requestFocusInWindow();
+        widget.requestFocusInWindow();
     }
-
-    private void appendAssistantResponse(String text) {
-        MarkdownRenderer.appendAssistantResponse(outputPane, text);
-    }
-
-    // -------------------------------------------------------------------------
-    // input / send
-    // -------------------------------------------------------------------------
 
     private void sendPrompt() {
         String text = inputArea.getText();
-        if (text.isBlank()) return;
-        if (claudeProcess == null) {
-            MarkdownRenderer.appendInfo(outputPane, "[not ready]");
-            return;
+        if (text.isEmpty() || connector == null) return;
+        try {
+            connector.write(text + "\r");
+            inputArea.setText("");
+            if (terminalWidget != null) terminalWidget.requestFocusInWindow();
+        } catch (IOException ex) {
+            showError("Write failed: " + ex.getMessage());
         }
-        if (claudeProcess.isRunning()) {
-            MarkdownRenderer.appendInfo(outputPane, "[busy — previous message still processing]");
-            return;
+    }
+
+    private void cancelPrompt() {
+        if (connector == null) return;
+        try {
+            connector.write(new byte[]{0x03});
+        } catch (IOException ex) {
+            showError("Cancel failed: " + ex.getMessage());
         }
-        MarkdownRenderer.appendUserMessage(outputPane, text);
-        inputArea.setText("");
-        inputArea.setBackground(Color.WHITE);
-        setInputEnabled(false);
-
-        Thread t = new Thread(() -> {
-            try {
-                claudeProcess.sendInput(text);
-            } catch (IOException ex) {
-                SwingUtilities.invokeLater(() ->
-                        MarkdownRenderer.appendInfo(outputPane,
-                                "[send error: " + ex.getMessage() + "]"));
-            } finally {
-                SwingUtilities.invokeLater(() -> setInputEnabled(true));
-            }
-        }, "claude-send");
-        t.setDaemon(true);
-        t.start();
     }
 
-    private void setInputEnabled(boolean enabled) {
-        inputArea.setEnabled(enabled);
-        sendButton.setEnabled(enabled);
-        stopButton.setEnabled(!enabled);
-    }
-
-    /**
-     * Binds send/newline keys according to current preferences.
-     * Reads preferences fresh each time so changes take effect on next use.
-     */
-    private void bindSendKeys() {
-        // Remove old bindings by using named keys we control
-        inputArea.getInputMap().put(
-                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enter-action");
-        inputArea.getInputMap().put(
-                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "shift-enter-action");
-        inputArea.getInputMap().put(
-                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.CTRL_DOWN_MASK), "ctrl-enter-action");
-        inputArea.getInputMap().put(
-                KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.ALT_DOWN_MASK), "alt-enter-action");
-
-        inputArea.getActionMap().put("enter-action",       keyAction(ClaudeCodePreferences.ENTER));
-        inputArea.getActionMap().put("shift-enter-action", keyAction(ClaudeCodePreferences.SHIFT_ENTER));
-        inputArea.getActionMap().put("ctrl-enter-action",  keyAction(ClaudeCodePreferences.CTRL_ENTER));
-        inputArea.getActionMap().put("alt-enter-action",   keyAction(ClaudeCodePreferences.ALT_ENTER));
-    }
-
-    private AbstractAction keyAction(final String keyValue) {
-        return new AbstractAction() {
+    private void bindSendKey(JTextArea area) {
+        area.addKeyListener(new KeyAdapter() {
             @Override
-            public void actionPerformed(ActionEvent e) {
-                String sendKey    = ClaudeCodePreferences.getSendKey();
-                String newlineKey = ClaudeCodePreferences.getNewlineKey();
-                if (keyValue.equals(sendKey)) {
+            public void keyPressed(KeyEvent e) {
+                String sendKey = ClaudeCodePreferences.getSendKey();
+                boolean ctrl  = e.isControlDown();
+                boolean shift = e.isShiftDown();
+                boolean alt   = e.isAltDown();
+                boolean plain = !ctrl && !shift && !alt;
+                boolean isEnter = e.getKeyCode() == KeyEvent.VK_ENTER;
+                if (!isEnter) return;
+
+                boolean match = switch (sendKey) {
+                    case ClaudeCodePreferences.ENTER       -> plain;
+                    case ClaudeCodePreferences.CTRL_ENTER  -> ctrl && !shift && !alt;
+                    case ClaudeCodePreferences.SHIFT_ENTER -> shift && !ctrl && !alt;
+                    case ClaudeCodePreferences.ALT_ENTER   -> alt && !ctrl && !shift;
+                    default -> false;
+                };
+
+                if (match) {
+                    e.consume();
                     sendPrompt();
-                } else if (keyValue.equals(newlineKey)) {
-                    inputArea.insert("\n", inputArea.getCaretPosition());
                 }
+                // non-matching Enter variants fall through and insert a newline
             }
-        };
-    }
-
-    // -------------------------------------------------------------------------
-    // slash-command popup
-    // -------------------------------------------------------------------------
-
-    private void onInputChanged() {
-        String text = inputArea.getText();
-        boolean isSlash = text.startsWith("/");
-        inputArea.setBackground(isSlash
-                ? new Color(255, 255, 224)   // light yellow
-                : Color.WHITE);
-
-        if (isSlash) {
-            showSlashPopup(text);
-        }
-    }
-
-    private void showSlashPopup(String prefix) {
-        JPopupMenu popup = new JPopupMenu();
-        boolean any = false;
-        for (String cmd : SLASH_COMMANDS) {
-            if (cmd.startsWith(prefix) || "/".equals(prefix)) {
-                JMenuItem item = new JMenuItem(cmd);
-                item.addActionListener(e -> {
-                    inputArea.setText(cmd + " ");
-                    inputArea.setCaretPosition(inputArea.getText().length());
-                    inputArea.setBackground(new Color(255, 255, 224));
-                });
-                popup.add(item);
-                any = true;
-            }
-        }
-        if (any) {
-            popup.show(inputArea, 0, inputArea.getHeight());
-        }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -603,39 +580,6 @@ public final class ClaudeSessionPanel extends JPanel {
         } finally {
             suppressProjectListener = false;
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // output area context menu
-    // -------------------------------------------------------------------------
-
-    private static void installOutputContextMenu(JTextComponent pane) {
-        JPopupMenu menu = new JPopupMenu();
-
-        JMenuItem copy = new JMenuItem("Copy");
-        copy.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
-                java.awt.event.KeyEvent.VK_C, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        copy.addActionListener(e -> pane.copy());
-
-        JMenuItem selectAll = new JMenuItem("Select All");
-        selectAll.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
-                java.awt.event.KeyEvent.VK_A, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        selectAll.addActionListener(e -> pane.selectAll());
-
-        menu.add(copy);
-        menu.addSeparator();
-        menu.add(selectAll);
-
-        // enable Copy only when there is a selection
-        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
-            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
-                copy.setEnabled(pane.getSelectedText() != null);
-            }
-            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
-            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
-        });
-
-        pane.setComponentPopupMenu(menu);
     }
 
     // -------------------------------------------------------------------------

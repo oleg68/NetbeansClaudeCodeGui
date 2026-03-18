@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.actions;
 
+import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
 import static javax.swing.Action.SMALL_ICON;
@@ -8,8 +9,6 @@ import org.openide.awt.ActionReference;
 import org.openide.awt.ActionRegistration;
 import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle.Messages;
-import org.openide.windows.TopComponent;
-import org.openide.windows.WindowManager;
 
 /**
  * Toolbar action that opens the Claude Code chat window.
@@ -40,11 +39,6 @@ public final class ClaudeCodeAction extends AbstractAction {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        TopComponent tc = WindowManager.getDefault().findTopComponent("ClaudeCodeTopComponent");
-        if (tc == null) {
-            tc = new io.github.nbclaudecodegui.ui.ClaudeCodeTopComponent();
-        }
-        tc.open();
-        tc.requestActive();
+        ClaudeSessionTopComponent.openNewOrFocus();
     }
 }
