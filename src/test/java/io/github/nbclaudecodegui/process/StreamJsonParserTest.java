@@ -1,6 +1,5 @@
 package io.github.nbclaudecodegui.process;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -101,66 +100,6 @@ class StreamJsonParserTest {
         assertEquals("init",   StreamJsonParser.extractString(line, "subtype"));
         assertEquals("01JNZQFAKE12345", StreamJsonParser.extractSessionId(line));
     }
-
-    // -------------------------------------------------------------------------
-    // isPromptRequest
-    // -------------------------------------------------------------------------
-
-    @Test
-    void testIsPromptRequestPlainQuestion() {
-        assertTrue(StreamJsonParser.isPromptRequest("Allow this action? (y/n)"));
-        assertTrue(StreamJsonParser.isPromptRequest("Proceed? [y/n]"));
-        assertTrue(StreamJsonParser.isPromptRequest("Choose [1/2/3]"));
-    }
-
-    @Test
-    void testIsPromptRequestJsonSubtype() {
-        assertTrue(StreamJsonParser.isPromptRequest(
-                "{\"type\":\"system\",\"subtype\":\"question\",\"question\":\"Allow?\"}"));
-        assertTrue(StreamJsonParser.isPromptRequest(
-                "{\"type\":\"system\",\"subtype\":\"permission_request\"}"));
-    }
-
-    @Test
-    void testIsPromptRequestNegative() {
-        assertFalse(StreamJsonParser.isPromptRequest(
-                "{\"type\":\"result\",\"subtype\":\"success\",\"result\":\"Hi\"}"));
-        assertFalse(StreamJsonParser.isPromptRequest("normal output line"));
-        assertFalse(StreamJsonParser.isPromptRequest(null));
-        assertFalse(StreamJsonParser.isPromptRequest(""));
-    }
-
-    // -------------------------------------------------------------------------
-    // extractPromptOptions
-    // -------------------------------------------------------------------------
-
-    @Test
-    void testExtractPromptOptionsParentheses() {
-        var opts = StreamJsonParser.extractPromptOptions("Allow? (y/n/always)");
-        assertEquals(List.of("y", "n", "always"), opts);
-    }
-
-    @Test
-    void testExtractPromptOptionsBrackets() {
-        var opts = StreamJsonParser.extractPromptOptions("Choose [1/2/3]");
-        assertEquals(List.of("1", "2", "3"), opts);
-    }
-
-    @Test
-    void testExtractPromptOptionsYesNo() {
-        var opts = StreamJsonParser.extractPromptOptions("Continue? (yes/no)");
-        assertEquals(List.of("yes", "no"), opts);
-    }
-
-    @Test
-    void testExtractPromptOptionsNone() {
-        var opts = StreamJsonParser.extractPromptOptions("Just a plain sentence.");
-        assertTrue(opts.isEmpty());
-    }
-
-    // -------------------------------------------------------------------------
-    // realistic event lines
-    // -------------------------------------------------------------------------
 
     // -------------------------------------------------------------------------
     // extractAssistantText

@@ -5,6 +5,7 @@ import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.pty4j.PtyProcess;
 import io.github.nbclaudecodegui.process.ClaudeProcess;
 import io.github.nbclaudecodegui.process.PtyTtyConnector;
+import io.github.nbclaudecodegui.process.TtyPromptDetector;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -32,6 +33,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingUtilities;
+import java.util.logging.Logger;
 import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
@@ -47,6 +49,8 @@ import org.openide.util.NbPreferences;
  * After Open: an embedded JediTerm terminal runs the Claude TUI.
  */
 public final class ClaudeSessionPanel extends JPanel {
+
+    private static final Logger LOG = Logger.getLogger(ClaudeSessionPanel.class.getName());
 
     // -------------------------------------------------------------------------
     // history persistence
@@ -88,13 +92,15 @@ public final class ClaudeSessionPanel extends JPanel {
     private final JLabel                 errorLabel;
     private final JLabel                 placeholderLabel;
 
-    private JediTermWidget terminalWidget;
-    private JPanel         topBar;
-    private JPanel         inputPanel;
-    private JTextArea      inputArea;
-    private JButton        sendButton;
-    private JButton        cancelButton;
-    private PtyTtyConnector connector;
+    private JediTermWidget      terminalWidget;
+    private JPanel              topBar;
+    private JPanel              inputPanel;
+    private JTextArea           inputArea;
+    private JButton             sendButton;
+    private JButton             cancelButton;
+    private PtyTtyConnector     connector;
+    private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
+    private PromptResponsePanel promptResponsePanel;
 
     private boolean suppressProjectListener;
     private File    confirmedDirectory;
@@ -208,12 +214,18 @@ public final class ClaudeSessionPanel extends JPanel {
         buttonCol.add(cancelButton);
         buttonCol.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
+        promptResponsePanel = new PromptResponsePanel();
+
+        JPanel southStack = new JPanel(new BorderLayout());
         inputPanel = new JPanel(new BorderLayout());
         inputPanel.add(new JScrollPane(inputArea), BorderLayout.CENTER);
         inputPanel.add(buttonCol, BorderLayout.EAST);
         inputPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
         inputPanel.setVisible(false);
-        add(inputPanel, BorderLayout.SOUTH);
+
+        southStack.add(promptResponsePanel, BorderLayout.NORTH);
+        southStack.add(inputPanel, BorderLayout.CENTER);
+        add(southStack, BorderLayout.SOUTH);
 
         if (locked) {
             setControlsLocked(true);
@@ -332,6 +344,9 @@ public final class ClaudeSessionPanel extends JPanel {
      * Stops the process unconditionally (called when the whole window closes).
      */
     public void stopProcess() {
+        if (connector != null) {
+            connector.setLineListener(null);
+        }
         if (terminalWidget != null) {
             terminalWidget.close();
             terminalWidget = null;
@@ -340,6 +355,7 @@ public final class ClaudeSessionPanel extends JPanel {
             claudeProcess.stop();
         }
         connector = null;
+        promptResponsePanel.dismiss();
         inputPanel.setVisible(false);
         topBar.setVisible(true);
     }
@@ -456,6 +472,46 @@ public final class ClaudeSessionPanel extends JPanel {
         remove(placeholderLabel);
 
         connector = new PtyTtyConnector(process);
+        connector.setLineListener(line -> {
+            if (ClaudeCodePreferences.isDebugMode()) {
+                LOG.info("[PTY line] " + line);
+            }
+            // If promptResponsePanel is active and Claude emitted a non-menu line,
+            // it means Claude accepted input from the terminal — auto-dismiss.
+            if (promptResponsePanel.isVisible()) {
+                ttyPromptDetector.feed(line); // update state machine
+                SwingUtilities.invokeLater(() -> {
+                    promptResponsePanel.dismissIfActive();
+                    inputPanel.setVisible(true);
+                    revalidate();
+                    repaint();
+                });
+                return;
+            }
+
+            ttyPromptDetector.feed(line).ifPresent(req -> {
+                LOG.info("[PTY prompt detected] text=\"" + req.text() + "\" | options=" + req.options());
+                SwingUtilities.invokeLater(() -> {
+                    inputPanel.setVisible(false);
+                    promptResponsePanel.show(req, answer -> {
+                        LOG.info("[PTY prompt answer] " + answer);
+                        inputPanel.setVisible(true);
+                        revalidate();
+                        repaint();
+                        if (answer != null) {
+                            try {
+                                connector.write(answer + "\r");
+                            } catch (java.io.IOException ex) {
+                                showError("Write failed: " + ex.getMessage());
+                            }
+                        }
+                    });
+                    revalidate();
+                    repaint();
+                });
+            });
+        });
+
         JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
         widget.setTtyConnector(connector);
         widget.start();

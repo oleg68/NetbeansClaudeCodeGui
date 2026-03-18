@@ -1,7 +1,5 @@
 package io.github.nbclaudecodegui.process;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Minimal parser for the claude CLI {@code --output-format stream-json} NDJSON stream.
@@ -130,90 +128,4 @@ public final class StreamJsonParser {
         return extractString(json.substring(typeTextPos + 13), "text");
     }
 
-    // -------------------------------------------------------------------------
-    // prompt detection
-    // -------------------------------------------------------------------------
-
-    /**
-     * Returns {@code true} if the line looks like an interactive question from claude.
-     *
-     * <p>Detects:
-     * <ul>
-     *   <li>Non-JSON lines containing common question patterns like
-     *       {@code ? (}, {@code [y/n]}, {@code (Y/n)}</li>
-     *   <li>JSON events with {@code "subtype":"question"} or
-     *       {@code "subtype":"permission_request"}</li>
-     * </ul>
-     *
-     * @param line a single line from the subprocess stdout
-     * @return {@code true} if this line represents an interactive prompt
-     */
-    public static boolean isPromptRequest(String line) {
-        if (line == null || line.isBlank()) return false;
-
-        if (!line.startsWith("{")) {
-            String lower = line.toLowerCase();
-            return lower.contains("? (") || lower.contains("[y/n]")
-                    || lower.contains("[y/n]") || lower.contains("(y/n)")
-                    || lower.contains("[y/n/") || lower.contains("(y/n/")
-                    || lower.contains("(yes/no)") || lower.contains("[yes/no]")
-                    || lower.contains("[1/") || lower.contains("(1/");
-        }
-
-        String subtype = extractString(line, "subtype");
-        return "question".equals(subtype) || "permission_request".equals(subtype);
-    }
-
-    /**
-     * Extracts option strings from a prompt line.
-     *
-     * <p>Parses content inside the last pair of {@code (…)} or {@code […]} brackets,
-     * splitting on {@code /}. For example:
-     * <ul>
-     *   <li>{@code "Allow? (y/n/always)"} → {@code ["y", "n", "always"]}</li>
-     *   <li>{@code "Choose [1/2/3]"} → {@code ["1", "2", "3"]}</li>
-     * </ul>
-     *
-     * @param line a prompt line (JSON or plain text)
-     * @return list of option strings; empty if none found
-     */
-    public static List<String> extractPromptOptions(String line) {
-        List<String> options = new ArrayList<>();
-        if (line == null || line.isBlank()) return options;
-
-        // Find the last bracketed group in the line
-        int lastOpen = -1;
-        char closeChar = ')';
-        for (int i = line.length() - 1; i >= 0; i--) {
-            char c = line.charAt(i);
-            if (c == ')' || c == ']') {
-                closeChar = c;
-                // find matching open
-                char openChar = (c == ')') ? '(' : '[';
-                for (int j = i - 1; j >= 0; j--) {
-                    if (line.charAt(j) == openChar) {
-                        lastOpen = j;
-                        break;
-                    }
-                }
-                if (lastOpen >= 0) break;
-            }
-        }
-
-        if (lastOpen < 0) return options;
-
-        int closePos = line.indexOf(closeChar, lastOpen + 1);
-        if (closePos < 0) return options;
-
-        String inner = line.substring(lastOpen + 1, closePos).trim();
-        if (inner.isEmpty() || !inner.contains("/")) return options;
-
-        for (String part : inner.split("/")) {
-            String trimmed = part.trim();
-            if (!trimmed.isEmpty()) {
-                options.add(trimmed);
-            }
-        }
-        return options;
-    }
 }
