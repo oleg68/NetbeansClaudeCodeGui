@@ -39,6 +39,7 @@ class TtyPromptDetectorTest {
         assertEquals("2",   req.get().options().get(1).response());
         assertEquals("No",  req.get().options().get(2).display());
         assertEquals("3",   req.get().options().get(2).response());
+        assertEquals(0, req.get().defaultOptionIndex());
     }
 
     @Test
@@ -53,6 +54,7 @@ class TtyPromptDetectorTest {
         assertEquals("1", req.get().options().get(0).response());
         assertEquals("2", req.get().options().get(1).response());
         assertEquals("3", req.get().options().get(2).response());
+        assertEquals(0, req.get().defaultOptionIndex());
     }
 
     @Test
@@ -67,6 +69,7 @@ class TtyPromptDetectorTest {
         assertEquals("1",        req.get().options().get(0).response());
         assertEquals("Option B", req.get().options().get(1).display());
         assertEquals("2",        req.get().options().get(1).response());
+        assertEquals(0, req.get().defaultOptionIndex());
     }
 
     @Test
@@ -91,6 +94,7 @@ class TtyPromptDetectorTest {
         assertEquals("y", req.get().options().get(0).response());
         assertEquals("n", req.get().options().get(1).display());
         assertEquals("n", req.get().options().get(1).response());
+        assertEquals(-1, req.get().defaultOptionIndex());
     }
 
     @Test
@@ -119,6 +123,7 @@ class TtyPromptDetectorTest {
         Optional<PromptResponsePanel.PromptRequest> req = detector.feed(line);
         assertTrue(req.isPresent());
         assertEquals("Allow?", req.get().text());
+        assertEquals(-1, req.get().defaultOptionIndex());
     }
 
     @Test
@@ -155,6 +160,36 @@ class TtyPromptDetectorTest {
         detector.reset();
         // After reset, non-option line should not emit
         assertTrue(detector.feed("something").isEmpty());
+    }
+
+    @Test
+    void testTryFlushEmitsPendingMenuWhenPtyGoesIdle() {
+        // Regression: Claude outputs menu options then goes silent waiting for input.
+        // No terminating non-option line arrives, so feed() never emits a PromptRequest.
+        // tryFlush() must emit the pending request immediately.
+        assertTrue(detector.feed("❯ 1. Yes").isEmpty(), "trigger line alone should not emit");
+        assertTrue(detector.feed("2. No").isEmpty(),    "second option alone should not emit");
+
+        Optional<PromptResponsePanel.PromptRequest> flushed = detector.tryFlush();
+        assertTrue(flushed.isPresent(), "tryFlush() must emit pending prompt");
+        assertEquals(2, flushed.get().options().size());
+        assertEquals("1", flushed.get().options().get(0).response());
+        assertEquals("2", flushed.get().options().get(1).response());
+    }
+
+    @Test
+    void testTryFlushReturnsEmptyWhenIdle() {
+        assertTrue(detector.tryFlush().isEmpty(), "tryFlush() on idle detector must return empty");
+    }
+
+    @Test
+    void testTryFlushResetsStateToIdle() {
+        detector.feed("❯ 1. Yes");
+        detector.tryFlush();
+        // After flush, feeding another menu trigger should start fresh
+        assertTrue(detector.feed("something unrelated").isEmpty());
+        Optional<PromptResponsePanel.PromptRequest> req = detector.feed("❯ 1. Option");
+        assertTrue(req.isEmpty(), "new trigger starts collecting again, no emit yet");
     }
 
     // -------------------------------------------------------------------------

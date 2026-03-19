@@ -101,6 +101,8 @@ public final class ClaudeSessionPanel extends JPanel {
     private PtyTtyConnector     connector;
     private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
     private PromptResponsePanel promptResponsePanel;
+    /** Fires tryFlush() when PTY output goes silent while menu options are being collected. */
+    private final javax.swing.Timer promptFlushTimer = new javax.swing.Timer(400, e -> flushPendingPrompt());
 
     private boolean suppressProjectListener;
     private File    confirmedDirectory;
@@ -476,18 +478,19 @@ public final class ClaudeSessionPanel extends JPanel {
             if (ClaudeCodePreferences.isDebugMode()) {
                 LOG.info("[PTY line] " + line);
             }
-            // If promptResponsePanel is active and Claude emitted a non-menu line,
-            // it means Claude accepted input from the terminal — auto-dismiss.
+            // While the prompt panel is visible, ignore PTY lines and wait for
+            // the user to click a button. Spinner frames and menu redraws must
+            // not auto-dismiss the panel before the user has responded.
             if (promptResponsePanel.isVisible()) {
-                ttyPromptDetector.feed(line); // update state machine
-                SwingUtilities.invokeLater(() -> {
-                    promptResponsePanel.dismissIfActive();
-                    inputPanel.setVisible(true);
-                    revalidate();
-                    repaint();
-                });
                 return;
             }
+
+            // Restart flush timer on every line. If Claude stops sending output
+            // while the detector is in COLLECTING state (menu is the last output),
+            // the timer fires and calls tryFlush() to emit the pending prompt.
+            SwingUtilities.invokeLater(() -> {
+                promptFlushTimer.restart();
+            });
 
             ttyPromptDetector.feed(line).ifPresent(req -> {
                 LOG.info("[PTY prompt detected] text=\"" + req.text() + "\" | options=" + req.options());
@@ -498,13 +501,7 @@ public final class ClaudeSessionPanel extends JPanel {
                         inputPanel.setVisible(true);
                         revalidate();
                         repaint();
-                        if (answer != null) {
-                            try {
-                                connector.write(answer + "\r");
-                            } catch (java.io.IOException ex) {
-                                showError("Write failed: " + ex.getMessage());
-                            }
-                        }
+                        writePtyAnswer(answer);
                     });
                     revalidate();
                     repaint();
@@ -585,6 +582,50 @@ public final class ClaudeSessionPanel extends JPanel {
         pathCombo.setEnabled(!locked);
         browseButton.setEnabled(!locked);
         openButton.setEnabled(!locked);
+    }
+
+    /** Called by promptFlushTimer when PTY output goes silent mid-menu. */
+    private void flushPendingPrompt() {
+        if (promptResponsePanel.isVisible()) {
+            return;
+        }
+        ttyPromptDetector.tryFlush().ifPresent(req -> {
+            LOG.info("[PTY prompt flush] text=\"" + req.text() + "\" | options=" + req.options());
+            inputPanel.setVisible(false);
+            promptResponsePanel.show(req, answer -> {
+                LOG.info("[PTY prompt answer] " + answer);
+                inputPanel.setVisible(true);
+                revalidate();
+                repaint();
+                writePtyAnswer(answer);
+            });
+            revalidate();
+            repaint();
+        });
+    }
+
+    /**
+     * Writes the user's answer to the PTY.
+     *
+     * <p>Single-digit answers select a numbered Ink/inquirer menu option immediately
+     * (no Enter needed). Free-form text needs a trailing {@code \r}. A {@code null}
+     * answer means the user clicked Cancel — send ESC so Claude dismisses its menu.
+     */
+    private void writePtyAnswer(String answer) {
+        try {
+            if (answer == null) {
+                // Cancel — send ESC to dismiss the Ink menu
+                LOG.info("[PTY write] \\x1b (Cancel/ESC)");
+                connector.write(new byte[]{0x1b});
+            } else {
+                boolean isMenuDigit = answer.matches("[0-9]");
+                String toWrite = isMenuDigit ? answer : answer + "\r";
+                LOG.info("[PTY write] " + toWrite.replace("\r", "\\r").replace("\n", "\\n"));
+                connector.write(toWrite);
+            }
+        } catch (java.io.IOException ex) {
+            showError("Write failed: " + ex.getMessage());
+        }
     }
 
     private void showError(String message) {

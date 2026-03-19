@@ -139,7 +139,7 @@ public final class TtyPromptDetector {
                     if (lower.contains(trigger.toLowerCase())) {
                         previousLine = line;
                         return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
-                                line, extractInlineOptions(line)));
+                                line, extractInlineOptions(line), -1));
                     }
                 }
                 // Check for JSON subtype prompts
@@ -150,7 +150,7 @@ public final class TtyPromptDetector {
                         if (text == null) text = line;
                         previousLine = line;
                         return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
-                                text, new ArrayList<>()));
+                                text, new ArrayList<>(), -1));
                     }
                 }
                 previousLine = line;
@@ -169,7 +169,7 @@ public final class TtyPromptDetector {
                     questionLine = "";
                     previousLine = line;
                     io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest req =
-                            new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(text, options);
+                            new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(text, options, 0);
                     // Re-process this line in IDLE state (it may itself be a trigger)
                     feed(line);
                     return Optional.of(req);
@@ -177,6 +177,28 @@ public final class TtyPromptDetector {
             }
             default -> { return Optional.empty(); }
         }
+    }
+
+    /**
+     * Flushes any pending COLLECTING state as a complete prompt.
+     *
+     * <p>Called when PTY output goes silent while a menu is partially collected —
+     * Claude is waiting for input and will not send a terminating line.
+     *
+     * @return the pending {@link io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest},
+     *         or empty if the detector was not in COLLECTING state
+     */
+    public Optional<io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest> tryFlush() {
+        if (state == State.COLLECTING && !collectedOptions.isEmpty()) {
+            state = State.IDLE;
+            List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> options = new ArrayList<>(collectedOptions);
+            collectedOptions.clear();
+            String text = questionLine;
+            questionLine = "";
+            LOG.info("[TtyPromptDetector] tryFlush emitting prompt: \"" + text + "\" options=" + options);
+            return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(text, options, 0));
+        }
+        return Optional.empty();
     }
 
     /** Reset internal state (e.g. when starting a new session). */
