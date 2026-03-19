@@ -13,7 +13,9 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JSpinner;
 import javax.swing.JTextField;
+import javax.swing.SpinnerNumberModel;
 
 /**
  * Settings panel displayed inside Tools → Options → Claude Code.
@@ -38,6 +40,7 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     };
 
     private JTextField executablePathField;
+    private JSpinner mcpPortSpinner;
     private javax.swing.JCheckBox debugCheckBox;
 
     /** send-key radio buttons: value → button */
@@ -76,6 +79,14 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
             }
         });
         form.add(browseButton, gbc(2, row, false));
+        row++;
+
+        // --- MCP port ---
+        form.add(new JLabel("MCP server port:"), gbc(0, row, false));
+        mcpPortSpinner = new JSpinner(new SpinnerNumberModel(
+                ClaudeCodePreferences.DEFAULT_MCP_PORT, 1024, 65535, 1));
+        mcpPortSpinner.setToolTipText("Port for the NetBeans MCP SSE server (restart required)");
+        form.add(mcpPortSpinner, gbc(1, row, false));
         row++;
 
         // --- send key ---
@@ -181,6 +192,7 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     void load() {
         executablePathField.setText(
                 ClaudeCodePreferences.getClaudeExecutablePath());
+        mcpPortSpinner.setValue(ClaudeCodePreferences.getMcpPort());
         debugCheckBox.setSelected(ClaudeCodePreferences.isDebugMode());
 
         String sendVal    = ClaudeCodePreferences.getSendKey();
@@ -200,6 +212,7 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     void store() {
         ClaudeCodePreferences.setClaudeExecutablePath(
                 executablePathField.getText().trim());
+        ClaudeCodePreferences.setMcpPort((Integer) mcpPortSpinner.getValue());
         ClaudeCodePreferences.setDebugMode(debugCheckBox.isSelected());
         ClaudeCodePreferences.setSendKey(selectedValue(sendRadios));
         ClaudeCodePreferences.setNewlineKey(selectedValue(newlineRadios));

@@ -1,15 +1,19 @@
 package org.openbeans.claude.netbeans;
 
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.api.project.ui.OpenProjects;
 import org.openide.modules.ModuleInstall;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.util.lookup.ServiceProvider;
-
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import org.netbeans.api.project.ui.OpenProjects;
 
 /**
  * Manages the lifecycle of the Claude Code NetBeans plugin.
@@ -24,7 +28,6 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
     // Static so that the Lookup-created instance (separate from the ModuleInstall
     // instance managed by NetBeans) reads the same running server state.
     private static volatile MCPSseServer mcpServer;
-    private static volatile LockFileManager lockFileManager;
     private NetBeansMCPHandler mcpHandler;
     
     /**
@@ -33,10 +36,13 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
     @Override
     public void restored() {
         LOGGER.info("Claude Code NetBeans plugin is starting up...");
-        
+
+        // Remove any stale NetBeans lock files from previous sessions
+        removeNetBeansLockFiles();
+
         // Initialize components
         initializeComponents();
-        
+
         // Start the MCP server
         startMCPServer();
         
@@ -58,11 +64,6 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
         // Stop MCP server
         stopMCPServer();
         
-        // Clean up lock file
-        if (lockFileManager != null) {
-            lockFileManager.removeLockFile();
-        }
-        
         LOGGER.info("Claude Code NetBeans plugin shut down complete");
     }
     
@@ -79,14 +80,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
      */
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
-         if (OpenProjects.PROPERTY_OPEN_PROJECTS.equals(evt.getPropertyName())) {
-             // Update lock file when projects change
-             RP.post(() -> {
-                 if (lockFileManager != null) {
-                     lockFileManager.updateLockFile();
-                 }
-             });
-         }
+         // No-op: lock file no longer used
     }
     
     /**
@@ -94,17 +88,9 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
      */
     private void initializeComponents() {
         try {
-            // Create MCP handler
             mcpHandler = new NetBeansMCPHandler();
-            
-            // Create SSE server
             mcpServer = new MCPSseServer(mcpHandler);
-            
-            // Create lock file manager
-            lockFileManager = new LockFileManager();
-            
             LOGGER.info("Claude Code components initialized");
-            
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to initialize Claude Code components", e);
             Exceptions.printStackTrace(e);
@@ -112,30 +98,46 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
     }
     
     /**
-     * Starts the MCP WebSocket server and creates the lock file.
+     * Starts the MCP SSE server on the configured port.
+     * Fails immediately if the port is busy.
      */
     private void startMCPServer() {
         RP.post(() -> {
             try {
-                // Start the WebSocket server
-                if (mcpServer.start()) {
-                    int port = mcpServer.getPort();
-                    long pid = LockFileManager.getCurrentProcessId();
-                    
-                    // Create lock file with server information
-                    lockFileManager.createLockFile(port, pid);
-                    
-                    LOGGER.log(Level.INFO, "Claude Code MCP server started on port {0}, PID {1}", 
-                              new Object[]{port, pid});
+                int port = ClaudeCodePreferences.getMcpPort();
+                if (mcpServer.start(port)) {
+                    LOGGER.log(Level.INFO, "Claude Code MCP server started on port {0}", port);
                 } else {
-                    LOGGER.severe("Failed to start Claude Code MCP server");
+                    LOGGER.severe("Port " + port + " is busy. Change MCP port in Tools → Options → Claude Code.");
                 }
-                
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Error starting Claude Code MCP server", e);
                 Exceptions.printStackTrace(e);
             }
         });
+    }
+
+    /**
+     * Removes stale NetBeans lock files from ~/.claude/ide/ left by previous sessions.
+     */
+    private void removeNetBeansLockFiles() {
+        try {
+            Path ideDir = Paths.get(System.getProperty("user.home"), ".claude", "ide");
+            if (!Files.exists(ideDir)) return;
+            try (var stream = Files.list(ideDir)) {
+                stream.filter(p -> p.toString().endsWith(".lock"))
+                      .forEach(p -> {
+                          try {
+                              if (Files.readString(p).contains("\"ideName\":\"NetBeans\"")) {
+                                  Files.delete(p);
+                                  LOGGER.info("Removed stale NetBeans lock: " + p);
+                              }
+                          } catch (IOException e) { /* ignore */ }
+                      });
+            }
+        } catch (IOException e) {
+            LOGGER.warning("Could not clean ide dir: " + e.getMessage());
+        }
     }
     
     /**
@@ -172,17 +174,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
             status.append("⚪ MCP Server: Not initialized<br>");
         }
         
-        if (lockFileManager != null) {
-            if (lockFileManager.isLockFileValid()) {
-                status.append("🟢 Lock File: Created<br>");
-            } else {
-                status.append("🔴 Lock File: Not found<br>");
-            }
-        } else {
-            status.append("⚪ Lock File: Not managed<br>");
-        }
-        
-        status.append("🔧 Process ID: ").append(LockFileManager.getCurrentProcessId());
+        status.append("🔧 Process ID: ").append(ProcessHandle.current().pid());
         
         return status.toString();
     }
@@ -210,13 +202,8 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
         return -1;
     }
     
-    /**
-     * Checks if the lock file is valid and accessible.
-     * 
-     * @return true if lock file is valid, false otherwise
-     */
     @Override
     public boolean isLockFileValid() {
-        return lockFileManager != null && lockFileManager.isLockFileValid();
+        return false; // lock file no longer used
     }
 }

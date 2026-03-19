@@ -58,8 +58,8 @@ public final class ClaudeProcess {
         if (mcp != null && mcp.isServerRunning()) {
             try {
                 String json = buildMcpConfigJson(mcp.getServerPort());
-                Path cfg = Files.createTempFile("nb-mcp-", ".json");
-                cfg.toFile().deleteOnExit();
+                Path cfg = Path.of(System.getProperty("java.io.tmpdir"),
+                        "netbeans-mcp-" + mcp.getServerPort() + ".json");
                 Files.writeString(cfg, json);
                 cmd.add("--mcp-config");
                 cmd.add(cfg.toAbsolutePath().toString());

@@ -40,8 +40,6 @@ import java.util.logging.Logger;
 public class MCPSseServer {
 
     private static final Logger LOGGER = Logger.getLogger(MCPSseServer.class.getName());
-    private static final int PORT_RANGE_START = 8990;
-    private static final int PORT_RANGE_END   = 9100;
 
     private Server server;
     private int port;
@@ -59,18 +57,21 @@ public class MCPSseServer {
     }
 
     /**
-     * Starts the HTTP/SSE server on an available port in [8990, 9100].
+     * Starts the HTTP/SSE server on the specified port.
+     * Fails immediately if the port is already in use.
      *
+     * @param port the port to listen on
      * @return {@code true} if the server started successfully
      */
-    public boolean start() {
+    public boolean start(int port) {
+        try (ServerSocket test = new ServerSocket(port)) {
+            // port is free — close probe socket and let Jetty bind it
+        } catch (Exception e) {
+            LOGGER.severe("MCP port " + port + " is busy: " + e.getMessage());
+            return false;
+        }
         try {
-            port = findAvailablePort();
-            if (port == -1) {
-                LOGGER.severe("No available ports found in range "
-                        + PORT_RANGE_START + "-" + PORT_RANGE_END);
-                return false;
-            }
+            this.port = port;
 
             server = new Server();
             ServerConnector connector = new ServerConnector(server);
@@ -206,15 +207,4 @@ public class MCPSseServer {
         }
     }
 
-    // -------------------------------------------------------------------------
-
-    private int findAvailablePort() {
-        for (int p = PORT_RANGE_START; p <= PORT_RANGE_END; p++) {
-            try (ServerSocket s = new ServerSocket(p)) {
-                return p;
-            } catch (Exception ignored) {
-            }
-        }
-        return -1;
-    }
 }

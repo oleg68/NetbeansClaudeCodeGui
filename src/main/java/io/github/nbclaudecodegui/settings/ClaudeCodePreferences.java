@@ -184,6 +184,31 @@ public final class ClaudeCodePreferences {
                 .putBoolean(KEY_DEBUG_MODE, enabled);
     }
 
+    // -------------------------------------------------------------------------
+    // mcpPort
+    // -------------------------------------------------------------------------
+
+    /** Preference key: MCP SSE server port. */
+    public static final String KEY_MCP_PORT = "mcpPort";
+    /** Default port for the NetBeans MCP SSE server. */
+    public static final int DEFAULT_MCP_PORT = 28991;
+
+    /**
+     * Returns the configured MCP server port.
+     */
+    public static int getMcpPort() {
+        return NbPreferences.forModule(ClaudeCodePreferences.class)
+                .getInt(KEY_MCP_PORT, DEFAULT_MCP_PORT);
+    }
+
+    /**
+     * Persists the MCP server port.
+     */
+    public static void setMcpPort(int port) {
+        NbPreferences.forModule(ClaudeCodePreferences.class)
+                .putInt(KEY_MCP_PORT, port);
+    }
+
     private static String validated(String value, String fallback) {
         return ENTER.equals(value) || SHIFT_ENTER.equals(value)
                 || CTRL_ENTER.equals(value) || ALT_ENTER.equals(value)

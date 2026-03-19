@@ -13,6 +13,7 @@ class ClaudeCodePreferencesTest {
     void tearDown() {
         ClaudeCodePreferences.setClaudeExecutablePath(
                 ClaudeCodePreferences.DEFAULT_CLAUDE_EXECUTABLE_PATH);
+        ClaudeCodePreferences.setMcpPort(ClaudeCodePreferences.DEFAULT_MCP_PORT);
     }
 
     @Test
@@ -42,6 +43,18 @@ class ClaudeCodePreferencesTest {
             assertTrue(new java.io.File(result).canExecute(),
                     "findOnPath must return an executable path");
         }
+    }
+
+    @Test
+    void mcpPortDefaultIs28991() {
+        assertEquals(28991, ClaudeCodePreferences.DEFAULT_MCP_PORT);
+        assertEquals(28991, ClaudeCodePreferences.getMcpPort());
+    }
+
+    @Test
+    void mcpPortStoreAndRetrieve() {
+        ClaudeCodePreferences.setMcpPort(9000);
+        assertEquals(9000, ClaudeCodePreferences.getMcpPort());
     }
 
     @Test

@@ -3,6 +3,7 @@ package io.github.nbclaudecodegui.process;
 import com.jediterm.terminal.TtyConnector;
 import com.pty4j.PtyProcess;
 import com.pty4j.WinSize;
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.Dimension;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -79,8 +80,10 @@ public final class PtyTtyConnector implements TtyConnector {
                         String stripped = ANSI_PATTERN.matcher(expanded).replaceAll("").trim();
                         lineBuffer.setLength(0);
                         if (!stripped.isEmpty()) {
-                            LOG.info("[PTY raw] " + raw.replace("\u001B", "<ESC>"));
-                            LOG.info("[PTY stripped] " + stripped);
+                            if (ClaudeCodePreferences.isDebugMode()) {
+                                LOG.info("[PTY raw] " + raw.replace("\u001B", "<ESC>"));
+                                LOG.info("[PTY stripped] " + stripped);
+                            }
                             Consumer<String> l = lineListener;
                             if (l != null) l.accept(stripped);
                         }
