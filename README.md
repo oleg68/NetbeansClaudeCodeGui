@@ -2,7 +2,7 @@
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
-Current version: **0.9.16-SNAPSHOT** (Stage 9 complete)
+Current version: **0.10.0-SNAPSHOT** (Stage 10 in progress)
 
 ---
 
@@ -126,10 +126,35 @@ src/
 | 7 | Embedded JediTerm terminal (PTY, full Claude TUI) | ✅ |
 | 8 | Refactor: each session = independent TopComponent | ✅ |
 | 9 | PromptResponsePanel fixes (visibility, flush timer, ESC/Cancel) | ✅ |
-| 10 | Diff viewer with Accept/Reject | planned |
-| 11 | File attachments (`@path` syntax) | planned |
-| 12 | Full settings integration + session persistence | planned |
-| 13 | MCP integration (optional) | planned |
+| 10 | MCP server integration (WebSocket, IDE tools for Claude CLI) — [test plan](docs/manual-test-mcp.md) | 🔄 in progress |
+| 11 | Diff viewer with Accept/Reject | planned |
+| 12 | File attachments (`@path` syntax) | planned |
+| 13 | Full settings integration + session persistence | planned |
+
+---
+
+## Third-party code
+
+The MCP server integration (package `org.openbeans.claude.netbeans`) is based on
+[claude-code-netbeans](https://github.com/emilianbold/claude-code-netbeans)
+by Emilian Marius Bold, used under the **ISC License**:
+
+> Copyright (c) 2025 Emilian Marius Bold
+>
+> Permission to use, copy, modify, and distribute this software for any purpose
+> with or without fee is hereby granted, provided that the above copyright notice
+> and this permission notice appear in all copies.
+>
+> THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+> REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+> FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+> INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+> LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+> OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+> PERFORMANCE OF THIS SOFTWARE.
+
+**Changes made:** updated target NetBeans version from RELEASE190 to RELEASE230;
+integrated into the `nb-claude-code-gui` plugin build alongside the PTY terminal component.
 
 ---
 

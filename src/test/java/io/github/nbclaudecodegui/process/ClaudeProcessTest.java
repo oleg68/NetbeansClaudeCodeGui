@@ -85,6 +85,15 @@ class ClaudeProcessTest {
         }
     }
 
+    @Test
+    void testMcpConfigJsonUsesSseTransport() {
+        String json = ClaudeProcess.buildMcpConfigJson(8990);
+        assertTrue(json.contains("\"type\":\"sse\""),
+                "MCP config must use SSE transport, got: " + json);
+        assertTrue(json.contains("http://localhost:8990"),
+                "MCP config must use http:// URL for SSE, got: " + json);
+    }
+
     // -------------------------------------------------------------------------
     // helpers
     // -------------------------------------------------------------------------

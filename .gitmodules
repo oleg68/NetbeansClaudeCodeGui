@@ -7,3 +7,6 @@
 [submodule "submodules/JeddictAi"]
 	path = submodules/JeddictAi
 	url = https://github.com/jeddict/jeddict-ai.git
+[submodule "submodules/ClaudeCodeNetbeans"]
+	path = submodules/ClaudeCodeNetbeans
+	url = https://github.com/emilianbold/claude-code-netbeans.git
