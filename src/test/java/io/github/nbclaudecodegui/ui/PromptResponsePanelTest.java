@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.ui.PermissionPanel;
 import io.github.nbclaudecodegui.ui.PromptResponsePanel.Option;
 import io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest;
 import java.awt.Color;
@@ -9,6 +10,7 @@ import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -39,8 +41,10 @@ class PromptResponsePanelTest {
             assertTrue(panel.isVisible(), "panel should become visible after show()");
 
             List<String> btnLabels = collectButtonLabels(panel);
-            assertTrue(btnLabels.contains("Yes"), "should have 'Yes' button");
-            assertTrue(btnLabels.contains("No"), "should have 'No' button");
+            String yesLabel = PermissionPanel.ICON_ACCEPT + " Yes";
+            String noLabel  = PermissionPanel.ICON_REJECT + " No";
+            assertTrue(btnLabels.contains(yesLabel), "should have '" + yesLabel + "' button");
+            assertTrue(btnLabels.contains(noLabel),  "should have '" + noLabel + "' button");
         });
     }
 
@@ -52,7 +56,7 @@ class PromptResponsePanelTest {
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(req, answer -> {});
 
-            JButton btn = findButton(panel, "Yes");
+            JButton btn = findButton(panel, PermissionPanel.ICON_ACCEPT + " Yes");
             assertNotNull(btn, "Yes button must exist");
             assertEquals(new Color(34, 139, 34), btn.getBackground(), "Yes button should be green");
         });
@@ -66,7 +70,7 @@ class PromptResponsePanelTest {
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(req, answer -> {});
 
-            JButton btn = findButton(panel, "No");
+            JButton btn = findButton(panel, PermissionPanel.ICON_REJECT + " No");
             assertNotNull(btn, "No button must exist");
             assertEquals(new Color(178, 34, 34), btn.getBackground(), "No button should be red");
         });
@@ -177,7 +181,7 @@ class PromptResponsePanelTest {
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(req, received::add);
 
-            JButton yesBtn = findButton(panel, "Yes");
+            JButton yesBtn = findButton(panel, PermissionPanel.ICON_ACCEPT + " Yes");
             assertNotNull(yesBtn, "Yes button must exist");
             yesBtn.doClick();
         });
@@ -193,7 +197,7 @@ class PromptResponsePanelTest {
             PromptRequest req = new PromptRequest("Go?", List.of(new Option("Yes", "1")), -1);
             panel.show(req, answer -> {});
 
-            JButton btn = findButton(panel, "Yes");
+            JButton btn = findButton(panel, PermissionPanel.ICON_ACCEPT + " Yes");
             assertNotNull(btn);
             btn.doClick();
 
@@ -364,5 +368,112 @@ class PromptResponsePanelTest {
             }
         }
         return null;
+    }
+
+    private static JTextField findTextField(java.awt.Container container) {
+        for (Component c : container.getComponents()) {
+            if (c instanceof JTextField tf) return tf;
+            if (c instanceof java.awt.Container sub) {
+                JTextField found = findTextField(sub);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Type-input option tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testTypeInputOptionRendersTextField() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            PromptResponsePanel panel = new PromptResponsePanel();
+            PromptRequest req = new PromptRequest("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(req, answer -> {});
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf, "panel must contain a JTextField for 'Type something.' option");
+        });
+    }
+
+    @Test
+    void testTypeInputFieldDisabledByDefault() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            PromptResponsePanel panel = new PromptResponsePanel();
+            PromptRequest req = new PromptRequest("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(req, answer -> {});
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            assertFalse(tf.isEnabled(),
+                    "type-input text field must be disabled until its radio button is selected");
+        });
+    }
+
+    @Test
+    void testTypeInputFieldEnabledWhenRadioSelected() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            PromptResponsePanel panel = new PromptResponsePanel();
+            PromptRequest req = new PromptRequest("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(req, answer -> {});
+
+            JRadioButton typeRb = findRadioButton(panel, "Type something.");
+            assertNotNull(typeRb);
+            typeRb.setSelected(true);
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            assertTrue(tf.isEnabled(),
+                    "type-input text field must be enabled when its radio button is selected");
+        });
+    }
+
+    @Test
+    void testTypeInputOptionSendsTypedText() throws Exception {
+        List<String> captured = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            PromptResponsePanel panel = new PromptResponsePanel();
+            PromptRequest req = new PromptRequest("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(req, captured::add);
+
+            JRadioButton typeRb = findRadioButton(panel, "Type something.");
+            assertNotNull(typeRb);
+            typeRb.setSelected(true);
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            tf.setText("my custom text");
+
+            // Click Send
+            JButton sendBtn = null;
+            for (Component c : panel.getComponents()) {
+                if (c instanceof JPanel p) {
+                    for (Component inner : p.getComponents()) {
+                        if (inner instanceof JPanel right && "rightCol".equals(right.getName())) {
+                            for (Component btn : right.getComponents()) {
+                                if (btn instanceof JButton b && "Send".equals(b.getText())) {
+                                    sendBtn = b;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            assertNotNull(sendBtn, "Send button must exist");
+            sendBtn.doClick();
+        });
+
+        assertEquals(1, captured.size(), "callback must be called once");
+        assertEquals("my custom text", captured.get(0),
+                "callback must receive typed text, not option number");
     }
 }

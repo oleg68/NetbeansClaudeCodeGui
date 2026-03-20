@@ -39,6 +39,27 @@ public final class TtyPromptDetector {
     private String previousLine = "";
     private final List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> collectedOptions = new ArrayList<>();
 
+    /**
+     * Number of consecutive non-blank, non-option lines seen while COLLECTING.
+     * If this exceeds MAX_NON_OPTION_STREAK the collection is aborted without
+     * emitting — protects against false-positive triggers from documentation or
+     * plan text that happens to contain a ❯N. sequence.
+     */
+    private int nonOptionStreak = 0;
+    private static final int MAX_NON_OPTION_STREAK = 3;
+
+    /**
+     * Lines matching {@code menu.option.pattern} seen in IDLE state before the cursor
+     * trigger line arrives. These are options rendered before the currently-selected item.
+     */
+    private final List<String> preBuffer = new ArrayList<>();
+
+    /**
+     * The PTY line that arrived just before the first pre-buffer item — used as the
+     * question text when the trigger follows a run of pre-buffered options.
+     */
+    private String preBufferQuestion = "";
+
     // -------------------------------------------------------------------------
     // Construction
     // -------------------------------------------------------------------------
@@ -124,15 +145,36 @@ public final class TtyPromptDetector {
 
         switch (state) {
             case IDLE -> {
-                // Check for start of a numbered menu (❯1.Text)
+                // Check for start of a numbered menu (❯1.Text or pre-buffered options before it)
                 if (menuTrigger.matcher(line).find()) {
                     state = State.COLLECTING;
-                    questionLine = previousLine;   // line before menu trigger is the question
+                    nonOptionStreak = 0;
+                    // If pre-buffer has options that appeared before the cursor glyph,
+                    // the line before the first pre-buffer item is the question.
+                    questionLine = preBuffer.isEmpty() ? previousLine : preBufferQuestion;
                     collectedOptions.clear();
-                    collectedOptions.add(extractOptionAsNumbered(line, 1));
+                    for (String buffered : preBuffer) {
+                        collectedOptions.add(
+                                extractOptionAsNumbered(buffered, collectedOptions.size() + 1));
+                    }
+                    preBuffer.clear();
+                    preBufferQuestion = "";
+                    collectedOptions.add(extractOptionAsNumbered(line, collectedOptions.size() + 1));
                     previousLine = "";
                     return Optional.empty();
                 }
+                // Unnumbered option lines before the cursor glyph → accumulate in pre-buffer
+                if (menuOption.matcher(line).find()) {
+                    if (preBuffer.isEmpty()) {
+                        preBufferQuestion = previousLine;
+                    }
+                    preBuffer.add(line);
+                    previousLine = line;
+                    return Optional.empty();
+                }
+                // Non-menu line: clear pre-buffer
+                preBuffer.clear();
+                preBufferQuestion = "";
                 // Check for inline single-line prompts
                 String lower = line.toLowerCase();
                 for (String trigger : inlineTriggers) {
@@ -157,23 +199,39 @@ public final class TtyPromptDetector {
                 return Optional.empty();
             }
             case COLLECTING -> {
-                if (menuOption.matcher(line).find()) {
-                    collectedOptions.add(extractOptionAsNumbered(line, collectedOptions.size() + 1));
-                    return Optional.empty();
-                } else {
-                    // Menu ended — emit the collected prompt
-                    state = State.IDLE;
-                    List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> options = new ArrayList<>(collectedOptions);
+                if (menuTrigger.matcher(line).find()) {
+                    // Menu re-render (user navigated with arrow keys) — restart collection.
+                    // The full menu is re-drawn from scratch; previous partial data is stale.
                     collectedOptions.clear();
-                    String text = questionLine;
-                    questionLine = "";
-                    previousLine = line;
-                    io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest req =
-                            new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(text, options, 0);
-                    // Re-process this line in IDLE state (it may itself be a trigger)
-                    feed(line);
-                    return Optional.of(req);
+                    preBuffer.clear();
+                    nonOptionStreak = 0;
+                    questionLine = previousLine;
+                    collectedOptions.add(extractOptionAsNumbered(line, 1));
+                    return Optional.empty();
                 }
+                if (menuOption.matcher(line).find()) {
+                    nonOptionStreak = 0;
+                    collectedOptions.add(
+                            extractOptionAsNumbered(line, collectedOptions.size() + 1));
+                } else if (!line.isBlank()) {
+                    // Non-blank, non-option line (description, nav hint, prose…)
+                    nonOptionStreak++;
+                    if (nonOptionStreak >= MAX_NON_OPTION_STREAK) {
+                        // Too many prose lines — this is a false-positive trigger.
+                        // Abort silently without emitting.
+                        state = State.IDLE;
+                        collectedOptions.clear();
+                        preBuffer.clear();
+                        nonOptionStreak = 0;
+                        questionLine = "";
+                        previousLine = line;
+                        return Optional.empty();
+                    }
+                }
+                // Description lines, blank lines, navigation hints are ignored.
+                // tryFlush() (called by the 400 ms promptFlushTimer when PTY goes idle)
+                // will emit the complete prompt once Claude stops sending output.
+                return Optional.empty();
             }
             default -> { return Optional.empty(); }
         }
@@ -207,6 +265,9 @@ public final class TtyPromptDetector {
         questionLine = "";
         previousLine = "";
         collectedOptions.clear();
+        preBuffer.clear();
+        preBufferQuestion = "";
+        nonOptionStreak = 0;
     }
 
     // -------------------------------------------------------------------------

@@ -139,8 +139,9 @@ public final class PromptResponsePanel extends JPanel {
             leftCol.add(Box.createVerticalStrut(4));
         }
 
-        // Radio buttons for other options
+        // Radio buttons for other options (type-input options get an adjacent text field)
         ButtonGroup group = null;
+        JTextField[] typeFields = new JTextField[otherOptions.size()];
         if (!otherOptions.isEmpty()) {
             group = new ButtonGroup();
             for (int i = 0; i < otherOptions.size(); i++) {
@@ -148,8 +149,26 @@ public final class PromptResponsePanel extends JPanel {
                 JRadioButton rb = new JRadioButton(opt.display().trim());
                 rb.setAlignmentX(Component.LEFT_ALIGNMENT);
                 group.add(rb);
-                leftCol.add(rb);
                 radioButtons[i] = rb;
+
+                if (isTypeInputOption(opt)) {
+                    JTextField tf = new JTextField(20);
+                    tf.setEnabled(false);
+                    tf.setMaximumSize(new java.awt.Dimension(
+                            Integer.MAX_VALUE, tf.getPreferredSize().height));
+                    rb.addItemListener(e -> tf.setEnabled(rb.isSelected()));
+                    typeFields[i] = tf;
+
+                    JPanel row = new JPanel();
+                    row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+                    row.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    row.add(rb);
+                    row.add(Box.createHorizontalStrut(4));
+                    row.add(tf);
+                    leftCol.add(row);
+                } else {
+                    leftCol.add(rb);
+                }
 
                 int idx = req.options().indexOf(opt);
                 if (idx == req.defaultOptionIndex()) {
@@ -194,6 +213,7 @@ public final class PromptResponsePanel extends JPanel {
         boolean hasSend = !otherOptions.isEmpty() || req.options().isEmpty();
         if (hasSend) {
             final JRadioButton[] finalRadios = radioButtons;
+            final JTextField[] finalTypeFields = typeFields;
             final JTextField finalField = freeField;
             sendBtn = new JButton("Send");
             sendBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -218,15 +238,19 @@ public final class PromptResponsePanel extends JPanel {
                 }
             }
             sendBtn.addActionListener(e -> {
-                for (JRadioButton rb : finalRadios) {
+                for (int i = 0; i < finalRadios.length; i++) {
+                    JRadioButton rb = finalRadios[i];
                     if (rb != null && rb.isSelected()) {
-                        String text = rb.getText();
-                        for (Option opt : otherOptions) {
-                            if (opt.display().trim().equals(text)) {
-                                submitAnswer(opt.response());
-                                return;
+                        Option opt = otherOptions.get(i);
+                        if (isTypeInputOption(opt) && finalTypeFields[i] != null) {
+                            String typed = finalTypeFields[i].getText().trim();
+                            if (!typed.isEmpty()) {
+                                submitAnswer(typed);
                             }
+                        } else {
+                            submitAnswer(opt.response());
                         }
+                        return;
                     }
                 }
                 if (finalField != null) {
@@ -342,6 +366,17 @@ public final class PromptResponsePanel extends JPanel {
         if (cb != null) {
             cb.accept(null);
         }
+    }
+
+    /**
+     * Returns {@code true} if the option represents a free-text input slot
+     * (display text starts with "type", case-insensitive).
+     *
+     * <p>Claude Code appends a "Type something." entry to AskUserQuestion menus
+     * to allow the user to submit arbitrary text instead of a predefined choice.
+     */
+    private static boolean isTypeInputOption(Option opt) {
+        return opt.display().trim().toLowerCase().startsWith("type");
     }
 
     private static String escapeHtml(String s) {

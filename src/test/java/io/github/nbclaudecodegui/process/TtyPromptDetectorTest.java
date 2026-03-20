@@ -29,8 +29,9 @@ class TtyPromptDetectorTest {
         assertTrue(detector.feed("\u276f1.Yes").isEmpty());
         assertTrue(detector.feed("2.Yes,allowalledits(shift+tab)").isEmpty());
         assertTrue(detector.feed("3.No").isEmpty());
-        // Non-option line ends menu
-        Optional<PromptResponsePanel.PromptRequest> req = detector.feed("Esctocancel");
+        // Non-option lines are now ignored in COLLECTING; tryFlush() emits when PTY goes silent
+        assertTrue(detector.feed("Esctocancel").isEmpty());
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
         assertTrue(req.isPresent());
         assertEquals(3, req.get().options().size());
         assertEquals("Yes", req.get().options().get(0).display());
@@ -48,7 +49,8 @@ class TtyPromptDetectorTest {
         assertTrue(detector.feed("\u276f 1. Yes").isEmpty());
         assertTrue(detector.feed("2. Yes, and always allow").isEmpty());
         assertTrue(detector.feed("3. No").isEmpty());
-        Optional<PromptResponsePanel.PromptRequest> req = detector.feed("Esc to cancel");
+        assertTrue(detector.feed("Esc to cancel").isEmpty());
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
         assertTrue(req.isPresent());
         assertEquals(3, req.get().options().size());
         assertEquals("1", req.get().options().get(0).response());
@@ -62,7 +64,8 @@ class TtyPromptDetectorTest {
         // Some terminals use > instead of ❯
         assertTrue(detector.feed(">1.Option A").isEmpty());
         assertTrue(detector.feed("2.Option B").isEmpty());
-        Optional<PromptResponsePanel.PromptRequest> req = detector.feed("done");
+        assertTrue(detector.feed("done").isEmpty());
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
         assertTrue(req.isPresent());
         assertEquals(2, req.get().options().size());
         assertEquals("Option A", req.get().options().get(0).display());
@@ -73,9 +76,10 @@ class TtyPromptDetectorTest {
     }
 
     @Test
-    void testSingleMenuOptionEmittedOnNonOption() {
+    void testSingleMenuOptionEmittedViaFlush() {
         detector.feed("\u276f1.Only");
-        Optional<PromptResponsePanel.PromptRequest> req = detector.feed("something else");
+        detector.feed("something else");
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
         assertTrue(req.isPresent());
         assertEquals(1, req.get().options().size());
     }
@@ -190,6 +194,120 @@ class TtyPromptDetectorTest {
         assertTrue(detector.feed("something unrelated").isEmpty());
         Optional<PromptResponsePanel.PromptRequest> req = detector.feed("❯ 1. Option");
         assertTrue(req.isEmpty(), "new trigger starts collecting again, no emit yet");
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug fixes: description lines, blank separators, pre-cursor options, re-renders
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testDescriptionLinesSkippedInCollecting() {
+        // Claude renders options with sub-label text after each numbered line.
+        // Description lines must not terminate COLLECTING; all options collected via tryFlush().
+        assertTrue(detector.feed("❯ 1. auto / edit / diff").isEmpty());
+        assertTrue(detector.feed("   Режим применения правок: auto-patch").isEmpty());
+        assertTrue(detector.feed("2. Permission mode").isEmpty());
+        assertTrue(detector.feed("   bypassPermissions / default / acceptEdits").isEmpty());
+        assertTrue(detector.feed("3. Other").isEmpty());
+        assertTrue(detector.feed("4. Type something.").isEmpty());
+
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
+        assertTrue(req.isPresent());
+        assertEquals(4, req.get().options().size());
+        assertEquals("1", req.get().options().get(0).response());
+        assertEquals("2", req.get().options().get(1).response());
+        assertEquals("3", req.get().options().get(2).response());
+        assertEquals("4", req.get().options().get(3).response());
+    }
+
+    @Test
+    void testBlankLineSeparatorSkippedInCollecting() {
+        // A blank line between option groups must not terminate COLLECTING.
+        assertTrue(detector.feed("❯ 1. Option A").isEmpty());
+        assertTrue(detector.feed("2. Option B").isEmpty());
+        assertTrue(detector.feed("").isEmpty());          // blank separator
+        assertTrue(detector.feed("3. Chat about this").isEmpty());
+        assertTrue(detector.feed("4. Skip interview").isEmpty());
+
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
+        assertTrue(req.isPresent());
+        assertEquals(4, req.get().options().size());
+        assertEquals("4", req.get().options().get(3).response());
+    }
+
+    @Test
+    void testCursorOnSecondOption() {
+        // Options before the cursor line are buffered in IDLE and prepended on trigger.
+        assertTrue(detector.feed("1. Yes").isEmpty());    // pre-buffer
+        assertTrue(detector.feed("❯2. No").isEmpty());   // trigger
+        assertTrue(detector.feed("3. Cancel").isEmpty());
+
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
+        assertTrue(req.isPresent());
+        assertEquals(3, req.get().options().size());
+        assertEquals("Yes",    req.get().options().get(0).display().trim());
+        assertEquals("1",      req.get().options().get(0).response());
+        assertEquals("No",     req.get().options().get(1).display().trim());
+        assertEquals("2",      req.get().options().get(1).response());
+        assertEquals("Cancel", req.get().options().get(2).display().trim());
+        assertEquals("3",      req.get().options().get(2).response());
+    }
+
+    @Test
+    void testLeadingSpaceBeforeCursor() {
+        // PTY ESC[1C expansion produces a leading space: " ❯ 1. Yes"
+        assertTrue(detector.feed(" ❯ 1. Yes").isEmpty());
+        assertTrue(detector.feed("2. No").isEmpty());
+
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
+        assertTrue(req.isPresent());
+        assertEquals(2, req.get().options().size());
+        assertEquals("1", req.get().options().get(0).response());
+        assertEquals("2", req.get().options().get(1).response());
+    }
+
+    @Test
+    void testMenuReRenderInCollecting() {
+        // User presses arrow key → Claude re-renders menu with cursor on option 2.
+        // The second trigger must reset collection cleanly.
+        assertTrue(detector.feed("❯ 1. Yes").isEmpty());   // first render, cursor on 1
+        assertTrue(detector.feed("2. No").isEmpty());
+        // Re-render: cursor moved to option 2
+        assertTrue(detector.feed("1. Yes").isEmpty());     // becomes pre-buffer? no — we're in COLLECTING
+        // Actually in COLLECTING, "1. Yes" matches option pattern → added as option 3 (stale).
+        // Then the new trigger resets.
+        assertTrue(detector.feed("❯ 2. No").isEmpty());   // re-render trigger → reset
+        assertTrue(detector.feed("3. Cancel").isEmpty());
+
+        Optional<PromptResponsePanel.PromptRequest> req = detector.tryFlush();
+        assertTrue(req.isPresent());
+        // After re-render reset: options are those collected since the second trigger
+        assertEquals("No",     req.get().options().get(0).display().trim());
+        assertEquals("Cancel", req.get().options().get(1).display().trim());
+    }
+
+    @Test
+    void testFalsePositiveTriggerInProseAborted() {
+        // Plan/doc text may contain "❯2. No ← trigger →" which matches menu.trigger.pattern.
+        // Followed by numbered list items from the doc and then prose.
+        // After MAX_NON_OPTION_STREAK consecutive non-option, non-blank lines the
+        // detector must silently abort — no PromptRequest should be emitted.
+        assertTrue(detector.feed("❯2. No         ← trigger → questionLine = \"1. Yes\"").isEmpty());
+        assertTrue(detector.feed("3. Cancel      ← COLLECTING: adds option 3").isEmpty());
+        // Three prose lines → streak = 3 → abort
+        assertTrue(detector.feed("This is documentation prose line one.").isEmpty());
+        assertTrue(detector.feed("This is documentation prose line two.").isEmpty());
+        assertTrue(detector.feed("This is documentation prose line three.").isEmpty());
+        // tryFlush() must return empty — collection was aborted
+        assertTrue(detector.tryFlush().isEmpty(), "false-positive trigger must not emit a prompt");
+    }
+
+    @Test
+    void testPreBufferClearedByNonOptionLine() {
+        // A stray numbered line not followed by a trigger should not produce a prompt.
+        detector.feed("1. Some numbered list item");
+        detector.feed("This is prose text, not a menu");
+        assertTrue(detector.tryFlush().isEmpty(), "no prompt should have been emitted");
     }
 
     // -------------------------------------------------------------------------
