@@ -269,9 +269,92 @@ claude   (no flags, working directory = project root)
 
 ---
 
-### Stage 12 — File attachments in prompt (planned)
+### Stage 12 — Prompt panel improvements (planned)
 
-**Goal:** the user attaches files to a prompt — they are prepended as `@/absolute/path` before the prompt text on send.
+**Goal:** improve the UX of the prompt input area and add a session status bar.
+
+**What to add:**
+
+*Input area:*
+- `inputArea` in `JScrollPane` with resizable split (`JSplitPane` between terminal and input field)
+- Context menu on `inputArea`: Cut / Copy / Paste + "History", "Favorites", "Clear"
+- Ctrl+Up / Ctrl+Down — in-memory command history navigation for the current session
+- Icons on Send and Cancel buttons (reuse pattern from `PermissionPanel`)
+
+*Status bar (bottom of `ClaudeSessionPanel`):*
+- **Model** combo box — lists available Claude models; selected value passed to `claude` CLI via `--model` flag
+- **Edit mode** combo box — e.g. `auto` / `edit` / `diff`; passed via `--edit-mode` flag (or equivalent)
+- **Claude version** label — populated once at session start by running `claude --version` and parsing stdout
+- **Current plan** label — shows the active plan name parsed from Claude's PTY output (e.g. from `CLAUDE.md` plan header or a `plan:` line in the stream)
+
+**Files:** `ClaudeSessionPanel.java`, `ClaudeProcess.java`, `ClaudeCodePreferences.java`
+
+---
+
+### Stage 13 — Claude Code profiles (planned)
+
+**Goal:** support multiple API keys / proxy settings via named profiles.
+
+**Profile fields:**
+- Profile name
+- `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `HTTPS_PROXY`, `HTTP_PROXY`
+- Type: `claude-subscription` / `claude-api` / `third-party-api`
+
+**Two ways to assign a profile:**
+1. **Project Properties** (right-click → Properties → Claude Code) — persistent per-project assignment
+2. **When opening a new session** (toolbar or context menu) — picker dialog
+
+**Components:**
+- `settings/ClaudeProfile.java` — POJO
+- `settings/ClaudeProfileStore.java` — stored in `NbPreferences`
+- `settings/ClaudeCodeOptionsPanel.java` — profile table with Add / Edit / Delete
+- `settings/ClaudeProjectProperties.java` — Project Properties panel
+- `actions/ClaudeCodeAction.java` — profile picker when opening a session
+- `process/ClaudeProcess.java` — pass profile env vars to PTY
+
+---
+
+### Stage 14 — Prompt history (planned)
+
+**Goal:** persistent per-project prompt history.
+
+**What to add:**
+- Store history in `NbPreferences` as a JSON array with timestamps
+- Settings: max depth (default 200), TTL
+- Popup list UI with columns: time, prompt preview
+- Actions on an entry: **Send to input area**, **Add to favorites**, **Delete**
+- Force-clear: "Delete entries older than…" (dialog with date picker)
+- Ctrl+Up / Ctrl+Down in `inputArea` — navigate persistent history
+
+**Components:**
+- `history/PromptHistoryStore.java` — read / write / trim
+- `ui/PromptListPanel.java` — reusable control (also used in stage 15)
+
+---
+
+### Stage 15 — Prompt favorites (planned)
+
+**Goal:** save frequently used prompts with optional hotkey support.
+
+**Two levels:**
+- Global (file in `~/.netbeans/`)
+- Per-project (`NbPreferences`)
+
+**What to add:**
+- `PromptListPanel` (from stage 14) — tabbed "History | Favorites" view
+- Actions on a favorite: **Send**, **Move to global**, **Rename**, **Delete**, **Reorder** (↑↓ buttons + drag & drop)
+- Assign a hotkey to a specific favorite (NetBeans Keymap API)
+
+**Components:**
+- `favorites/PromptFavoritesStore.java`
+- `ui/PromptListPanel.java` — extension from stage 14
+- `actions/PromptFavoriteAction.java` — dynamically registered Actions for hotkeys
+
+---
+
+### Stage 16 — File attachments in prompt (planned)
+
+**Goal:** attach files to a prompt — prepended as `@/absolute/path` before the prompt text on send.
 
 **UI:** horizontal chip panel above `inputArea` (appears when the first file is added):
 ```
@@ -283,19 +366,15 @@ claude   (no flags, working directory = project root)
 ```
 
 **Ways to add files:**
-1. **Attach** button next to Send/Cancel → JFileChooser
+1. **Attach** button → JFileChooser
 2. Context menu in the Projects tree: "Add to Claude Prompt"
 3. Drag & drop a file onto `inputPanel`
 
-**What to add:**
-- `ui/AttachedFilesPanel.java` — horizontal chip panel (filename + "×")
+**Components:**
+- `ui/AttachedFilesPanel.java` — chip panel (filename + "×")
 - `actions/AddToClaudePromptAction.java` — context menu on file/folder nodes
-- `ui/ClaudeSessionPanel.java` — Attach button, DnD handler; in `sendPrompt()` prepend `@path` lines
+- `ui/ClaudeSessionPanel.java` — Attach button, DnD handler; prepend `@path` in `sendPrompt()`
 - `layer.xml` — register `AddToClaudePromptAction`
-
-**Source files:**
-- `submodules/JeddictAi/.../AssistantChat.java` — `addFileTab()`, `FileTab`
-- `submodules/IdeaClaudeCodeGui/.../SendFilePathToInputAction.java`
 
 **Tests:**
 - `AttachedFilesPanelTest.java` — add file → chip; "×" → chip removed; `clearFiles()` → empty
@@ -303,19 +382,53 @@ claude   (no flags, working directory = project root)
 
 ---
 
-### Stage 13 — Settings and full integration (planned)
+### Stage 17 — FileDiff location config (planned)
 
-**Goal:** settings affect plugin behaviour; session state persistence.
+**Goal:** allow the user to choose whether FileDiff appears embedded in the session window or in a separate TopComponent (current behaviour).
+
+**What to add:**
+- New key in `ClaudeCodePreferences`: `diffLocation = SESSION | TOPLEVEL`
+- `FileDiffTab.open()` reads the setting and picks the display mode accordingly
+
+**Files:** `ClaudeCodePreferences.java`, `FileDiffTab.java`, `ClaudeCodeOptionsPanel.java`
+
+---
+
+### Stage 18 — Settings + full integration (planned)
+
+**Goal:** settings drive plugin behaviour; session lifecycle management.
 
 **What to add:**
 - `ClaudeCodeOptionsPanel` — extend: Claude CLI path (Browse), auto-start (checkbox), send key
 - Auto-start when `ClaudeSessionTopComponent` opens if `autoStart=true`
 - On project close — stop associated processes
-- `ClaudeCodePreferences` — add `autoStart`, command history
 
 **Tests:**
 - `ClaudeCodePreferencesAutoStartTest.java` — `autoStart=true` → `componentOpened` calls `panel.autoStart()`
 - `FullIntegrationIT.java` (NbModuleSuite) — end-to-end
+
+---
+
+### Stage 19 — GitHub CI/CD + NBM publishing (planned)
+
+**Goal:** automated build and release publishing.
+
+**What to add:**
+- `.github/workflows/build.yml`: `mvn package` on push to main; artifact — `.nbm`
+- `.github/workflows/release.yml`: triggered by tag `v*.*.*`; GitHub Release + NBM; release notes from `CHANGELOG.md`
+- `CHANGELOG.md` — maintained manually
+- Badges in README
+
+---
+
+### Stage 20 — Help + user documentation (planned)
+
+**Goal:** built-in help and end-user documentation.
+
+**What to add:**
+- NetBeans Help integration (JavaHelp)
+- `docs/user-guide.md` or GitHub Wiki: installation, profiles, history, favorites, keyboard shortcuts
+- External announcements on releases: posts in NetBeans community forum and Anthropic/Claude community (manual)
 
 ---
 
