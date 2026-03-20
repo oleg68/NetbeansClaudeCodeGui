@@ -9,56 +9,33 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
 /**
- * Stateful detector for interactive prompts in Claude PTY output.
+ * Detects <em>inline</em> and <em>JSON-based</em> interactive prompts from Claude PTY output.
  *
- * <p>Claude renders numbered menus across several lines without spaces (PTY rendering
- * collapses whitespace). This class accumulates lines in a state machine and emits a
- * {@link io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest} only when the
- * full menu has been collected.
+ * <p>Numbered-menu prompts (❯ 1. Yes / 2. No / …) are <strong>not</strong> handled here —
+ * they are detected by {@link ScreenPromptDetector} which reads the rendered terminal screen
+ * instead of the raw PTY stream.  Attempting to detect menus from the stream is unreliable
+ * because Claude updates spinner lines above the menu using cursor-up sequences
+ * ({@code ESC[15A}), and the stripped versions of those updates look like regular text lines
+ * that pollute the stream-based state machine.
+ *
+ * <p>This class handles two immediate (no-wait) cases:
+ * <ol>
+ *   <li><strong>Inline triggers</strong> — single-line prompts containing a bracketed
+ *       yes/no group, e.g. {@code "Allow? (y/n)"}.</li>
+ *   <li><strong>JSON subtypes</strong> — NDJSON lines starting with {@code '{'} whose
+ *       {@code "subtype"} field matches a configured value.</li>
+ * </ol>
  *
  * <p>Patterns are loaded from {@code tty-patterns.properties} on the classpath.
- * If a version-specific file {@code tty-patterns-{version}.properties} exists it is
- * preferred.
  */
 public final class TtyPromptDetector {
 
     private static final Logger LOG = Logger.getLogger(TtyPromptDetector.class.getName());
 
-    private enum State { IDLE, COLLECTING }
-
-    private final Pattern menuTrigger;
-    private final Pattern menuOption;
     private final List<String> inlineTriggers;
     private final List<String> jsonSubtypes;
-
-    private State state = State.IDLE;
-    private String questionLine = "";
-    private String previousLine = "";
-    private final List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> collectedOptions = new ArrayList<>();
-
-    /**
-     * Number of consecutive non-blank, non-option lines seen while COLLECTING.
-     * If this exceeds MAX_NON_OPTION_STREAK the collection is aborted without
-     * emitting — protects against false-positive triggers from documentation or
-     * plan text that happens to contain a ❯N. sequence.
-     */
-    private int nonOptionStreak = 0;
-    private static final int MAX_NON_OPTION_STREAK = 3;
-
-    /**
-     * Lines matching {@code menu.option.pattern} seen in IDLE state before the cursor
-     * trigger line arrives. These are options rendered before the currently-selected item.
-     */
-    private final List<String> preBuffer = new ArrayList<>();
-
-    /**
-     * The PTY line that arrived just before the first pre-buffer item — used as the
-     * question text when the trigger follows a run of pre-buffered options.
-     */
-    private String preBufferQuestion = "";
 
     // -------------------------------------------------------------------------
     // Construction
@@ -75,8 +52,6 @@ public final class TtyPromptDetector {
     /** Package-private constructor for testing with injected properties. */
     TtyPromptDetector(Properties props) {
         validate(props);
-        menuTrigger    = Pattern.compile(props.getProperty("menu.trigger.pattern"));
-        menuOption     = Pattern.compile(props.getProperty("menu.option.pattern"));
         inlineTriggers = splitCsv(props.getProperty("inline.trigger.patterns"));
         jsonSubtypes   = splitCsv(props.getProperty("json.subtypes"));
     }
@@ -103,7 +78,8 @@ public final class TtyPromptDetector {
         Properties props = new Properties();
         String base = "/io/github/nbclaudecodegui/process/tty-patterns";
         if (version != null && !version.isBlank()) {
-            try (InputStream in = TtyPromptDetector.class.getResourceAsStream(base + "-" + version + ".properties")) {
+            try (InputStream in = TtyPromptDetector.class.getResourceAsStream(
+                    base + "-" + version + ".properties")) {
                 if (in != null) {
                     props.load(in);
                     return props;
@@ -136,138 +112,39 @@ public final class TtyPromptDetector {
     /**
      * Feed a single PTY output line into the detector.
      *
-     * @param line raw line from PTY (may contain ANSI codes stripped by caller)
+     * @param line stripped line from PTY (ANSI codes removed by caller)
      * @return a {@link io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest}
-     *         if a complete prompt has been detected, otherwise empty
+     *         if an inline or JSON prompt is detected, otherwise empty
      */
     public Optional<io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest> feed(String line) {
         if (line == null) return Optional.empty();
 
-        switch (state) {
-            case IDLE -> {
-                // Check for start of a numbered menu (❯1.Text or pre-buffered options before it)
-                if (menuTrigger.matcher(line).find()) {
-                    state = State.COLLECTING;
-                    nonOptionStreak = 0;
-                    // If pre-buffer has options that appeared before the cursor glyph,
-                    // the line before the first pre-buffer item is the question.
-                    questionLine = preBuffer.isEmpty() ? previousLine : preBufferQuestion;
-                    collectedOptions.clear();
-                    for (String buffered : preBuffer) {
-                        collectedOptions.add(
-                                extractOptionAsNumbered(buffered, collectedOptions.size() + 1));
-                    }
-                    preBuffer.clear();
-                    preBufferQuestion = "";
-                    collectedOptions.add(extractOptionAsNumbered(line, collectedOptions.size() + 1));
-                    previousLine = "";
-                    return Optional.empty();
-                }
-                // Unnumbered option lines before the cursor glyph → accumulate in pre-buffer
-                if (menuOption.matcher(line).find()) {
-                    if (preBuffer.isEmpty()) {
-                        preBufferQuestion = previousLine;
-                    }
-                    preBuffer.add(line);
-                    previousLine = line;
-                    return Optional.empty();
-                }
-                // Non-menu line: clear pre-buffer
-                preBuffer.clear();
-                preBufferQuestion = "";
-                // Check for inline single-line prompts
-                String lower = line.toLowerCase();
-                for (String trigger : inlineTriggers) {
-                    if (lower.contains(trigger.toLowerCase())) {
-                        previousLine = line;
-                        return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
-                                line, extractInlineOptions(line), -1));
-                    }
-                }
-                // Check for JSON subtype prompts
-                if (line.startsWith("{")) {
-                    String subtype = StreamJsonParser.extractString(line, "subtype");
-                    if (subtype != null && jsonSubtypes.contains(subtype)) {
-                        String text = StreamJsonParser.extractString(line, "question");
-                        if (text == null) text = line;
-                        previousLine = line;
-                        return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
-                                text, new ArrayList<>(), -1));
-                    }
-                }
-                previousLine = line;
-                return Optional.empty();
+        // Inline single-line prompts, e.g. "Allow? (y/n)"
+        String lower = line.toLowerCase();
+        for (String trigger : inlineTriggers) {
+            if (lower.contains(trigger.toLowerCase())) {
+                return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
+                        line, extractInlineOptions(line), -1));
             }
-            case COLLECTING -> {
-                if (menuTrigger.matcher(line).find()) {
-                    // Menu re-render (user navigated with arrow keys) — restart collection.
-                    // The full menu is re-drawn from scratch; previous partial data is stale.
-                    collectedOptions.clear();
-                    preBuffer.clear();
-                    nonOptionStreak = 0;
-                    questionLine = previousLine;
-                    collectedOptions.add(extractOptionAsNumbered(line, 1));
-                    return Optional.empty();
-                }
-                if (menuOption.matcher(line).find()) {
-                    nonOptionStreak = 0;
-                    collectedOptions.add(
-                            extractOptionAsNumbered(line, collectedOptions.size() + 1));
-                } else if (!line.isBlank()) {
-                    // Non-blank, non-option line (description, nav hint, prose…)
-                    nonOptionStreak++;
-                    if (nonOptionStreak >= MAX_NON_OPTION_STREAK) {
-                        // Too many prose lines — this is a false-positive trigger.
-                        // Abort silently without emitting.
-                        state = State.IDLE;
-                        collectedOptions.clear();
-                        preBuffer.clear();
-                        nonOptionStreak = 0;
-                        questionLine = "";
-                        previousLine = line;
-                        return Optional.empty();
-                    }
-                }
-                // Description lines, blank lines, navigation hints are ignored.
-                // tryFlush() (called by the 400 ms promptFlushTimer when PTY goes idle)
-                // will emit the complete prompt once Claude stops sending output.
-                return Optional.empty();
-            }
-            default -> { return Optional.empty(); }
         }
-    }
 
-    /**
-     * Flushes any pending COLLECTING state as a complete prompt.
-     *
-     * <p>Called when PTY output goes silent while a menu is partially collected —
-     * Claude is waiting for input and will not send a terminating line.
-     *
-     * @return the pending {@link io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest},
-     *         or empty if the detector was not in COLLECTING state
-     */
-    public Optional<io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest> tryFlush() {
-        if (state == State.COLLECTING && !collectedOptions.isEmpty()) {
-            state = State.IDLE;
-            List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> options = new ArrayList<>(collectedOptions);
-            collectedOptions.clear();
-            String text = questionLine;
-            questionLine = "";
-            LOG.info("[TtyPromptDetector] tryFlush emitting prompt: \"" + text + "\" options=" + options);
-            return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(text, options, 0));
+        // JSON subtype prompts, e.g. {"subtype":"question","question":"..."}
+        if (line.startsWith("{")) {
+            String subtype = StreamJsonParser.extractString(line, "subtype");
+            if (subtype != null && jsonSubtypes.contains(subtype)) {
+                String text = StreamJsonParser.extractString(line, "question");
+                if (text == null) text = line;
+                return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
+                        text, new ArrayList<>(), -1));
+            }
         }
+
         return Optional.empty();
     }
 
-    /** Reset internal state (e.g. when starting a new session). */
+    /** Reset internal state (no-op — kept for API compatibility). */
     public void reset() {
-        state = State.IDLE;
-        questionLine = "";
-        previousLine = "";
-        collectedOptions.clear();
-        preBuffer.clear();
-        preBufferQuestion = "";
-        nonOptionStreak = 0;
+        // No state to reset; numbered-menu detection moved to ScreenPromptDetector.
     }
 
     // -------------------------------------------------------------------------
@@ -275,32 +152,10 @@ public final class TtyPromptDetector {
     // -------------------------------------------------------------------------
 
     /**
-     * Extract a numbered Option from a menu line.
-     * Input: "❯1.Yes" → Option("Yes", "1"); "2.Yes,allowalledits(shift+tab)" → Option("Yes,allowalledits", "2")
-     */
-    private static io.github.nbclaudecodegui.ui.PromptResponsePanel.Option extractOptionAsNumbered(String line, int index) {
-        LOG.info("[TtyPromptDetector] extractOption raw line: \"" + line + "\"");
-        int dotPos = line.indexOf('.');
-        if (dotPos < 0) {
-            LOG.info("[TtyPromptDetector] extractOption[" + index + "] (no dot): \"" + line + "\"");
-            return new io.github.nbclaudecodegui.ui.PromptResponsePanel.Option(line, String.valueOf(index));
-        }
-        String afterDot = line.substring(dotPos + 1);
-        // Remove trailing parenthetical like "(shift+tab)"
-        int parenPos = afterDot.lastIndexOf('(');
-        if (parenPos > 0 && afterDot.endsWith(")")) {
-            afterDot = afterDot.substring(0, parenPos);
-        }
-        LOG.info("[TtyPromptDetector] extractOption[" + index + "] display: \"" + afterDot + "\"");
-        return new io.github.nbclaudecodegui.ui.PromptResponsePanel.Option(afterDot, String.valueOf(index));
-    }
-
-    /**
-     * Extract options from a single-line prompt like "Allow? (y/n/always)" → [Option("y","y"), Option("n","n"), ...].
+     * Extract options from a single-line prompt like "Allow? (y/n/always)".
      */
     private static List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> extractInlineOptions(String line) {
         List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> options = new ArrayList<>();
-        // Find last bracketed group
         int lastOpen = -1;
         char closeChar = ')';
         for (int i = line.length() - 1; i >= 0; i--) {
@@ -321,7 +176,8 @@ public final class TtyPromptDetector {
         if (inner.isEmpty() || !inner.contains("/")) return options;
         for (String part : inner.split("/")) {
             String t = part.trim();
-            if (!t.isEmpty()) options.add(new io.github.nbclaudecodegui.ui.PromptResponsePanel.Option(t, t));
+            if (!t.isEmpty()) options.add(
+                    new io.github.nbclaudecodegui.ui.PromptResponsePanel.Option(t, t));
         }
         return options;
     }

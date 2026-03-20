@@ -1,10 +1,12 @@
 package io.github.nbclaudecodegui.ui;
 
+import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.pty4j.PtyProcess;
 import io.github.nbclaudecodegui.process.ClaudeProcess;
 import io.github.nbclaudecodegui.process.PtyTtyConnector;
+import io.github.nbclaudecodegui.process.ScreenPromptDetector;
 import io.github.nbclaudecodegui.process.TtyPromptDetector;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
@@ -100,6 +102,7 @@ public final class ClaudeSessionPanel extends JPanel {
     private JButton             cancelButton;
     private PtyTtyConnector     connector;
     private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
+    private final ScreenPromptDetector screenPromptDetector = new ScreenPromptDetector();
     private PromptResponsePanel promptResponsePanel;
     /** Fires tryFlush() when PTY output goes silent while menu options are being collected. */
     private final javax.swing.Timer promptFlushTimer = new javax.swing.Timer(400, e -> flushPendingPrompt());
@@ -588,15 +591,24 @@ public final class ClaudeSessionPanel extends JPanel {
         openButton.setEnabled(!locked);
     }
 
-    /** Called by promptFlushTimer when PTY output goes silent mid-menu. */
+    /** Called by promptFlushTimer when PTY output goes silent. Reads the rendered screen. */
     private void flushPendingPrompt() {
         if (promptResponsePanel.isVisible()) {
             return;
         }
-        ttyPromptDetector.tryFlush().ifPresent(req -> {
-            LOG.info("[PTY prompt flush] text=\"" + req.text() + "\" | options=" + req.options());
+        // Inline/JSON prompts are detected from the stream immediately by ttyPromptDetector.feed().
+        // Numbered menus are detected here from the rendered JediTerm screen, which avoids
+        // false aborts caused by cursor-up spinner updates (ESC[15A) above the menu.
+        java.util.Optional<PromptResponsePanel.PromptRequest> req = java.util.Optional.empty();
+        if (terminalWidget != null) {
+            TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
+            java.util.List<String> lines = buf.getScreenBuffer().getLineTexts();
+            req = screenPromptDetector.detect(lines);
+        }
+        req.ifPresent(r -> {
+            LOG.info("[screen prompt flush] text=\"" + r.text() + "\" | options=" + r.options());
             inputPanel.setVisible(false);
-            promptResponsePanel.show(req, answer -> {
+            promptResponsePanel.show(r, answer -> {
                 LOG.info("[PTY prompt answer] " + answer);
                 inputPanel.setVisible(true);
                 revalidate();
