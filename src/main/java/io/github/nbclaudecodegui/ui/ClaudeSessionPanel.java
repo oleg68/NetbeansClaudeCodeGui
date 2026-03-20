@@ -335,6 +335,10 @@ public final class ClaudeSessionPanel extends JPanel {
      * that the user can type immediately after switching to this window.
      */
     public void requestFocusOnInput() {
+        if (promptResponsePanel.isVisible()) {
+            // PromptResponsePanel is active — focus was set on show(); don't override it
+            return;
+        }
         if (inputPanel.isVisible() && inputArea != null) {
             inputArea.requestFocusInWindow();
         } else if (terminalWidget != null) {
@@ -535,7 +539,7 @@ public final class ClaudeSessionPanel extends JPanel {
         }
     }
 
-    private void cancelPrompt() {
+    void cancelPrompt() {
         if (connector == null) return;
         try {
             connector.write(new byte[]{0x03});

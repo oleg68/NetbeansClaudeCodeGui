@@ -12,9 +12,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -83,6 +86,7 @@ public class MCPSseServer {
             ctx.setContextPath("/");
             ctx.addServlet(new ServletHolder(new SseServlet()), "/sse");
             ctx.addServlet(new ServletHolder(new MessagesServlet()), "/messages");
+            ctx.addServlet(new ServletHolder(new HookServlet()), "/hook");
 
             server.setHandler(ctx);
             server.start();
@@ -115,6 +119,58 @@ public class MCPSseServer {
 
     /** @return {@code true} while the Jetty server is running */
     public boolean isRunning() { return server != null && server.isStarted(); }
+
+    // -------------------------------------------------------------------------
+    // POST /hook  (PreToolUse HTTP hook)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Receives PreToolUse hook calls from Claude Code CLI.
+     *
+     * <p>Blocks until {@link NetBeansMCPHandler#handlePreToolUse} resolves the
+     * {@link CompletableFuture} (user clicks Allow/Deny in the diff view), then
+     * writes the hook decision JSON back to Claude.  The hook timeout is 600 s
+     * (Claude's default); if the future times out we return {@code "ask"} so
+     * Claude falls back to its built-in PTY dialog instead of hanging.
+     */
+    private class HookServlet extends HttpServlet {
+
+        @Override
+        protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+                throws IOException {
+
+            byte[] bodyBytes;
+            try (InputStream in = req.getInputStream()) {
+                bodyBytes = in.readAllBytes();
+            }
+            String body = new String(bodyBytes, StandardCharsets.UTF_8);
+            LOGGER.log(Level.INFO, "PreToolUse hook received: {0}", body);
+
+            String responseJson;
+            try {
+                CompletableFuture<String> future = mcpHandler.handlePreToolUse(body);
+                // Wait up to 590 s — just under Claude's 600 s hook timeout
+                responseJson = future.get(590, TimeUnit.SECONDS);
+            } catch (java.util.concurrent.TimeoutException e) {
+                LOGGER.warning("PreToolUse hook timed out; returning 'ask'");
+                responseJson = ASK_JSON;
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Error handling PreToolUse hook", e);
+                responseJson = ASK_JSON;
+            }
+
+            byte[] responseBytes = responseJson.getBytes(StandardCharsets.UTF_8);
+
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.setContentType("application/json");
+            resp.setContentLength(responseBytes.length);
+            resp.getOutputStream().write(responseBytes);
+        }
+
+    }
+
+    private static final String ASK_JSON =
+            "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\"}}";
 
     // -------------------------------------------------------------------------
     // GET /sse

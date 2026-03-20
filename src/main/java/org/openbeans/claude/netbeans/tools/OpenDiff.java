@@ -209,9 +209,17 @@ public class OpenDiff implements Tool<OpenDiffParams, AsyncResponse<OpenDiffResu
 
                     DiffView diffView = diffService.createDiff(oldSource, newSource);
                     if (diffView != null) {
-                        // Wrap the diff view in a TopComponent (recommended pattern)
+                        // Wrap the diff view in a TopComponent (recommended pattern).
+                        // Override componentClosed() so that closing the tab without clicking
+                        // Approve or Reject sends FILE_REJECTED — preventing Claude from hanging.
                         final String finalDiffTabName = diffTabName;
-                        TopComponent diffTC = new TopComponent();
+                        TopComponent diffTC = new TopComponent() {
+                            @Override
+                            public void componentClosed() {
+                                super.componentClosed();
+                                DiffTabTracker.setRejected(finalDiffTabName);
+                            }
+                        };
                         diffTC.setDisplayName(diffTabName);
                         diffTC.setLayout(new java.awt.BorderLayout());
 
@@ -253,7 +261,17 @@ public class OpenDiff implements Tool<OpenDiffParams, AsyncResponse<OpenDiffResu
                             // Note: We do not close the diff tab here. Claude Code will close the tab via command.
                         });
 
-                        // Add approve button as first button in toolbar
+                        // Create reject button
+                        javax.swing.JButton rejectButton = new javax.swing.JButton("✗ Reject");
+                        rejectButton.setToolTipText("Reject this diff — Claude will not apply the change");
+                        rejectButton.addActionListener(e -> {
+                            LOGGER.info("Diff rejected by user: " + finalDiffTabName);
+                            DiffTabTracker.setRejected(finalDiffTabName);
+                            diffTC.close();
+                        });
+
+                        // Add approve and reject buttons as first buttons in toolbar
+                        toolbar.add(rejectButton, 0);
                         toolbar.add(approveButton, 0);
                         diffTC.add(toolbar, java.awt.BorderLayout.NORTH);
 

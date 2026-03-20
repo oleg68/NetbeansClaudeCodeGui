@@ -6,7 +6,7 @@
 
     <groupId>io.github.nbclaudecodegui</groupId>
     <artifactId>nb-claude-code-gui</artifactId>
-    <version>0.10.16-SNAPSHOT</version>
+    <version>0.11.12-SNAPSHOT</version>
     <packaging>nbm</packaging>
     <name>Claude Code GUI</name>
     <description>NetBeans plugin that provides a GUI for Claude Code CLI — run claude code sessions directly inside the IDE.</description>
@@ -28,6 +28,13 @@
                     <codeNameBase>io.github.nbclaudecodegui</codeNameBase>
                     <useOSGiDependencies>false</useOSGiDependencies>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>nbm</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

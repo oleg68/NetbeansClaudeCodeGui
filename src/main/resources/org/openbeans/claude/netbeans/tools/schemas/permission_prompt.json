@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "tool_name": {
+      "type": "string",
+      "description": "Name of the tool requesting permission (e.g. Edit, Write, MultiEdit)"
+    },
+    "tool_input": {
+      "type": "object",
+      "description": "Input parameters for the tool requesting permission"
+    }
+  },
+  "required": ["tool_name", "tool_input"]
+}

@@ -216,6 +216,19 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     // helpers
     // -------------------------------------------------------------------------
 
+    /**
+     * Sends Ctrl+C (0x03) to the running Claude process to interrupt the current prompt.
+     * No-op if no process is running.
+     */
+    public void cancelCurrentPrompt() {
+        panel.cancelPrompt();
+    }
+
+    /** Returns the working directory of this session, or {@code null} if not yet selected. */
+    public File getConfirmedDirectory() {
+        return panel.getConfirmedDirectory();
+    }
+
     private void updateDisplayName(File dir) {
         String name = ClaudeSessionPanel.resolveTabLabel(dir);
         setDisplayName(name);

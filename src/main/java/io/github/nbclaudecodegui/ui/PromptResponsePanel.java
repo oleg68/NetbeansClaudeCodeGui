@@ -1,19 +1,24 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.ui.PermissionPanel;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 
 /**
  * A panel that appears when claude asks an interactive question.
@@ -97,15 +102,27 @@ public final class PromptResponsePanel extends JPanel {
             for (Option opt : yesNoOptions) {
                 String display = opt.display().trim();
                 String response = opt.response();
-                JButton btn = new JButton(display);
-                if (display.equalsIgnoreCase("Yes")) {
-                    btn.setBackground(new Color(34, 139, 34));
-                    btn.setForeground(Color.WHITE);
-                } else {
-                    btn.setBackground(new Color(178, 34, 34));
-                    btn.setForeground(Color.WHITE);
-                }
+                // Prefix Yes/No with the same icons used on Accept/Reject in PermissionPanel:
+                // PermissionPanel.ICON_ACCEPT = \u2713 (CHECK MARK)
+                // PermissionPanel.ICON_REJECT = \u2717 (BALLOT X)
+                String label = display.equalsIgnoreCase("Yes")
+                        ? PermissionPanel.ICON_ACCEPT + " " + display
+                        : PermissionPanel.ICON_REJECT + " " + display;
+                JButton btn = new JButton(label);
+                Color baseColor = display.equalsIgnoreCase("Yes")
+                        ? new Color(34, 139, 34) : new Color(178, 34, 34);
+                Color focusColor = baseColor.brighter();
+                btn.setBackground(baseColor);
+                btn.setForeground(Color.WHITE);
                 btn.setOpaque(true);
+                btn.addFocusListener(new java.awt.event.FocusAdapter() {
+                    @Override public void focusGained(java.awt.event.FocusEvent e) {
+                        btn.setBackground(focusColor);
+                    }
+                    @Override public void focusLost(java.awt.event.FocusEvent e) {
+                        btn.setBackground(baseColor);
+                    }
+                });
                 btn.addActionListener(e -> {
                     LOG.info("[PromptResponsePanel] yes/no clicked: \"" + display + "\" → \"" + response + "\"");
                     submitAnswer(response);
@@ -234,17 +251,46 @@ public final class PromptResponsePanel extends JPanel {
 
         add(mainRow);
 
+        // ESC → cancel from anywhere in the panel
+        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
+        getActionMap().put("cancel", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { cancel(); }
+        });
+
+        // Enter on radio buttons → click Send
+        final JButton finalSendRef = sendBtn;
+        for (JRadioButton rb : radioButtons) {
+            if (rb != null) {
+                rb.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "sendOnEnter");
+                rb.getActionMap().put("sendOnEnter", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        if (finalSendRef != null && finalSendRef.isEnabled()) {
+                            finalSendRef.doClick();
+                        }
+                    }
+                });
+            }
+        }
+
         setVisible(true);
         revalidate();
         repaint();
 
-        // --- Default focus ---
+        // --- Default focus (deferred so the component is fully laid out first) ---
+        final java.awt.Component focusTarget;
         if (freeField != null) {
-            freeField.requestFocusInWindow();
+            focusTarget = freeField;
         } else if (defaultYesNoBtn != null) {
-            defaultYesNoBtn.requestFocusInWindow();
+            focusTarget = defaultYesNoBtn;
         } else if (sendBtn != null && otherOptions.size() > 0) {
-            sendBtn.requestFocusInWindow();
+            focusTarget = sendBtn;
+        } else {
+            focusTarget = null;
+        }
+        if (focusTarget != null) {
+            javax.swing.SwingUtilities.invokeLater(focusTarget::requestFocusInWindow);
         }
     }
 

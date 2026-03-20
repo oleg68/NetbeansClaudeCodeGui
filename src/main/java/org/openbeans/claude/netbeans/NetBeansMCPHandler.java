@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.openide.cookies.EditorCookie;
@@ -21,11 +22,19 @@ import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 import org.openide.text.NbDocument;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.netbeans.api.diff.Diff;
+import org.netbeans.api.diff.DiffView;
+import org.netbeans.api.diff.Difference;
+import org.netbeans.api.diff.StreamSource;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.List;
@@ -34,8 +43,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import javax.swing.SwingUtilities;
+import org.openide.windows.WindowManager;
+import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
+import io.github.nbclaudecodegui.ui.FileDiffTab;
 import org.netbeans.api.project.ui.OpenProjects;
-import java.io.IOException;
+import org.openide.util.Lookup;
 import org.openbeans.claude.netbeans.tools.AsyncHandler;
 import org.openbeans.claude.netbeans.tools.AsyncResponse;
 import org.openbeans.claude.netbeans.tools.CheckDocumentDirty;
@@ -48,6 +61,7 @@ import org.openbeans.claude.netbeans.tools.GetOpenEditors;
 import org.openbeans.claude.netbeans.tools.GetWorkspaceFolders;
 import org.openbeans.claude.netbeans.tools.OpenDiff;
 import org.openbeans.claude.netbeans.tools.OpenFile;
+import org.openbeans.claude.netbeans.tools.PermissionPromptTool;
 import org.openbeans.claude.netbeans.tools.SaveDocument;
 import org.openbeans.claude.netbeans.tools.params.Content;
 import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
@@ -79,6 +93,7 @@ public class NetBeansMCPHandler {
     private final GetWorkspaceFolders getWorkspaceFoldersTool;
     private final OpenDiff openDiffTool;
     private final OpenFile openFileTool;
+    private final PermissionPromptTool permissionPromptTool;
     private final SaveDocument saveDocument;
 
     public NetBeansMCPHandler() {
@@ -92,6 +107,7 @@ public class NetBeansMCPHandler {
         this.getWorkspaceFoldersTool = new GetWorkspaceFolders();
         this.openDiffTool = new OpenDiff();
         this.openFileTool = new OpenFile();
+        this.permissionPromptTool = new PermissionPromptTool();
         this.saveDocument = new SaveDocument();
     }
     
@@ -225,7 +241,10 @@ public class NetBeansMCPHandler {
         tools.add(createToolDefinition("saveDocument", "Save a document to disk", "SaveDocumentParams"));
         tools.add(createToolDefinition("closeAllDiffTabs", "Close all diff viewer tabs", "CloseAllDiffTabsParams"));
         tools.add(createToolDefinition("openDiff", "Open a git diff for the file", "OpenDiffParams"));
-        
+        tools.add(createToolDefinition("permission_prompt",
+                "Shows proposed file changes as a diff and asks the user to allow or deny the operation.",
+                "permission_prompt"));
+
         ObjectNode result = responseBuilder.objectNode();
         result.set("tools", tools);
         return result;
@@ -284,6 +303,11 @@ public class NetBeansMCPHandler {
 
                 case "openDiff":
                     result = this.openDiffTool.run(this.openDiffTool.parseArguments(arguments));
+                    break;
+
+                case "permission_prompt":
+                    result = this.permissionPromptTool.run(
+                            this.permissionPromptTool.parseArguments(arguments));
                     break;
 
                 default:
@@ -432,6 +456,145 @@ public class NetBeansMCPHandler {
         return projectInfo;
     }
     
+    // -------------------------------------------------------------------------
+    // PreToolUse HTTP hook
+    // -------------------------------------------------------------------------
+
+    /**
+     * Handles a PreToolUse hook call from the Claude Code CLI.
+     *
+     * <p>Parses the hook JSON, computes the before/after content for file-editing
+     * tools (Edit, Write, MultiEdit), opens a NetBeans diff view with Allow/Deny
+     * buttons, and returns a {@link CompletableFuture} that resolves to
+     * {@code "allow"} or {@code "deny"} when the user makes a decision.
+     *
+     * <p>For non-file-editing tools the future is completed immediately with
+     * {@code "allow"}.
+     *
+     * @param hookJson raw JSON body from the Claude hook POST request
+     * @return future resolved with {@code "allow"}, {@code "deny"}, or {@code "ask"}
+     */
+    public CompletableFuture<String> handlePreToolUse(String hookJson) {
+        try {
+            JsonNode hook = objectMapper.readTree(hookJson);
+            String toolName = hook.has("tool_name") ? hook.get("tool_name").asText() : "";
+            JsonNode toolInput = hook.has("tool_input") ? hook.get("tool_input") : objectMapper.createObjectNode();
+
+            LOGGER.info("handlePreToolUse: tool=" + toolName);
+
+            if (!isFileEditTool(toolName)) {
+                LOGGER.info("Auto-allowing non-file-edit tool: " + toolName);
+                return CompletableFuture.completedFuture(hookAllowJson());
+            }
+
+            String filePath = getFilePath(toolInput);
+            String before = computeBefore(toolInput, filePath);
+            String after = computeAfter(toolName, toolInput, before);
+
+            String tabName = resolveUniqueHookTabName("Diff: " + new File(filePath).getName());
+            CompletableFuture<String> future = DiffTabTracker.registerHookFuture(tabName);
+
+            FileDiffTab.open(filePath, before, after, tabName,
+            () -> DiffTabTracker.resolveHook(tabName, hookAllowJson()),
+            reason -> DiffTabTracker.resolveHook(tabName, hookDenyJson(reason)),
+            () -> {
+                DiffTabTracker.resolveHook(tabName, hookDenyJson(""));
+                FileDiffTab.cancelCurrentPromptForFile(filePath);
+            },
+            () -> DiffTabTracker.resolveHook(tabName, hookAskJson())
+        );
+
+            return future;
+
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "handlePreToolUse error", e);
+            return CompletableFuture.completedFuture(hookAskJson());
+        }
+    }
+
+    private static boolean isFileEditTool(String toolName) {
+        return "Edit".equals(toolName) || "Write".equals(toolName) || "MultiEdit".equals(toolName);
+    }
+
+    private static String getFilePath(JsonNode toolInput) {
+        JsonNode node = toolInput.get("file_path");
+        if (node == null || node.isNull()) {
+            throw new IllegalArgumentException("tool_input missing file_path");
+        }
+        return node.asText();
+    }
+
+    private static String computeBefore(JsonNode toolInput, String filePath) throws IOException {
+        File file = new File(filePath);
+        if (!file.exists()) {
+            return "";
+        }
+        return Files.readString(file.toPath(), StandardCharsets.UTF_8);
+    }
+
+    private static String computeAfter(String toolName, JsonNode toolInput, String before)
+            throws Exception {
+        return switch (toolName) {
+            case "Edit"      -> applyEdit(toolInput, before);
+            case "Write"     -> toolInput.has("content") ? toolInput.get("content").asText() : before;
+            case "MultiEdit" -> applyMultiEdit(toolInput, before);
+            default          -> before;
+        };
+    }
+
+    private static String applyEdit(JsonNode toolInput, String before) {
+        String oldStr = toolInput.has("old_string") ? toolInput.get("old_string").asText() : null;
+        String newStr = toolInput.has("new_string") ? toolInput.get("new_string").asText() : "";
+        if (oldStr == null || oldStr.isEmpty()) {
+            return before + newStr;
+        }
+        int idx = before.indexOf(oldStr);
+        if (idx < 0) {
+            throw new IllegalArgumentException("old_string not found in file — cannot compute diff");
+        }
+        return before.substring(0, idx) + newStr + before.substring(idx + oldStr.length());
+    }
+
+    private static String applyMultiEdit(JsonNode toolInput, String before) throws Exception {
+        JsonNode edits = toolInput.get("edits");
+        if (edits == null || !edits.isArray()) {
+            return before;
+        }
+        String result = before;
+        for (JsonNode edit : edits) {
+            result = applyEdit(edit, result);
+        }
+        return result;
+    }
+
+    private static String hookAllowJson() {
+        return "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"allow\"}}";
+    }
+
+    private static String hookDenyJson(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\"}}";
+        }
+        String escaped = reason.replace("\\", "\\\\").replace("\"", "\\\"");
+        return "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\","
+             + "\"permissionDecision\":\"deny\","
+             + "\"permissionDecisionReason\":\"" + escaped + "\"}}";
+    }
+
+    private static String hookAskJson() {
+        return "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\"}}";
+    }
+
+    private static String resolveUniqueHookTabName(String base) {
+        String name = base;
+        int suffix = 1;
+        while (DiffTabTracker.isHookTracked(name)) {
+            name = base + " (" + (++suffix) + ")";
+        }
+        return name;
+    }
+
+
     /**
      * Enqueues a JSON-RPC message for delivery via the SSE stream.
      *
