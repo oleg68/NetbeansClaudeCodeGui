@@ -76,6 +76,51 @@ class PermissionPanelTest {
         assertEquals("wrong file", received.get());
     }
 
+    private static void fireEnter(JTextField tf) {
+        for (java.awt.event.ActionListener al : tf.getActionListeners()) {
+            al.actionPerformed(new java.awt.event.ActionEvent(tf, java.awt.event.ActionEvent.ACTION_PERFORMED, ""));
+        }
+    }
+
+    @Test
+    void enterOnEmptyReasonFieldDoesNothing() throws Exception {
+        AtomicReference<String> received = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            PermissionPanel panel = new PermissionPanel(() -> {}, received::set, () -> {});
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            tf.setText("");
+            fireEnter(tf);
+        });
+        assertNull(received.get(), "onReject should NOT be called when reason field is empty");
+    }
+
+    @Test
+    void enterOnHintTextDoesNothing() throws Exception {
+        AtomicReference<String> received = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            PermissionPanel panel = new PermissionPanel(() -> {}, received::set, () -> {});
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            tf.setText(PermissionPanel.REASON_HINT);
+            fireEnter(tf);
+        });
+        assertNull(received.get(), "onReject should NOT be called when field contains only the hint text");
+    }
+
+    @Test
+    void enterOnNonEmptyReasonFieldCallsDecline() throws Exception {
+        AtomicReference<String> received = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            PermissionPanel panel = new PermissionPanel(() -> {}, received::set, () -> {});
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            tf.setText("wrong path");
+            fireEnter(tf);
+        });
+        assertEquals("wrong path", received.get(), "onReject should be called with the typed reason");
+    }
+
     @Test
     void acceptWithEmptyReasonCallsCallbackDirectly() throws Exception {
         List<String> accepted = new ArrayList<>();

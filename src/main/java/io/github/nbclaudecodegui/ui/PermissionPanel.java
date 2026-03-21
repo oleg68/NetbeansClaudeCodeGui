@@ -27,6 +27,9 @@ public final class PermissionPanel extends JPanel {
 
     private final JButton acceptBtn;
 
+    /** Placeholder text shown in the decline reason field when it is empty. */
+    static final String REASON_HINT = "Decline reason (Optional)";
+
     /** \u2713 CHECK MARK — used on confirmation buttons (Accept, Yes) */
     public static final String ICON_ACCEPT = "\u2713";
 
@@ -75,7 +78,7 @@ public final class PermissionPanel extends JPanel {
 
         // Reason field — filled width between Decline and Cancel
         JTextField reasonField = new JTextField();
-        reasonField.putClientProperty("JTextField.placeholderText", "Decline reason (Optional)");
+        reasonField.putClientProperty("JTextField.placeholderText", REASON_HINT);
         reasonField.setToolTipText("Optional reason sent to Claude when declining");
 
         // Cancel button — far right
@@ -101,6 +104,14 @@ public final class PermissionPanel extends JPanel {
         });
         rejectBtn.addActionListener(e -> onReject.accept(reasonField.getText().trim()));
         cancelBtn.addActionListener(e -> onCancel.run());
+
+        // Enter in reason field: if non-empty (and not just the hint) → Decline; if empty → do nothing
+        reasonField.addActionListener(e -> {
+            String reason = reasonField.getText().trim();
+            if (!reason.isEmpty() && !reason.equals(REASON_HINT)) {
+                onReject.accept(reason);
+            }
+        });
 
         // Layout: WEST=[Accept][Reject]  CENTER=reasonField  EAST=[Cancel]
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
