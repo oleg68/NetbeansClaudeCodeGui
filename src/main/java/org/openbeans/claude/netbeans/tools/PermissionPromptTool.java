@@ -105,7 +105,7 @@ public class PermissionPromptTool implements Tool<PermissionPromptTool.Params, A
         String tabName = "Diff: " + new File(filePath).getName();
         final String finalTabName = resolveUniqueTabName(tabName);
 
-        return handler -> FileDiffTab.open(filePath, before, after, finalTabName,
+        return handler -> FileDiffTab.open(filePath, before, after, finalTabName, null,
             () -> {
                 LOGGER.info("Permission granted for tab: " + finalTabName);
                 AsyncHandler<List<Content>> h = DiffTabTracker.remove(finalTabName);

@@ -487,14 +487,29 @@ public class NetBeansMCPHandler {
                 return CompletableFuture.completedFuture(hookAllowJson());
             }
 
+            // cwd from hook JSON == confirmedDirectory of the session that launched Claude
+            String cwd = hook.has("cwd") ? hook.get("cwd").asText() : null;
+            String editMode = getEditModeForCwd(cwd);
+            LOGGER.info("handlePreToolUse: editMode=" + editMode + " cwd=" + cwd);
+
             String filePath = getFilePath(toolInput);
+
+            // acceptEdits: auto-allow only if file is inside the session's confirmed directory
+            if ("acceptEdits".equals(editMode)
+                    && io.github.nbclaudecodegui.ui.FileDiffTab.isFileUnderDirectory(filePath, cwd)) {
+                LOGGER.info("acceptEdits mode — file inside project, auto-allowing: " + filePath);
+                return CompletableFuture.completedFuture(hookAllowJson());
+            }
+            // plan / ask / acceptEdits-outside: fall through to show diff dialog
+
             String before = computeBefore(toolInput, filePath);
             String after = computeAfter(toolName, toolInput, before);
 
             String tabName = resolveUniqueHookTabName("Diff: " + new File(filePath).getName());
             CompletableFuture<String> future = DiffTabTracker.registerHookFuture(tabName);
 
-            FileDiffTab.open(filePath, before, after, tabName,
+            // Pass cwd as confirmedDir so FileDiffTab can warn if file is outside this project
+            FileDiffTab.open(filePath, before, after, tabName, cwd,
             () -> DiffTabTracker.resolveHook(tabName, hookAllowJson()),
             reason -> DiffTabTracker.resolveHook(tabName, hookDenyJson(reason)),
             () -> {
@@ -651,6 +666,19 @@ public class NetBeansMCPHandler {
             }
         }
         return java.util.Optional.empty();
+    }
+
+    /**
+     * Returns the edit mode of the session whose working directory is {@code cwd},
+     * or {@code "default"} if the session cannot be found.
+     *
+     * <p>Safe to call from any thread — uses the thread-safe registry in
+     * {@link io.github.nbclaudecodegui.ui.ClaudeSessionPanel#EDIT_MODE_REGISTRY}.
+     */
+    private static String getEditModeForCwd(String cwd) {
+        if (cwd == null) return "default";
+        String mode = io.github.nbclaudecodegui.ui.ClaudeSessionPanel.EDIT_MODE_REGISTRY.get(cwd);
+        return mode != null ? mode : "default";
     }
 
     /**

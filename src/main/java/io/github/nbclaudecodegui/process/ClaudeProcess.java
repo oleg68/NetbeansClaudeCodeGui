@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -141,6 +143,30 @@ public final class ClaudeProcess {
             } catch (IOException e) {
                 LOG.warning("Could not clean up .claude/settings.local.json: " + e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Runs {@code claude --version} as a separate (non-PTY) process and returns the first line
+     * of its stdout output, or an empty string on any error.
+     *
+     * @return version string, e.g. {@code "1.0.20 (Claude Code)"}
+     */
+    public String readVersion() {
+        String executable = ClaudeCodePreferences.resolveClaudeExecutable();
+        try {
+            Process p = new ProcessBuilder(executable, "--version")
+                    .redirectErrorStream(true)
+                    .start();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                String line = reader.readLine();
+                p.waitFor(5, TimeUnit.SECONDS);
+                return line != null ? line.trim() : "";
+            }
+        } catch (Exception e) {
+            LOG.warning("readVersion failed: " + e.getMessage());
+            return "";
         }
     }
 

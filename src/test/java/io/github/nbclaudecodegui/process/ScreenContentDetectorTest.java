@@ -77,6 +77,179 @@ class ScreenContentDetectorTest {
     }
 
     // -------------------------------------------------------------------------
+    // detectSessionState
+    // -------------------------------------------------------------------------
+
+    @org.junit.jupiter.api.Test
+    void detectSessionStateReadyWhenNoSpinner() {
+        List<String> lines = List.of(
+                "Some output line",
+                "claude> ",
+                "esc to interrupt"
+        );
+        assertEquals(ScreenContentDetector.SessionState.READY,
+                detector.detectSessionState(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectSessionStateWorkingWhenSpinnerPresent() {
+        List<String> lines = List.of(
+                "Some output line",
+                "\u280B Running tool..."
+        );
+        assertEquals(ScreenContentDetector.SessionState.WORKING,
+                detector.detectSessionState(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectSessionStateReadyWhenNullOrEmpty() {
+        assertEquals(ScreenContentDetector.SessionState.READY, detector.detectSessionState(null));
+        assertEquals(ScreenContentDetector.SessionState.READY, detector.detectSessionState(List.of()));
+    }
+
+    // -------------------------------------------------------------------------
+    // detectEditMode
+    // -------------------------------------------------------------------------
+
+    @org.junit.jupiter.api.Test
+    void detectEditModeDefaultWhenNoPlanMode() {
+        List<String> lines = List.of("Normal output", "esc to interrupt");
+        java.util.Optional<String> result = detector.detectEditMode(lines);
+        assertTrue(result.isPresent());
+        assertEquals("default", result.get());
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectEditModePlanWhenPlanModeInFooter() {
+        List<String> lines = List.of(
+                "Some output",
+                "plan mode  |  esc to interrupt"
+        );
+        java.util.Optional<String> result = detector.detectEditMode(lines);
+        assertTrue(result.isPresent());
+        assertEquals("plan", result.get());
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectEditModePlanWithManyTrailingEmptyLines() {
+        // JediTerm screen buffer has many trailing blank lines — must still detect plan mode
+        List<String> lines = new ArrayList<>(List.of(
+                "Some output",
+                "\u23F8 plan mode on  |  esc to interrupt"
+        ));
+        for (int i = 0; i < 15; i++) lines.add("");
+        java.util.Optional<String> result = detector.detectEditMode(lines);
+        assertTrue(result.isPresent());
+        assertEquals("plan", result.get());
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectEditModeAcceptEditsWithTrailingEmptyLines() {
+        List<String> lines = new ArrayList<>(List.of(
+                "Some output",
+                "\u23F5\u23F5 accept edits on  |  esc to interrupt"
+        ));
+        for (int i = 0; i < 10; i++) lines.add("");
+        java.util.Optional<String> result = detector.detectEditMode(lines);
+        assertTrue(result.isPresent());
+        assertEquals("acceptEdits", result.get());
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectEditModeDefaultWhenNoModeIndicator() {
+        List<String> lines = new ArrayList<>(List.of(
+                "Some output",
+                "esc to interrupt"
+        ));
+        for (int i = 0; i < 15; i++) lines.add("");
+        java.util.Optional<String> result = detector.detectEditMode(lines);
+        assertTrue(result.isPresent());
+        assertEquals("default", result.get());
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectEditModeEmptyWhenNullOrEmpty() {
+        assertTrue(detector.detectEditMode(null).isEmpty());
+        assertTrue(detector.detectEditMode(List.of()).isEmpty());
+    }
+
+    // -------------------------------------------------------------------------
+    // detectPlanName
+    // -------------------------------------------------------------------------
+
+    @org.junit.jupiter.api.Test
+    void detectPlanNameEmptyWhenNoMdInFooter() {
+        List<String> lines = List.of("No plan here", "esc to interrupt");
+        assertTrue(detector.detectPlanName(lines).isEmpty());
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectPlanNameFoundWhenMdFileInFooter() {
+        List<String> lines = List.of(
+                "Some output",
+                "PLAN.md  |  plan mode"
+        );
+        java.util.Optional<String> result = detector.detectPlanName(lines);
+        assertTrue(result.isPresent());
+        assertEquals("PLAN.md", result.get());
+    }
+
+    // -------------------------------------------------------------------------
+    // detectInputPromptReady
+    // -------------------------------------------------------------------------
+
+    @org.junit.jupiter.api.Test
+    void detectInputPromptReady_splashScreen() {
+        // Splash screen has no empty ❯ prompt → false
+        List<String> lines = List.of(
+                " ╔═══════════════════════════════╗",
+                " ║  Welcome to Claude Code       ║",
+                " ╚═══════════════════════════════╝",
+                "",
+                " ? How can I help you today?"
+        );
+        assertFalse(detector.detectInputPromptReady(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectInputPromptReady_idlePrompt() {
+        // Genuine idle state shows ❯ with nothing after it → true
+        List<String> lines = new ArrayList<>(List.of(
+                "Some previous output",
+                "Another line",
+                "\u276F "
+        ));
+        assertTrue(detector.detectInputPromptReady(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectInputPromptReady_idlePromptWithTrailingBlanks() {
+        // Trailing blank lines after ❯ (JediTerm buffer) → still true
+        List<String> lines = new ArrayList<>(List.of(
+                "Some previous output",
+                "\u276F"
+        ));
+        for (int i = 0; i < 4; i++) lines.add("");
+        assertTrue(detector.detectInputPromptReady(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectInputPromptReady_promptWithText() {
+        // ❯ with placeholder/typed text is still the idle input prompt → true
+        List<String> lines = List.of(
+                "Some output",
+                "\u276F Ask anything (/ for commands)"
+        );
+        assertTrue(detector.detectInputPromptReady(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectInputPromptReady_nullOrEmpty() {
+        assertFalse(detector.detectInputPromptReady(null));
+        assertFalse(detector.detectInputPromptReady(List.of()));
+    }
+
+    // -------------------------------------------------------------------------
     // extractOption helper tests (kept inline — simple unit tests, no resource files needed)
     // -------------------------------------------------------------------------
 

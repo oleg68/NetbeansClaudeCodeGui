@@ -218,6 +218,42 @@ class ClaudeProcessTest {
     }
 
     // -------------------------------------------------------------------------
+    // readVersion
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testReadVersionReturnsStringOnSuccess() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(
+                System.getProperty("os.name", "").toLowerCase().contains("win"),
+                "Skipping on Windows");
+
+        // Create a fake claude that prints a version line
+        File script = makeFakeClaude("echo '1.2.3 (Claude Code)'\n");
+        try {
+            ClaudeProcess cp = new ClaudeProcess();
+            String version = cp.readVersion();
+            assertEquals("1.2.3 (Claude Code)", version);
+        } finally {
+            resetPrefs(script);
+        }
+    }
+
+    @Test
+    void testReadVersionReturnsEmptyStringOnFailure() {
+        // Point to a non-existent executable
+        io.github.nbclaudecodegui.settings.ClaudeCodePreferences
+                .setClaudeExecutablePath("/nonexistent/claude-xyz");
+        try {
+            ClaudeProcess cp = new ClaudeProcess();
+            String version = cp.readVersion();
+            assertEquals("", version);
+        } finally {
+            io.github.nbclaudecodegui.settings.ClaudeCodePreferences
+                    .setClaudeExecutablePath("");
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // helpers
     // -------------------------------------------------------------------------
 

@@ -235,6 +235,9 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     /** Called by PermissionRequest hook — triggers screen scan for upcoming Ink menu. */
     public void triggerPromptScan() { panel.triggerPromptScan(); }
 
+    /** Returns the current edit mode: {@code "default"}, {@code "acceptEdits"}, or {@code "plan"}. */
+    public String getEditMode() { return panel.getEditMode(); }
+
     private void updateDisplayName(File dir) {
         String name = ClaudeSessionPanel.resolveTabLabel(dir);
         setDisplayName(name);
