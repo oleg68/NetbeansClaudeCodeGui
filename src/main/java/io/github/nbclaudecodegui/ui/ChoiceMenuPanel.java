@@ -38,6 +38,7 @@ public final class ChoiceMenuPanel extends JPanel {
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
                 BorderFactory.createEmptyBorder(4, 4, 4, 4)));
+        setFocusCycleRoot(true); // keep Tab navigation contained within this panel
         setVisible(false);
     }
 
@@ -64,6 +65,8 @@ public final class ChoiceMenuPanel extends JPanel {
         // Track focus targets
         JButton defaultYesNoBtn = null;
         JRadioButton[] radioButtons = new JRadioButton[otherOptions.size()];
+        JRadioButton defaultRadioBtn = null;
+        JTextField defaultTypeField = null;
         JTextField freeField = null;
         JButton sendBtn = null;
 
@@ -140,19 +143,20 @@ public final class ChoiceMenuPanel extends JPanel {
 
                 if (isTypeInputOption(opt)) {
                     JTextField tf = new JTextField(20);
-                    tf.setEnabled(false);
                     tf.setMaximumSize(new java.awt.Dimension(
                             Integer.MAX_VALUE, tf.getPreferredSize().height));
-                    rb.addItemListener(e -> tf.setEnabled(rb.isSelected()));
+                    tf.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    setPlaceholder(tf, opt.display().trim());
+                    rb.setVisible(false); // hide label, keep in ButtonGroup for selection tracking
+                    tf.addFocusListener(new java.awt.event.FocusAdapter() {
+                        @Override public void focusGained(java.awt.event.FocusEvent e) {
+                            rb.setSelected(true); // selecting text field activates this option
+                        }
+                    });
+                    // Enter in type-input field → click Send (sendBtn is not yet created here,
+                    // so we store tf and wire it up after sendBtn is created)
                     typeFields[i] = tf;
-
-                    JPanel row = new JPanel();
-                    row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
-                    row.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    row.add(rb);
-                    row.add(Box.createHorizontalStrut(4));
-                    row.add(tf);
-                    leftCol.add(row);
+                    leftCol.add(tf);
                 } else {
                     leftCol.add(rb);
                 }
@@ -160,6 +164,8 @@ public final class ChoiceMenuPanel extends JPanel {
                 int idx = model.options().indexOf(opt);
                 if (idx == model.defaultOptionIndex()) {
                     rb.setSelected(true);
+                    defaultRadioBtn = rb;
+                    defaultTypeField = typeFields[i]; // non-null only for type-input options
                 }
             }
             leftCol.add(Box.createVerticalStrut(4));
@@ -229,8 +235,9 @@ public final class ChoiceMenuPanel extends JPanel {
                     if (rb != null && rb.isSelected()) {
                         ChoiceMenuModel.Option opt = otherOptions.get(i);
                         if (isTypeInputOption(opt) && finalTypeFields[i] != null) {
+                            String hint = opt.display().trim();
                             String typed = finalTypeFields[i].getText().trim();
-                            if (!typed.isEmpty()) {
+                            if (!typed.isEmpty() && !typed.equals(hint)) {
                                 submitAnswer(typed);
                             }
                         } else {
@@ -245,6 +252,25 @@ public final class ChoiceMenuPanel extends JPanel {
             });
             rightCol.add(Box.createVerticalStrut(4));
             rightCol.add(sendBtn);
+
+            // Enter when Send button has focus clicks it (some L&Fs only fire Space on buttons)
+            final JButton finalSendForEnter = sendBtn;
+            sendBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "clickSend");
+            sendBtn.getActionMap().put("clickSend", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (finalSendForEnter.isEnabled()) finalSendForEnter.doClick();
+                }
+            });
+
+            // Enter in type-input text fields also triggers Send
+            for (JTextField tf : typeFields) {
+                if (tf != null) {
+                    tf.addActionListener(e -> {
+                        if (finalSendForEnter.isEnabled()) finalSendForEnter.doClick();
+                    });
+                }
+            }
         }
 
         // Pin rightCol width to its preferred size so it doesn't stretch
@@ -285,28 +311,43 @@ public final class ChoiceMenuPanel extends JPanel {
         }
 
         // Arrow key navigation between radio buttons (needed because some radios are
-        // wrapped in a sub-JPanel, breaking BasicRadioButtonUI's sibling traversal)
+        // wrapped in a sub-JPanel, breaking BasicRadioButtonUI's sibling traversal).
+        // Navigation is cyclic: wraps around at top/bottom.
+        // Invisible radio buttons (type-input options) are skipped; their text field gets focus instead.
+        final JTextField[] finalTypeFieldsNav = typeFields;
         for (int i = 0; i < radioButtons.length; i++) {
             if (radioButtons[i] == null) continue;
             final int idx = i;
             AbstractAction prevAction = new AbstractAction() {
                 @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                    for (int j = idx - 1; j >= 0; j--) {
-                        if (radioButtons[j] != null) {
-                            radioButtons[j].setSelected(true);
-                            radioButtons[j].requestFocusInWindow();
-                            break;
+                    int n = radioButtons.length;
+                    int target = (idx - 1 + n) % n;
+                    while (target != idx && (radioButtons[target] == null || !radioButtons[target].isVisible())) {
+                        target = (target - 1 + n) % n;
+                    }
+                    if (target != idx && radioButtons[target] != null) {
+                        radioButtons[target].setSelected(true);
+                        if (finalTypeFieldsNav[target] != null) {
+                            finalTypeFieldsNav[target].requestFocusInWindow();
+                        } else {
+                            radioButtons[target].requestFocusInWindow();
                         }
                     }
                 }
             };
             AbstractAction nextAction = new AbstractAction() {
                 @Override public void actionPerformed(java.awt.event.ActionEvent e) {
-                    for (int j = idx + 1; j < radioButtons.length; j++) {
-                        if (radioButtons[j] != null) {
-                            radioButtons[j].setSelected(true);
-                            radioButtons[j].requestFocusInWindow();
-                            break;
+                    int n = radioButtons.length;
+                    int target = (idx + 1) % n;
+                    while (target != idx && (radioButtons[target] == null || !radioButtons[target].isVisible())) {
+                        target = (target + 1) % n;
+                    }
+                    if (target != idx && radioButtons[target] != null) {
+                        radioButtons[target].setSelected(true);
+                        if (finalTypeFieldsNav[target] != null) {
+                            finalTypeFieldsNav[target].requestFocusInWindow();
+                        } else {
+                            radioButtons[target].requestFocusInWindow();
                         }
                     }
                 }
@@ -327,16 +368,18 @@ public final class ChoiceMenuPanel extends JPanel {
         revalidate();
         repaint();
 
-        // --- Default focus (deferred so the component is fully laid out first) ---
+        // --- Default focus: the element Claude pre-selected (❯) ---
         final java.awt.Component focusTarget;
         if (freeField != null) {
             focusTarget = freeField;
         } else if (defaultYesNoBtn != null) {
             focusTarget = defaultYesNoBtn;
-        } else if (sendBtn != null && otherOptions.size() > 0) {
-            focusTarget = sendBtn;
+        } else if (defaultTypeField != null) {
+            focusTarget = defaultTypeField;  // type-input option is default → focus its text field
+        } else if (defaultRadioBtn != null) {
+            focusTarget = defaultRadioBtn;
         } else {
-            focusTarget = null;
+            focusTarget = sendBtn;
         }
         if (focusTarget != null) {
             javax.swing.SwingUtilities.invokeLater(focusTarget::requestFocusInWindow);
@@ -399,6 +442,26 @@ public final class ChoiceMenuPanel extends JPanel {
      */
     private static boolean isTypeInputOption(ChoiceMenuModel.Option opt) {
         return opt.display().trim().toLowerCase().startsWith("type");
+    }
+
+    /** Shows {@code hint} as greyed-out placeholder text; clears on focus, restores on blur if empty. */
+    private static void setPlaceholder(JTextField tf, String hint) {
+        tf.setForeground(Color.GRAY);
+        tf.setText(hint);
+        tf.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override public void focusGained(java.awt.event.FocusEvent e) {
+                if (hint.equals(tf.getText())) {
+                    tf.setText("");
+                    tf.setForeground(javax.swing.UIManager.getColor("TextField.foreground"));
+                }
+            }
+            @Override public void focusLost(java.awt.event.FocusEvent e) {
+                if (tf.getText().isBlank()) {
+                    tf.setForeground(Color.GRAY);
+                    tf.setText(hint);
+                }
+            }
+        });
     }
 
     private static String escapeHtml(String s) {
