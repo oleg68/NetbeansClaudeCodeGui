@@ -84,11 +84,9 @@ public final class ScreenContentDetector {
                 ? screenLines.get(firstOptionRow - 1).trim()
                 : "";
 
-        // Guard against false positives (e.g. numbered lists in Claude's own output).
-        // A real Ink menu must satisfy at least one of:
-        //   a) the selected option is marked with a cursor glyph (❯ / ▶ / >), OR
-        //   b) the question text above the block is non-blank.
-        // Regular output that lacks both is not a menu.
+        // Guard: Claude Code Ink menus always show a cursor glyph (❯ / ▶ / >) on the
+        // currently-selected option. Numbered lists in Claude's own output never have
+        // a cursor, so requiring one eliminates false positives entirely.
         boolean hasCursor = false;
         for (int i = firstOptionRow; i <= lastOptionRow; i++) {
             if (CURSOR_LINE.matcher(screenLines.get(i).trim()).matches()) {
@@ -96,7 +94,7 @@ public final class ScreenContentDetector {
                 break;
             }
         }
-        if (!hasCursor && question.isBlank()) return Optional.empty();
+        if (!hasCursor) return Optional.empty();
 
         LOG.info("[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
         return Optional.of(new ChoiceMenuModel(question, options, 0));

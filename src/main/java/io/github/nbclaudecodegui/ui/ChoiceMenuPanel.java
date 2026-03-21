@@ -146,16 +146,16 @@ public final class ChoiceMenuPanel extends JPanel {
                     tf.setMaximumSize(new java.awt.Dimension(
                             Integer.MAX_VALUE, tf.getPreferredSize().height));
                     tf.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    tf.setEnabled(false); // disabled until radio button is selected
                     setPlaceholder(tf, opt.display().trim());
-                    rb.setVisible(false); // hide label, keep in ButtonGroup for selection tracking
+                    rb.addChangeListener(e -> tf.setEnabled(rb.isSelected()));
                     tf.addFocusListener(new java.awt.event.FocusAdapter() {
                         @Override public void focusGained(java.awt.event.FocusEvent e) {
-                            rb.setSelected(true); // selecting text field activates this option
+                            rb.setSelected(true); // clicking field also selects this option
                         }
                     });
-                    // Enter in type-input field → click Send (sendBtn is not yet created here,
-                    // so we store tf and wire it up after sendBtn is created)
                     typeFields[i] = tf;
+                    leftCol.add(rb);   // radio button visible so tests can find it
                     leftCol.add(tf);
                 } else {
                     leftCol.add(rb);
