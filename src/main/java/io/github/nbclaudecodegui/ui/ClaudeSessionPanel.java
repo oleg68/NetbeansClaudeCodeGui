@@ -6,7 +6,7 @@ import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.pty4j.PtyProcess;
 import io.github.nbclaudecodegui.process.ClaudeProcess;
 import io.github.nbclaudecodegui.process.PtyTtyConnector;
-import io.github.nbclaudecodegui.process.ScreenPromptDetector;
+import io.github.nbclaudecodegui.process.ScreenContentDetector;
 import io.github.nbclaudecodegui.process.TtyPromptDetector;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
@@ -102,9 +102,9 @@ public final class ClaudeSessionPanel extends JPanel {
     private JButton             cancelButton;
     private PtyTtyConnector     connector;
     private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
-    private final ScreenPromptDetector screenPromptDetector = new ScreenPromptDetector();
-    private PromptResponsePanel promptResponsePanel;
-    /** Fires tryFlush() when PTY output goes silent while menu options are being collected. */
+    private final ScreenContentDetector screenContentDetector = new ScreenContentDetector();
+    private ChoiceMenuPanel choiceMenuPanel;
+    /** Fires flushPendingPrompt() when PTY output goes silent while menu options are being collected. */
     private final javax.swing.Timer promptFlushTimer = new javax.swing.Timer(400, e -> flushPendingPrompt());
 
     private boolean suppressProjectListener;
@@ -219,7 +219,7 @@ public final class ClaudeSessionPanel extends JPanel {
         buttonCol.add(cancelButton);
         buttonCol.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
-        promptResponsePanel = new PromptResponsePanel();
+        choiceMenuPanel = new ChoiceMenuPanel();
 
         JPanel southStack = new JPanel(new BorderLayout());
         inputPanel = new JPanel(new BorderLayout());
@@ -228,7 +228,7 @@ public final class ClaudeSessionPanel extends JPanel {
         inputPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
         inputPanel.setVisible(false);
 
-        southStack.add(promptResponsePanel, BorderLayout.NORTH);
+        southStack.add(choiceMenuPanel, BorderLayout.NORTH);
         southStack.add(inputPanel, BorderLayout.CENTER);
         add(southStack, BorderLayout.SOUTH);
 
@@ -338,8 +338,8 @@ public final class ClaudeSessionPanel extends JPanel {
      * that the user can type immediately after switching to this window.
      */
     public void requestFocusOnInput() {
-        if (promptResponsePanel.isVisible()) {
-            // PromptResponsePanel is active — focus was set on show(); don't override it
+        if (choiceMenuPanel.isVisible()) {
+            // ChoiceMenuPanel is active — focus was set on show(); don't override it
             return;
         }
         if (inputPanel.isVisible() && inputArea != null) {
@@ -364,7 +364,7 @@ public final class ClaudeSessionPanel extends JPanel {
             claudeProcess.stop();
         }
         connector = null;
-        promptResponsePanel.dismiss();
+        choiceMenuPanel.dismiss();
         inputPanel.setVisible(false);
         topBar.setVisible(true);
     }
@@ -488,7 +488,7 @@ public final class ClaudeSessionPanel extends JPanel {
             // While the prompt panel is visible, ignore PTY lines and wait for
             // the user to click a button. Spinner frames and menu redraws must
             // not auto-dismiss the panel before the user has responded.
-            if (promptResponsePanel.isVisible()) {
+            if (choiceMenuPanel.isVisible()) {
                 return;
             }
 
@@ -503,7 +503,7 @@ public final class ClaudeSessionPanel extends JPanel {
                 LOG.info("[PTY prompt detected] text=\"" + req.text() + "\" | options=" + req.options());
                 SwingUtilities.invokeLater(() -> {
                     inputPanel.setVisible(false);
-                    promptResponsePanel.show(req, answer -> {
+                    choiceMenuPanel.show(req, answer -> {
                         LOG.info("[PTY prompt answer] " + answer);
                         inputPanel.setVisible(true);
                         revalidate();
@@ -522,6 +522,8 @@ public final class ClaudeSessionPanel extends JPanel {
         this.terminalWidget = widget;
 
         topBar.setVisible(false);
+        sendButton.setEnabled(true);
+        cancelButton.setEnabled(false);
         inputPanel.setVisible(true);
 
         add(widget, BorderLayout.CENTER);
@@ -534,9 +536,11 @@ public final class ClaudeSessionPanel extends JPanel {
         String text = inputArea.getText();
         if (text.isEmpty() || connector == null) return;
         try {
+            sendButton.setEnabled(false);
+            cancelButton.setEnabled(true);
             connector.write(text + "\r");
             inputArea.setText("");
-            if (terminalWidget != null) terminalWidget.requestFocusInWindow();
+            inputArea.requestFocusInWindow();
         } catch (IOException ex) {
             showError("Write failed: " + ex.getMessage());
         }
@@ -546,6 +550,7 @@ public final class ClaudeSessionPanel extends JPanel {
         if (connector == null) return;
         try {
             connector.write(new byte[]{0x03});
+            SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
         } catch (IOException ex) {
             showError("Cancel failed: " + ex.getMessage());
         }
@@ -593,22 +598,22 @@ public final class ClaudeSessionPanel extends JPanel {
 
     /** Called by promptFlushTimer when PTY output goes silent. Reads the rendered screen. */
     private void flushPendingPrompt() {
-        if (promptResponsePanel.isVisible()) {
+        if (choiceMenuPanel.isVisible()) {
             return;
         }
         // Inline/JSON prompts are detected from the stream immediately by ttyPromptDetector.feed().
         // Numbered menus are detected here from the rendered JediTerm screen, which avoids
         // false aborts caused by cursor-up spinner updates (ESC[15A) above the menu.
-        java.util.Optional<PromptResponsePanel.PromptRequest> req = java.util.Optional.empty();
+        java.util.Optional<io.github.nbclaudecodegui.model.ChoiceMenuModel> req = java.util.Optional.empty();
         if (terminalWidget != null) {
             TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
             java.util.List<String> lines = buf.getScreenBuffer().getLineTexts();
-            req = screenPromptDetector.detect(lines);
+            req = screenContentDetector.detectChoiceMenu(lines);
         }
         req.ifPresent(r -> {
             LOG.info("[screen prompt flush] text=\"" + r.text() + "\" | options=" + r.options());
             inputPanel.setVisible(false);
-            promptResponsePanel.show(r, answer -> {
+            choiceMenuPanel.show(r, answer -> {
                 LOG.info("[PTY prompt answer] " + answer);
                 inputPanel.setVisible(true);
                 revalidate();
@@ -642,6 +647,20 @@ public final class ClaudeSessionPanel extends JPanel {
         } catch (java.io.IOException ex) {
             showError("Write failed: " + ex.getMessage());
         }
+    }
+
+    /** Called when Claude finishes its turn (Stop hook) — re-enables Send, disables Cancel. */
+    public void onClaudeIdle() {
+        SwingUtilities.invokeLater(() -> {
+            sendButton.setEnabled(true);
+            cancelButton.setEnabled(false);
+            inputArea.requestFocusInWindow();
+        });
+    }
+
+    /** Called before a PTY permission dialog appears (PermissionRequest hook) — triggers screen scan. */
+    public void triggerPromptScan() {
+        SwingUtilities.invokeLater(this::flushPendingPrompt);
     }
 
     private void showError(String message) {

@@ -1,6 +1,6 @@
 package io.github.nbclaudecodegui.process;
 
-import io.github.nbclaudecodegui.ui.PromptResponsePanel;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,11 +16,11 @@ import java.util.regex.Pattern;
  * sequences (e.g. {@code ESC[15A}) that Claude uses to update spinner lines
  * above the menu while the menu is still waiting for input.
  *
- * <p>This class is stateless — call {@link #detect(List)} at any time.
+ * <p>This class is stateless — call {@link #detectChoiceMenu(List)} at any time.
  */
-public final class ScreenPromptDetector {
+public final class ScreenContentDetector {
 
-    private static final Logger LOG = Logger.getLogger(ScreenPromptDetector.class.getName());
+    private static final Logger LOG = Logger.getLogger(ScreenContentDetector.class.getName());
 
     /**
      * Matches a numbered-menu option line in either of two forms:
@@ -32,6 +32,10 @@ public final class ScreenPromptDetector {
      */
     private static final Pattern OPTION_LINE =
             Pattern.compile("^\\s*(\u276F|\u25B6|>)?\\s*\\d+\\.\\s*.+");
+
+    /** Matches an option line that carries the Ink cursor glyph (selected item). */
+    private static final Pattern CURSOR_LINE =
+            Pattern.compile("^\\s*[\u276F\u25B6>]\\s*\\d+\\.\\s*.+");
 
     // -------------------------------------------------------------------------
     // Public API
@@ -45,9 +49,9 @@ public final class ScreenPromptDetector {
      * above that block as the question text.
      *
      * @param screenLines lines from {@code TerminalTextBuffer.getScreenBuffer().getLineTexts()}
-     * @return a detected prompt, or empty if no numbered menu is visible
+     * @return a detected {@link ChoiceMenuModel}, or empty if no numbered menu is visible
      */
-    public Optional<PromptResponsePanel.PromptRequest> detect(List<String> screenLines) {
+    public Optional<ChoiceMenuModel> detectChoiceMenu(List<String> screenLines) {
         if (screenLines == null || screenLines.isEmpty()) return Optional.empty();
 
         // Find the last option line (bottom-most) on screen
@@ -61,7 +65,7 @@ public final class ScreenPromptDetector {
         if (lastOptionRow < 0) return Optional.empty();
 
         // Walk upward to collect all contiguous option lines
-        List<PromptResponsePanel.Option> options = new ArrayList<>();
+        List<ChoiceMenuModel.Option> options = new ArrayList<>();
         int firstOptionRow = lastOptionRow;
         for (int i = lastOptionRow; i >= 0; i--) {
             String trimmed = screenLines.get(i).trim();
@@ -80,8 +84,22 @@ public final class ScreenPromptDetector {
                 ? screenLines.get(firstOptionRow - 1).trim()
                 : "";
 
-        LOG.info("[ScreenPromptDetector] detected prompt: \"" + question + "\" options=" + options);
-        return Optional.of(new PromptResponsePanel.PromptRequest(question, options, 0));
+        // Guard against false positives (e.g. numbered lists in Claude's own output).
+        // A real Ink menu must satisfy at least one of:
+        //   a) the selected option is marked with a cursor glyph (❯ / ▶ / >), OR
+        //   b) the question text above the block is non-blank.
+        // Regular output that lacks both is not a menu.
+        boolean hasCursor = false;
+        for (int i = firstOptionRow; i <= lastOptionRow; i++) {
+            if (CURSOR_LINE.matcher(screenLines.get(i).trim()).matches()) {
+                hasCursor = true;
+                break;
+            }
+        }
+        if (!hasCursor && question.isBlank()) return Optional.empty();
+
+        LOG.info("[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
+        return Optional.of(new ChoiceMenuModel(question, options, 0));
     }
 
     // -------------------------------------------------------------------------
@@ -101,7 +119,7 @@ public final class ScreenPromptDetector {
      * @param line   the trimmed screen line
      * @param index  1-based fallback index if number extraction fails
      */
-    static PromptResponsePanel.Option extractOption(String line, int index) {
+    static ChoiceMenuModel.Option extractOption(String line, int index) {
         // Skip cursor glyph if present
         String working = line;
         if (!working.isEmpty() && "\u276F\u25B6>".indexOf(working.charAt(0)) >= 0) {
@@ -109,7 +127,7 @@ public final class ScreenPromptDetector {
         }
         int dotPos = working.indexOf('.');
         if (dotPos < 0) {
-            return new PromptResponsePanel.Option(line, String.valueOf(index));
+            return new ChoiceMenuModel.Option(line, String.valueOf(index));
         }
         String numStr = working.substring(0, dotPos).strip();
         int num;
@@ -124,6 +142,6 @@ public final class ScreenPromptDetector {
         if (parenPos > 0 && afterDot.endsWith(")")) {
             afterDot = afterDot.substring(0, parenPos).stripTrailing();
         }
-        return new PromptResponsePanel.Option(afterDot.strip(), String.valueOf(num));
+        return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num));
     }
 }

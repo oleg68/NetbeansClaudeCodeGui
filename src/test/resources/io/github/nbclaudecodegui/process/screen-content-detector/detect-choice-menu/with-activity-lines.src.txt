@@ -1,0 +1,8 @@
+● Reading 1 file… (ctrl+o to expand)
+  ⦿  tail -100 /home/oleg/.netbeans/28/var/log/messages.log
+Run shell command
+Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, allow reading from log/ from this project
+   3. No
+Esc to cancel · Tab to amend · ctrl+e to explain

@@ -1,0 +1,6 @@
+Build successful. All three fixes are in place:
+
+  1. sendPrompt() — inputArea.requestFocusInWindow() instead of terminalWidget.requestFocusInWindow()
+  2. cancelPrompt() — SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow()) after writing Ctrl+C
+  3. onClaudeIdle() — inputArea.requestFocusInWindow() inside the existing invokeLater block
+  4. ChoiceMenuPanel — explicit UP/DOWN/LEFT/RIGHT key bindings on each radio button to manually walk prev/next sibling

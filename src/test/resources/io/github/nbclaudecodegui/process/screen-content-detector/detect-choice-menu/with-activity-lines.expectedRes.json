@@ -1,0 +1,9 @@
+{
+  "text": "Do you want to proceed?",
+  "options": [
+    {"display": "Yes", "response": "1"},
+    {"display": "Yes, allow reading from log/ from this project", "response": "2"},
+    {"display": "No", "response": "3"}
+  ],
+  "defaultOptionIndex": 0
+}

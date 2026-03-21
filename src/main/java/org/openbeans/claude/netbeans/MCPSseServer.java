@@ -87,6 +87,8 @@ public class MCPSseServer {
             ctx.addServlet(new ServletHolder(new SseServlet()), "/sse");
             ctx.addServlet(new ServletHolder(new MessagesServlet()), "/messages");
             ctx.addServlet(new ServletHolder(new HookServlet()), "/hook");
+            ctx.addServlet(new ServletHolder(new StopServlet()), "/stop");
+            ctx.addServlet(new ServletHolder(new PermissionRequestServlet()), "/permission-request");
 
             server.setHandler(ctx);
             server.start();
@@ -171,6 +173,44 @@ public class MCPSseServer {
 
     private static final String ASK_JSON =
             "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\"}}";
+
+    // -------------------------------------------------------------------------
+    // POST /stop  (Stop hook)
+    // -------------------------------------------------------------------------
+
+    private class StopServlet extends HttpServlet {
+        @Override
+        protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+                throws IOException {
+            byte[] bodyBytes;
+            try (InputStream in = req.getInputStream()) { bodyBytes = in.readAllBytes(); }
+            String body = new String(bodyBytes, StandardCharsets.UTF_8);
+            LOGGER.log(Level.FINE, "Stop hook received: {0}", body);
+            mcpHandler.handleStop(body);
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.setContentType("application/json");
+            resp.getOutputStream().write("{}".getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /permission-request  (PermissionRequest hook)
+    // -------------------------------------------------------------------------
+
+    private class PermissionRequestServlet extends HttpServlet {
+        @Override
+        protected void doPost(HttpServletRequest req, HttpServletResponse resp)
+                throws IOException {
+            byte[] bodyBytes;
+            try (InputStream in = req.getInputStream()) { bodyBytes = in.readAllBytes(); }
+            String body = new String(bodyBytes, StandardCharsets.UTF_8);
+            LOGGER.log(Level.FINE, "PermissionRequest hook received: {0}", body);
+            mcpHandler.handlePermissionRequest(body);
+            resp.setStatus(HttpServletResponse.SC_OK);
+            resp.setContentType("application/json");
+            resp.getOutputStream().write("{}".getBytes(StandardCharsets.UTF_8));
+        }
+    }
 
     // -------------------------------------------------------------------------
     // GET /sse

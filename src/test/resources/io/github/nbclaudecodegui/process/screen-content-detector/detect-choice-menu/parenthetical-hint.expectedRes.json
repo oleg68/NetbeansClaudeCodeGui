@@ -1,0 +1,8 @@
+{
+  "text": "Proceed?",
+  "options": [
+    {"display": "Yes", "response": "1"},
+    {"display": "No", "response": "2"}
+  ],
+  "defaultOptionIndex": 0
+}

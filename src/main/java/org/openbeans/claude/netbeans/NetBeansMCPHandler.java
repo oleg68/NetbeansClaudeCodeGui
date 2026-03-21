@@ -595,6 +595,64 @@ public class NetBeansMCPHandler {
     }
 
 
+    // -------------------------------------------------------------------------
+    // Stop hook
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called when Claude finishes its turn (Stop hook).
+     * Finds the matching session by cwd and signals it that Claude is idle.
+     */
+    public void handleStop(String payload) {
+        String cwd = extractCwdFromPayload(payload);
+        if (cwd == null) return;
+        LOGGER.fine("handleStop cwd=" + cwd);
+        SwingUtilities.invokeLater(() ->
+            findSessionByCwd(cwd).ifPresent(ClaudeSessionTopComponent::onClaudeIdle));
+    }
+
+    // -------------------------------------------------------------------------
+    // PermissionRequest hook
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called before Claude shows a native PTY permission dialog (PermissionRequest hook).
+     * Triggers a screen scan so the PromptResponsePanel appears promptly.
+     */
+    public void handlePermissionRequest(String payload) {
+        String cwd = extractCwdFromPayload(payload);
+        if (cwd == null) return;
+        LOGGER.fine("handlePermissionRequest cwd=" + cwd);
+        SwingUtilities.invokeLater(() ->
+            findSessionByCwd(cwd).ifPresent(ClaudeSessionTopComponent::triggerPromptScan));
+    }
+
+    private static String extractCwdFromPayload(String payload) {
+        if (payload == null) return null;
+        // Simple extraction without full JSON parse
+        int idx = payload.indexOf("\"cwd\"");
+        if (idx < 0) return null;
+        int colon = payload.indexOf(':', idx);
+        if (colon < 0) return null;
+        int q1 = payload.indexOf('"', colon + 1);
+        if (q1 < 0) return null;
+        int q2 = payload.indexOf('"', q1 + 1);
+        if (q2 < 0) return null;
+        return payload.substring(q1 + 1, q2);
+    }
+
+    private static java.util.Optional<ClaudeSessionTopComponent> findSessionByCwd(String cwd) {
+        for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
+            if (tc instanceof ClaudeSessionTopComponent stc) {
+                File dir = stc.getConfirmedDirectory();
+                if (dir != null && dir.getAbsolutePath().equals(cwd)) {
+                    return java.util.Optional.of(stc);
+                }
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
     /**
      * Enqueues a JSON-RPC message for delivery via the SSE stream.
      *

@@ -229,6 +229,12 @@ public final class ClaudeSessionTopComponent extends TopComponent {
         return panel.getConfirmedDirectory();
     }
 
+    /** Called by Stop hook — Claude finished its turn, re-enables Send button. */
+    public void onClaudeIdle() { panel.onClaudeIdle(); }
+
+    /** Called by PermissionRequest hook — triggers screen scan for upcoming Ink menu. */
+    public void triggerPromptScan() { panel.triggerPromptScan(); }
+
     private void updateDisplayName(File dir) {
         String name = ClaudeSessionPanel.resolveTabLabel(dir);
         setDisplayName(name);

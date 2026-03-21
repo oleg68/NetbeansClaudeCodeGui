@@ -1,6 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.ui.PermissionPanel;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.event.KeyEvent;
@@ -27,23 +27,13 @@ import javax.swing.KeyStroke;
  * options, a free-form text field (only when there are no parsed options),
  * and a Cancel button pinned to the right.
  */
-public final class PromptResponsePanel extends JPanel {
+public final class ChoiceMenuPanel extends JPanel {
 
-    private static final Logger LOG = Logger.getLogger(PromptResponsePanel.class.getName());
-
-    /** A single selectable option in an interactive prompt. */
-    public record Option(String display, String response) {}
-
-    /**
-     * Represents an interactive question from claude.
-     *
-     * @param defaultOptionIndex 0-based index of the default option, or -1 if unknown
-     */
-    public record PromptRequest(String text, List<Option> options, int defaultOptionIndex) {}
+    private static final Logger LOG = Logger.getLogger(ChoiceMenuPanel.class.getName());
 
     private Consumer<String> callback;
 
-    public PromptResponsePanel() {
+    public ChoiceMenuPanel() {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
@@ -52,21 +42,21 @@ public final class PromptResponsePanel extends JPanel {
     }
 
     /**
-     * Shows the panel for the given prompt request.
+     * Shows the panel for the given choice menu model.
      *
-     * @param req      the prompt request
+     * @param model    the menu model
      * @param callback invoked with the chosen response string, or {@code null} on Cancel
      */
-    public void show(PromptRequest req, Consumer<String> callback) {
+    public void show(ChoiceMenuModel model, Consumer<String> callback) {
         this.callback = callback;
         removeAll();
 
         // Split options into Yes/No vs others
-        List<Option> yesNoOptions = req.options().stream()
+        List<ChoiceMenuModel.Option> yesNoOptions = model.options().stream()
                 .filter(o -> o.display().trim().equalsIgnoreCase("Yes")
                           || o.display().trim().equalsIgnoreCase("No"))
                 .toList();
-        List<Option> otherOptions = req.options().stream()
+        List<ChoiceMenuModel.Option> otherOptions = model.options().stream()
                 .filter(o -> !o.display().trim().equalsIgnoreCase("Yes")
                           && !o.display().trim().equalsIgnoreCase("No"))
                 .toList();
@@ -78,8 +68,8 @@ public final class PromptResponsePanel extends JPanel {
         JButton sendBtn = null;
 
         // --- Question label — full width ---
-        String questionText = req.text();
-        LOG.info("[PromptResponsePanel] question: " + questionText);
+        String questionText = model.text();
+        LOG.info("[ChoiceMenuPanel] question: " + questionText);
         if (questionText != null && !questionText.isBlank()) {
             JLabel questionLabel = new JLabel("<html>" + escapeHtml(questionText) + "</html>");
             questionLabel.setFont(questionLabel.getFont().deriveFont(questionLabel.getFont().getSize() * 1.5f));
@@ -99,12 +89,9 @@ public final class PromptResponsePanel extends JPanel {
             yesNoRow.setLayout(new BoxLayout(yesNoRow, BoxLayout.X_AXIS));
             yesNoRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-            for (Option opt : yesNoOptions) {
+            for (ChoiceMenuModel.Option opt : yesNoOptions) {
                 String display = opt.display().trim();
                 String response = opt.response();
-                // Prefix Yes/No with the same icons used on Accept/Reject in PermissionPanel:
-                // PermissionPanel.ICON_ACCEPT = \u2713 (CHECK MARK)
-                // PermissionPanel.ICON_REJECT = \u2717 (BALLOT X)
                 String label = display.equalsIgnoreCase("Yes")
                         ? PermissionPanel.ICON_ACCEPT + " " + display
                         : PermissionPanel.ICON_REJECT + " " + display;
@@ -124,14 +111,14 @@ public final class PromptResponsePanel extends JPanel {
                     }
                 });
                 btn.addActionListener(e -> {
-                    LOG.info("[PromptResponsePanel] yes/no clicked: \"" + display + "\" → \"" + response + "\"");
+                    LOG.info("[ChoiceMenuPanel] yes/no clicked: \"" + display + "\" → \"" + response + "\"");
                     submitAnswer(response);
                 });
                 yesNoRow.add(btn);
                 yesNoRow.add(Box.createHorizontalStrut(4));
 
-                int idx = req.options().indexOf(opt);
-                if (idx == req.defaultOptionIndex()) {
+                int idx = model.options().indexOf(opt);
+                if (idx == model.defaultOptionIndex()) {
                     defaultYesNoBtn = btn;
                 }
             }
@@ -145,7 +132,7 @@ public final class PromptResponsePanel extends JPanel {
         if (!otherOptions.isEmpty()) {
             group = new ButtonGroup();
             for (int i = 0; i < otherOptions.size(); i++) {
-                Option opt = otherOptions.get(i);
+                ChoiceMenuModel.Option opt = otherOptions.get(i);
                 JRadioButton rb = new JRadioButton(opt.display().trim());
                 rb.setAlignmentX(Component.LEFT_ALIGNMENT);
                 group.add(rb);
@@ -170,8 +157,8 @@ public final class PromptResponsePanel extends JPanel {
                     leftCol.add(rb);
                 }
 
-                int idx = req.options().indexOf(opt);
-                if (idx == req.defaultOptionIndex()) {
+                int idx = model.options().indexOf(opt);
+                if (idx == model.defaultOptionIndex()) {
                     rb.setSelected(true);
                 }
             }
@@ -179,7 +166,7 @@ public final class PromptResponsePanel extends JPanel {
         }
 
         // Free-form input (no options at all)
-        if (req.options().isEmpty()) {
+        if (model.options().isEmpty()) {
             freeField = new JTextField(30);
             freeField.setMaximumSize(new java.awt.Dimension(Integer.MAX_VALUE, freeField.getPreferredSize().height));
             freeField.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -205,19 +192,18 @@ public final class PromptResponsePanel extends JPanel {
         JButton cancelBtn = new JButton("Cancel");
         cancelBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         cancelBtn.addActionListener(e -> {
-            LOG.info("[PromptResponsePanel] Cancel clicked");
+            LOG.info("[ChoiceMenuPanel] Cancel clicked");
             cancel();
         });
         rightCol.add(cancelBtn);
 
-        boolean hasSend = !otherOptions.isEmpty() || req.options().isEmpty();
+        boolean hasSend = !otherOptions.isEmpty() || model.options().isEmpty();
         if (hasSend) {
             final JRadioButton[] finalRadios = radioButtons;
             final JTextField[] finalTypeFields = typeFields;
             final JTextField finalField = freeField;
             sendBtn = new JButton("Send");
             sendBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-            // Disabled until a radio is selected (for radio-only prompts)
             boolean anySelected = false;
             for (JRadioButton rb : radioButtons) {
                 if (rb != null && rb.isSelected()) { anySelected = true; break; }
@@ -241,7 +227,7 @@ public final class PromptResponsePanel extends JPanel {
                 for (int i = 0; i < finalRadios.length; i++) {
                     JRadioButton rb = finalRadios[i];
                     if (rb != null && rb.isSelected()) {
-                        Option opt = otherOptions.get(i);
+                        ChoiceMenuModel.Option opt = otherOptions.get(i);
                         if (isTypeInputOption(opt) && finalTypeFields[i] != null) {
                             String typed = finalTypeFields[i].getText().trim();
                             if (!typed.isEmpty()) {
@@ -298,6 +284,45 @@ public final class PromptResponsePanel extends JPanel {
             }
         }
 
+        // Arrow key navigation between radio buttons (needed because some radios are
+        // wrapped in a sub-JPanel, breaking BasicRadioButtonUI's sibling traversal)
+        for (int i = 0; i < radioButtons.length; i++) {
+            if (radioButtons[i] == null) continue;
+            final int idx = i;
+            AbstractAction prevAction = new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    for (int j = idx - 1; j >= 0; j--) {
+                        if (radioButtons[j] != null) {
+                            radioButtons[j].setSelected(true);
+                            radioButtons[j].requestFocusInWindow();
+                            break;
+                        }
+                    }
+                }
+            };
+            AbstractAction nextAction = new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    for (int j = idx + 1; j < radioButtons.length; j++) {
+                        if (radioButtons[j] != null) {
+                            radioButtons[j].setSelected(true);
+                            radioButtons[j].requestFocusInWindow();
+                            break;
+                        }
+                    }
+                }
+            };
+            radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "prev");
+            radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "prev");
+            radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "next");
+            radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "next");
+            radioButtons[i].getActionMap().put("prev", prevAction);
+            radioButtons[i].getActionMap().put("next", nextAction);
+        }
+
         setVisible(true);
         revalidate();
         repaint();
@@ -321,7 +346,7 @@ public final class PromptResponsePanel extends JPanel {
     /** Hides the panel if a prompt is still pending (called when Claude accepted input via terminal). */
     public void dismissIfActive() {
         if (isVisible() && callback != null) {
-            LOG.info("[PromptResponsePanel] dismissing — Claude accepted terminal input");
+            LOG.info("[ChoiceMenuPanel] dismissing — Claude accepted terminal input");
             Consumer<String> cb = callback;
             setVisible(false);
             callback = null;
@@ -345,7 +370,7 @@ public final class PromptResponsePanel extends JPanel {
 
     private void submitAnswer(String answer) {
         Consumer<String> cb = callback;
-        LOG.info("[PromptResponsePanel] submitAnswer: \"" + answer + "\", cb=" + cb);
+        LOG.info("[ChoiceMenuPanel] submitAnswer: \"" + answer + "\", cb=" + cb);
         setVisible(false);
         callback = null;
         removeAll();
@@ -371,11 +396,8 @@ public final class PromptResponsePanel extends JPanel {
     /**
      * Returns {@code true} if the option represents a free-text input slot
      * (display text starts with "type", case-insensitive).
-     *
-     * <p>Claude Code appends a "Type something." entry to AskUserQuestion menus
-     * to allow the user to submit arbitrary text instead of a predefined choice.
      */
-    private static boolean isTypeInputOption(Option opt) {
+    private static boolean isTypeInputOption(ChoiceMenuModel.Option opt) {
         return opt.display().trim().toLowerCase().startsWith("type");
     }
 

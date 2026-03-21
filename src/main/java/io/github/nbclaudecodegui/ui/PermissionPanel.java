@@ -6,6 +6,7 @@ import java.awt.FlowLayout;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
@@ -13,12 +14,12 @@ import javax.swing.JTextField;
  * One-line permission bar shown at the bottom of a diff view:
  *
  * <pre>
- *   [✓ Accept]  [✗ Reject]  [___Reject reason (Optional)___________]  [Cancel]
+ *   [✓ Accept]  [✗ Decline]  [___Decline reason (Optional)___________]  [Cancel]
  * </pre>
  *
  * <ul>
- *   <li><b>Accept</b> — allow the proposed change</li>
- *   <li><b>Reject</b> — deny the change, with an optional reason sent to Claude</li>
+ *   <li><b>Accept</b> — allow the proposed change; warns if a Decline reason is already typed</li>
+ *   <li><b>Decline</b> — deny the change, with an optional reason sent to Claude</li>
  *   <li><b>Cancel</b> — deny the change <em>and</em> interrupt Claude's running prompt (Ctrl+C)</li>
  * </ul>
  */
@@ -57,9 +58,9 @@ public final class PermissionPanel extends JPanel {
             }
         });
 
-        // Reject button (red)
-        JButton rejectBtn = new JButton(ICON_REJECT + " Reject");
-        rejectBtn.setToolTipText("Reject this change");
+        // Decline button (red)
+        JButton rejectBtn = new JButton(ICON_REJECT + " Decline");
+        rejectBtn.setToolTipText("Decline this change");
         rejectBtn.setOpaque(true);
         rejectBtn.setBackground(new Color(178, 34, 34));
         rejectBtn.setForeground(Color.WHITE);
@@ -72,10 +73,10 @@ public final class PermissionPanel extends JPanel {
             }
         });
 
-        // Reason field — filled width between Reject and Cancel
+        // Reason field — filled width between Decline and Cancel
         JTextField reasonField = new JTextField();
-        reasonField.putClientProperty("JTextField.placeholderText", "Reject reason (Optional)");
-        reasonField.setToolTipText("Optional reason sent to Claude when rejecting");
+        reasonField.putClientProperty("JTextField.placeholderText", "Decline reason (Optional)");
+        reasonField.setToolTipText("Optional reason sent to Claude when declining");
 
         // Cancel button — far right
         JButton cancelBtn = new JButton("Cancel");
@@ -84,7 +85,20 @@ public final class PermissionPanel extends JPanel {
         this.acceptBtn = acceptBtn;
 
         // Wire actions
-        acceptBtn.addActionListener(e -> onAccept.run());
+        acceptBtn.addActionListener(e -> {
+            String reason = reasonField.getText().trim();
+            if (!reason.isEmpty()) {
+                int choice = JOptionPane.showConfirmDialog(
+                        acceptBtn,
+                        "You have typed a decline reason: \"" + reason + "\"\n"
+                        + "It will NOT be sent. Accept the change anyway?",
+                        "Accept with decline reason",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE);
+                if (choice != JOptionPane.YES_OPTION) return;
+            }
+            onAccept.run();
+        });
         rejectBtn.addActionListener(e -> onReject.accept(reasonField.getText().trim()));
         cancelBtn.addActionListener(e -> onCancel.run());
 

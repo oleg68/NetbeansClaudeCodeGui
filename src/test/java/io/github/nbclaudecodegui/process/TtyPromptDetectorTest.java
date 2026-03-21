@@ -1,6 +1,6 @@
 package io.github.nbclaudecodegui.process;
 
-import io.github.nbclaudecodegui.ui.PromptResponsePanel;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import java.util.Optional;
 import java.util.Properties;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for {@link TtyPromptDetector}.
  *
- * <p>Numbered-menu detection has been moved to {@link ScreenPromptDetector}; this
+ * <p>Numbered-menu detection has been moved to {@link ScreenContentDetector}; this
  * class only tests inline and JSON-subtype prompts.
  */
 class TtyPromptDetectorTest {
@@ -28,7 +28,7 @@ class TtyPromptDetectorTest {
 
     @Test
     void testNumberedMenuLineIgnored() {
-        // Numbered menu lines are handled by ScreenPromptDetector, not TtyPromptDetector
+        // Numbered menu lines are handled by ScreenContentDetector, not TtyPromptDetector
         assertTrue(detector.feed("\u276f 1. Yes").isEmpty());
         assertTrue(detector.feed("2. No").isEmpty());
         assertTrue(detector.feed("3. Cancel").isEmpty());
@@ -40,7 +40,7 @@ class TtyPromptDetectorTest {
 
     @Test
     void testInlineYnPrompt() {
-        Optional<PromptResponsePanel.PromptRequest> req =
+        Optional<ChoiceMenuModel> req =
                 detector.feed("Allow this action? (y/n)");
         assertTrue(req.isPresent());
         assertEquals(2, req.get().options().size());
@@ -53,7 +53,7 @@ class TtyPromptDetectorTest {
 
     @Test
     void testInlineAlwaysPrompt() {
-        Optional<PromptResponsePanel.PromptRequest> req =
+        Optional<ChoiceMenuModel> req =
                 detector.feed("Allow? (y/n/always)");
         assertTrue(req.isPresent());
         assertEquals(3, req.get().options().size());
@@ -61,7 +61,7 @@ class TtyPromptDetectorTest {
 
     @Test
     void testInlineBracketsPrompt() {
-        Optional<PromptResponsePanel.PromptRequest> req =
+        Optional<ChoiceMenuModel> req =
                 detector.feed("Proceed [y/n]");
         assertTrue(req.isPresent());
         assertEquals(2, req.get().options().size());
@@ -74,7 +74,7 @@ class TtyPromptDetectorTest {
     @Test
     void testJsonQuestionSubtype() {
         String line = "{\"type\":\"system\",\"subtype\":\"question\",\"question\":\"Allow?\"}";
-        Optional<PromptResponsePanel.PromptRequest> req = detector.feed(line);
+        Optional<ChoiceMenuModel> req = detector.feed(line);
         assertTrue(req.isPresent());
         assertEquals("Allow?", req.get().text());
         assertEquals(-1, req.get().defaultOptionIndex());
@@ -83,7 +83,7 @@ class TtyPromptDetectorTest {
     @Test
     void testJsonPermissionRequestSubtype() {
         String line = "{\"type\":\"system\",\"subtype\":\"permission_request\"}";
-        Optional<PromptResponsePanel.PromptRequest> req = detector.feed(line);
+        Optional<ChoiceMenuModel> req = detector.feed(line);
         assertTrue(req.isPresent());
     }
 

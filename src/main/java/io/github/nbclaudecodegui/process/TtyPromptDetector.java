@@ -14,7 +14,7 @@ import java.util.logging.Logger;
  * Detects <em>inline</em> and <em>JSON-based</em> interactive prompts from Claude PTY output.
  *
  * <p>Numbered-menu prompts (❯ 1. Yes / 2. No / …) are <strong>not</strong> handled here —
- * they are detected by {@link ScreenPromptDetector} which reads the rendered terminal screen
+ * they are detected by {@link ScreenContentDetector} which reads the rendered terminal screen
  * instead of the raw PTY stream.  Attempting to detect menus from the stream is unreliable
  * because Claude updates spinner lines above the menu using cursor-up sequences
  * ({@code ESC[15A}), and the stripped versions of those updates look like regular text lines
@@ -24,7 +24,7 @@ import java.util.logging.Logger;
  * <ol>
  *   <li><strong>Inline triggers</strong> — single-line prompts containing a bracketed
  *       yes/no group, e.g. {@code "Allow? (y/n)"}.</li>
- *   <li><strong>JSON subtypes</strong> — NDJSON lines starting with {@code '{'} whose
+ *   <li><strong>JSON subtypes</strong> — NDJSON lines starting with <code>'{'</code> whose
  *       {@code "subtype"} field matches a configured value.</li>
  * </ol>
  *
@@ -113,17 +113,17 @@ public final class TtyPromptDetector {
      * Feed a single PTY output line into the detector.
      *
      * @param line stripped line from PTY (ANSI codes removed by caller)
-     * @return a {@link io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest}
+     * @return a {@link io.github.nbclaudecodegui.model.ChoiceMenuModel}
      *         if an inline or JSON prompt is detected, otherwise empty
      */
-    public Optional<io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest> feed(String line) {
+    public Optional<io.github.nbclaudecodegui.model.ChoiceMenuModel> feed(String line) {
         if (line == null) return Optional.empty();
 
         // Inline single-line prompts, e.g. "Allow? (y/n)"
         String lower = line.toLowerCase();
         for (String trigger : inlineTriggers) {
             if (lower.contains(trigger.toLowerCase())) {
-                return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
+                return Optional.of(new io.github.nbclaudecodegui.model.ChoiceMenuModel(
                         line, extractInlineOptions(line), -1));
             }
         }
@@ -134,7 +134,7 @@ public final class TtyPromptDetector {
             if (subtype != null && jsonSubtypes.contains(subtype)) {
                 String text = StreamJsonParser.extractString(line, "question");
                 if (text == null) text = line;
-                return Optional.of(new io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest(
+                return Optional.of(new io.github.nbclaudecodegui.model.ChoiceMenuModel(
                         text, new ArrayList<>(), -1));
             }
         }
@@ -144,7 +144,7 @@ public final class TtyPromptDetector {
 
     /** Reset internal state (no-op — kept for API compatibility). */
     public void reset() {
-        // No state to reset; numbered-menu detection moved to ScreenPromptDetector.
+        // No state to reset; numbered-menu detection moved to ScreenContentDetector.
     }
 
     // -------------------------------------------------------------------------
@@ -154,8 +154,8 @@ public final class TtyPromptDetector {
     /**
      * Extract options from a single-line prompt like "Allow? (y/n/always)".
      */
-    private static List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> extractInlineOptions(String line) {
-        List<io.github.nbclaudecodegui.ui.PromptResponsePanel.Option> options = new ArrayList<>();
+    private static List<io.github.nbclaudecodegui.model.ChoiceMenuModel.Option> extractInlineOptions(String line) {
+        List<io.github.nbclaudecodegui.model.ChoiceMenuModel.Option> options = new ArrayList<>();
         int lastOpen = -1;
         char closeChar = ')';
         for (int i = line.length() - 1; i >= 0; i--) {
@@ -177,7 +177,7 @@ public final class TtyPromptDetector {
         for (String part : inner.split("/")) {
             String t = part.trim();
             if (!t.isEmpty()) options.add(
-                    new io.github.nbclaudecodegui.ui.PromptResponsePanel.Option(t, t));
+                    new io.github.nbclaudecodegui.model.ChoiceMenuModel.Option(t, t));
         }
         return options;
     }

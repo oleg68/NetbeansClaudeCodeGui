@@ -49,6 +49,9 @@ public final class ClaudeProcess {
     /** Matcher string the plugin registers in PreToolUse hooks. */
     static final String OUR_HOOK_MATCHER = "Edit|Write|MultiEdit";
 
+    /** Matcher for Stop and PermissionRequest hooks (match all). */
+    static final String OUR_STOP_MATCHER = ".*";
+
     /** Key the plugin registers under {@code mcpServers}. */
     static final String OUR_MCP_KEY = "netbeans";
 
@@ -246,6 +249,33 @@ public final class ClaudeProcess {
             filtered.add(ourEntry);
 
             hooks.set("PreToolUse", filtered);
+
+            // --- hooks.Stop ---
+            ObjectNode stopEntry = MAPPER.createObjectNode();
+            stopEntry.put("matcher", OUR_STOP_MATCHER);
+            ArrayNode stopHooksArr = MAPPER.createArrayNode();
+            ObjectNode stopHook = MAPPER.createObjectNode();
+            stopHook.put("type", "http");
+            stopHook.put("url", "http://localhost:" + port + "/stop");
+            stopHooksArr.add(stopHook);
+            stopEntry.set("hooks", stopHooksArr);
+            ArrayNode stopArr = MAPPER.createArrayNode();
+            stopArr.add(stopEntry);
+            hooks.set("Stop", stopArr);
+
+            // --- hooks.PermissionRequest ---
+            ObjectNode permEntry = MAPPER.createObjectNode();
+            permEntry.put("matcher", OUR_STOP_MATCHER);
+            ArrayNode permHooksArr = MAPPER.createArrayNode();
+            ObjectNode permHook = MAPPER.createObjectNode();
+            permHook.put("type", "http");
+            permHook.put("url", "http://localhost:" + port + "/permission-request");
+            permHooksArr.add(permHook);
+            permEntry.set("hooks", permHooksArr);
+            ArrayNode permArr = MAPPER.createArrayNode();
+            permArr.add(permEntry);
+            hooks.set("PermissionRequest", permArr);
+
             root.set("hooks", hooks);
 
             return MAPPER.writeValueAsString(root);
@@ -321,7 +351,7 @@ public final class ClaudeProcess {
                 }
             }
 
-            // Remove our PreToolUse hook entry
+            // Remove our hook entries
             if (root.has("hooks")) {
                 ObjectNode hooks = (ObjectNode) root.get("hooks");
                 if (hooks.has("PreToolUse")) {
@@ -339,6 +369,8 @@ public final class ClaudeProcess {
                         hooks.set("PreToolUse", filtered);
                     }
                 }
+                hooks.remove("Stop");
+                hooks.remove("PermissionRequest");
                 if (hooks.isEmpty()) {
                     root.remove("hooks");
                 }
@@ -366,8 +398,13 @@ public final class ClaudeProcess {
                 + "\"hooks\":{"
                 + "\"PreToolUse\":["
                 + "{\"matcher\":\"Edit|Write|MultiEdit\","
-                + "\"hooks\":[{\"type\":\"http\",\"url\":\"http://localhost:" + port + "/hook\"}]}"
-                + "]}"
-                + "}";
+                + "\"hooks\":[{\"type\":\"http\",\"url\":\"http://localhost:" + port + "/hook\"}]}],"
+                + "\"Stop\":["
+                + "{\"matcher\":\".*\","
+                + "\"hooks\":[{\"type\":\"http\",\"url\":\"http://localhost:" + port + "/stop\"}]}],"
+                + "\"PermissionRequest\":["
+                + "{\"matcher\":\".*\","
+                + "\"hooks\":[{\"type\":\"http\",\"url\":\"http://localhost:" + port + "/permission-request\"}]}]"
+                + "}}";
     }
 }

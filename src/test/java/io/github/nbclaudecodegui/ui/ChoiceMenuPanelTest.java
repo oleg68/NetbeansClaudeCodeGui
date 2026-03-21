@@ -1,8 +1,7 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.ui.PermissionPanel;
-import io.github.nbclaudecodegui.ui.PromptResponsePanel.Option;
-import io.github.nbclaudecodegui.ui.PromptResponsePanel.PromptRequest;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel.Option;
 import java.awt.Color;
 import java.awt.Component;
 import java.util.ArrayList;
@@ -16,16 +15,16 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link PromptResponsePanel}.
+ * Unit tests for {@link ChoiceMenuPanel}.
  *
  * <p>All Swing operations are performed on the EDT.
  */
-class PromptResponsePanelTest {
+class ChoiceMenuPanelTest {
 
     @Test
     void testInitiallyHidden() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
             assertFalse(panel.isVisible(), "panel should be hidden initially");
         });
     }
@@ -33,10 +32,10 @@ class PromptResponsePanelTest {
     @Test
     void testShowWithOptionsCreatesButtons() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Allow?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Allow?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
-            panel.show(req, answer -> {});
+            panel.show(model, answer -> {});
 
             assertTrue(panel.isVisible(), "panel should become visible after show()");
 
@@ -51,10 +50,10 @@ class PromptResponsePanelTest {
     @Test
     void testYesButtonIsGreen() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Q?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Q?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
-            panel.show(req, answer -> {});
+            panel.show(model, answer -> {});
 
             JButton btn = findButton(panel, PermissionPanel.ICON_ACCEPT + " Yes");
             assertNotNull(btn, "Yes button must exist");
@@ -65,10 +64,10 @@ class PromptResponsePanelTest {
     @Test
     void testNoButtonIsRed() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Q?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Q?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
-            panel.show(req, answer -> {});
+            panel.show(model, answer -> {});
 
             JButton btn = findButton(panel, PermissionPanel.ICON_REJECT + " No");
             assertNotNull(btn, "No button must exist");
@@ -79,10 +78,10 @@ class PromptResponsePanelTest {
     @Test
     void testRadioButtonForNonYesNoOption() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Q?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Q?",
                     List.of(new Option("Maybe", "3")), -1);
-            panel.show(req, answer -> {});
+            panel.show(model, answer -> {});
 
             JRadioButton rb = findRadioButton(panel, "Maybe");
             assertNotNull(rb, "Non-Yes/No option should render as JRadioButton");
@@ -93,22 +92,22 @@ class PromptResponsePanelTest {
     void testCancelAlwaysPresent() throws Exception {
         // With Yes/No only
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
             assertNotNull(findButton(panel, "Cancel"), "Cancel must be present with Yes/No options");
         });
 
         // With radio options
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
             assertNotNull(findButton(panel, "Cancel"), "Cancel must be present with radio options");
         });
 
         // Free-form
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(), -1), a -> {});
             assertNotNull(findButton(panel, "Cancel"), "Cancel must be present for free-form input");
         });
     }
@@ -116,8 +115,8 @@ class PromptResponsePanelTest {
     @Test
     void testSendAbsentWhenOnlyYesNo() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
             assertNull(findButton(panel, "Send"), "Send button must NOT be present when only Yes/No options");
         });
     }
@@ -125,8 +124,8 @@ class PromptResponsePanelTest {
     @Test
     void testSendPresentWhenOtherOptionsExist() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?",
                     List.of(new Option("Yes", "1"), new Option("Maybe", "3")), -1), a -> {});
             assertNotNull(findButton(panel, "Send"), "Send button must be present when other options exist");
         });
@@ -135,8 +134,8 @@ class PromptResponsePanelTest {
     @Test
     void testSendDisabledUntilRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
             JButton send = findButton(panel, "Send");
             assertNotNull(send, "Send must exist");
             assertFalse(send.isEnabled(), "Send must be disabled when no radio is selected");
@@ -151,8 +150,8 @@ class PromptResponsePanelTest {
     @Test
     void testSendEnabledWhenDefaultRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Maybe", "1")), 0), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "1")), 0), a -> {});
             JButton send = findButton(panel, "Send");
             assertNotNull(send, "Send must exist");
             assertTrue(send.isEnabled(), "Send must be enabled when default radio is pre-selected");
@@ -162,9 +161,8 @@ class PromptResponsePanelTest {
     @Test
     void testDefaultRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            // defaultOptionIndex=0, option "Maybe" is at index 0
-            panel.show(new PromptRequest("Q?", List.of(new Option("Maybe", "1")), 0), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "1")), 0), a -> {});
             JRadioButton rb = findRadioButton(panel, "Maybe");
             assertNotNull(rb, "JRadioButton for Maybe must exist");
             assertTrue(rb.isSelected(), "Radio button for default option should be selected");
@@ -176,10 +174,10 @@ class PromptResponsePanelTest {
         List<String> received = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Allow?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Allow?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
-            panel.show(req, received::add);
+            panel.show(model, received::add);
 
             JButton yesBtn = findButton(panel, PermissionPanel.ICON_ACCEPT + " Yes");
             assertNotNull(yesBtn, "Yes button must exist");
@@ -193,9 +191,9 @@ class PromptResponsePanelTest {
     @Test
     void testHideAfterButtonClick() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Go?", List.of(new Option("Yes", "1")), -1);
-            panel.show(req, answer -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Go?", List.of(new Option("Yes", "1")), -1);
+            panel.show(model, answer -> {});
 
             JButton btn = findButton(panel, PermissionPanel.ICON_ACCEPT + " Yes");
             assertNotNull(btn);
@@ -211,9 +209,9 @@ class PromptResponsePanelTest {
         List<Boolean> nullReceived = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Q?", List.of(new Option("Yes", "1")), -1);
-            panel.show(req, answer -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1")), -1);
+            panel.show(model, answer -> {
                 if (answer == null) nullReceived.add(true);
                 else received.add(answer);
             });
@@ -232,9 +230,9 @@ class PromptResponsePanelTest {
     @Test
     void testHideMethodHidesPanel() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Q?", List.of(new Option("Yes", "1")), -1);
-            panel.show(req, answer -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1")), -1);
+            panel.show(model, answer -> {});
             assertTrue(panel.isVisible());
 
             panel.dismiss();
@@ -245,9 +243,9 @@ class PromptResponsePanelTest {
     @Test
     void testShowWithNoOptionsShowsSendAndCancelButtons() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Enter your response:", List.of(), -1);
-            panel.show(req, answer -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Enter your response:", List.of(), -1);
+            panel.show(model, answer -> {});
             assertTrue(panel.isVisible());
 
             List<String> btnLabels = collectButtonLabels(panel);
@@ -259,8 +257,8 @@ class PromptResponsePanelTest {
     @Test
     void testCancelAndSendAreInRightCol() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
 
             JPanel rightCol = findPanelByName(panel, "rightCol");
             assertNotNull(rightCol, "rightCol panel must exist");
@@ -272,8 +270,8 @@ class PromptResponsePanelTest {
     @Test
     void testCancelInRightColWhenOnlyYesNo() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            panel.show(new PromptRequest("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
 
             JPanel rightCol = findPanelByName(panel, "rightCol");
             assertNotNull(rightCol, "rightCol panel must exist");
@@ -283,32 +281,22 @@ class PromptResponsePanelTest {
     }
 
     /**
-     * Regression: PTY spinner lines (e.g. "●") arrived while the panel was
-     * visible and the old ClaudeSessionPanel listener called dismissIfActive()
-     * on every such line. This dismissed the panel before the user could click
-     * anything, firing the callback with {@code null} and hiding the UI.
-     *
-     * <p>Fix: the listener now returns early when the panel is visible and
-     * never calls dismissIfActive() from the PTY thread.
-     *
-     * <p>This test verifies that dismissIfActive() has the observed premature-
-     * dismissal effect (null callback + hidden panel) so a future regression
-     * would be immediately visible.
+     * Regression: PTY spinner lines arrived while the panel was visible and the old
+     * ClaudeSessionPanel listener called dismissIfActive() on every such line.
      */
     @Test
     void dismissIfActiveFiresNullCallbackImmediately() throws Exception {
         List<String> received = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Do you want to proceed?",
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Do you want to proceed?",
                     List.of(new Option(" Yes", "1"), new Option(" No", "3")), 0);
-            panel.show(req, answer -> received.add(String.valueOf(answer)));
+            panel.show(model, answer -> received.add(String.valueOf(answer)));
 
             assertTrue(panel.isVisible(), "panel must be visible after show()");
             assertTrue(received.isEmpty(), "callback must not fire before user action");
 
-            // Simulates what the buggy PTY listener did on every spinner line:
             panel.dismissIfActive();
 
             assertFalse(panel.isVisible(), "dismissIfActive() hides the panel");
@@ -316,6 +304,102 @@ class PromptResponsePanelTest {
             assertEquals("null", received.get(0),
                     "dismissIfActive() fires callback with null (no user selection)");
         });
+    }
+
+    // -------------------------------------------------------------------------
+    // Type-input option tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testTypeInputOptionRendersTextField() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(model, answer -> {});
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf, "panel must contain a JTextField for 'Type something.' option");
+        });
+    }
+
+    @Test
+    void testTypeInputFieldDisabledByDefault() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(model, answer -> {});
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            assertFalse(tf.isEnabled(),
+                    "type-input text field must be disabled until its radio button is selected");
+        });
+    }
+
+    @Test
+    void testTypeInputFieldEnabledWhenRadioSelected() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(model, answer -> {});
+
+            JRadioButton typeRb = findRadioButton(panel, "Type something.");
+            assertNotNull(typeRb);
+            typeRb.setSelected(true);
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            assertTrue(tf.isEnabled(),
+                    "type-input text field must be enabled when its radio button is selected");
+        });
+    }
+
+    @Test
+    void testTypeInputOptionSendsTypedText() throws Exception {
+        List<String> captured = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(model, captured::add);
+
+            JRadioButton typeRb = findRadioButton(panel, "Type something.");
+            assertNotNull(typeRb);
+            typeRb.setSelected(true);
+
+            JTextField tf = findTextField(panel);
+            assertNotNull(tf);
+            tf.setText("my custom text");
+
+            // Click Send
+            JButton sendBtn = null;
+            for (Component c : panel.getComponents()) {
+                if (c instanceof JPanel p) {
+                    for (Component inner : p.getComponents()) {
+                        if (inner instanceof JPanel right && "rightCol".equals(right.getName())) {
+                            for (Component btn : right.getComponents()) {
+                                if (btn instanceof JButton b && "Send".equals(b.getText())) {
+                                    sendBtn = b;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            assertNotNull(sendBtn, "Send button must exist");
+            sendBtn.doClick();
+        });
+
+        assertEquals(1, captured.size(), "callback must be called once");
+        assertEquals("my custom text", captured.get(0),
+                "callback must receive typed text, not option number");
     }
 
     // -------------------------------------------------------------------------
@@ -379,101 +463,5 @@ class PromptResponsePanelTest {
             }
         }
         return null;
-    }
-
-    // -------------------------------------------------------------------------
-    // Type-input option tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    void testTypeInputOptionRendersTextField() throws Exception {
-        SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Choose:",
-                    List.of(new Option("Option A", "1"),
-                            new Option("Type something.", "2")), 0);
-            panel.show(req, answer -> {});
-
-            JTextField tf = findTextField(panel);
-            assertNotNull(tf, "panel must contain a JTextField for 'Type something.' option");
-        });
-    }
-
-    @Test
-    void testTypeInputFieldDisabledByDefault() throws Exception {
-        SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Choose:",
-                    List.of(new Option("Option A", "1"),
-                            new Option("Type something.", "2")), 0);
-            panel.show(req, answer -> {});
-
-            JTextField tf = findTextField(panel);
-            assertNotNull(tf);
-            assertFalse(tf.isEnabled(),
-                    "type-input text field must be disabled until its radio button is selected");
-        });
-    }
-
-    @Test
-    void testTypeInputFieldEnabledWhenRadioSelected() throws Exception {
-        SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Choose:",
-                    List.of(new Option("Option A", "1"),
-                            new Option("Type something.", "2")), 0);
-            panel.show(req, answer -> {});
-
-            JRadioButton typeRb = findRadioButton(panel, "Type something.");
-            assertNotNull(typeRb);
-            typeRb.setSelected(true);
-
-            JTextField tf = findTextField(panel);
-            assertNotNull(tf);
-            assertTrue(tf.isEnabled(),
-                    "type-input text field must be enabled when its radio button is selected");
-        });
-    }
-
-    @Test
-    void testTypeInputOptionSendsTypedText() throws Exception {
-        List<String> captured = new ArrayList<>();
-        SwingUtilities.invokeAndWait(() -> {
-            PromptResponsePanel panel = new PromptResponsePanel();
-            PromptRequest req = new PromptRequest("Choose:",
-                    List.of(new Option("Option A", "1"),
-                            new Option("Type something.", "2")), 0);
-            panel.show(req, captured::add);
-
-            JRadioButton typeRb = findRadioButton(panel, "Type something.");
-            assertNotNull(typeRb);
-            typeRb.setSelected(true);
-
-            JTextField tf = findTextField(panel);
-            assertNotNull(tf);
-            tf.setText("my custom text");
-
-            // Click Send
-            JButton sendBtn = null;
-            for (Component c : panel.getComponents()) {
-                if (c instanceof JPanel p) {
-                    for (Component inner : p.getComponents()) {
-                        if (inner instanceof JPanel right && "rightCol".equals(right.getName())) {
-                            for (Component btn : right.getComponents()) {
-                                if (btn instanceof JButton b && "Send".equals(b.getText())) {
-                                    sendBtn = b;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            assertNotNull(sendBtn, "Send button must exist");
-            sendBtn.doClick();
-        });
-
-        assertEquals(1, captured.size(), "callback must be called once");
-        assertEquals("my custom text", captured.get(0),
-                "callback must receive typed text, not option number");
     }
 }
