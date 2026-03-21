@@ -549,11 +549,16 @@ public final class ClaudeSessionPanel extends JPanel {
     void cancelPrompt() {
         if (connector == null) return;
         try {
-            connector.write(new byte[]{0x03});
-            SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
+            sendCancelToPty(new byte[]{0x03});
         } catch (IOException ex) {
             showError("Cancel failed: " + ex.getMessage());
         }
+    }
+
+    /** Sends cancel bytes to the PTY and resets the session to idle state. Single place for all cancel paths. */
+    private void sendCancelToPty(byte[] bytes) throws IOException {
+        connector.write(bytes);
+        onClaudeIdle();
     }
 
     private void bindSendKey(JTextArea area) {
@@ -637,7 +642,7 @@ public final class ClaudeSessionPanel extends JPanel {
             if (answer == null) {
                 // Cancel — send ESC to dismiss the Ink menu
                 LOG.info("[PTY write] \\x1b (Cancel/ESC)");
-                connector.write(new byte[]{0x1b});
+                sendCancelToPty(new byte[]{0x1b});
             } else {
                 boolean isMenuDigit = answer.matches("[0-9]");
                 String toWrite = isMenuDigit ? answer : answer + "\r";
