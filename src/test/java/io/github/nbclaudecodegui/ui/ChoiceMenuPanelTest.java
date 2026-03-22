@@ -282,7 +282,7 @@ class ChoiceMenuPanelTest {
 
     /**
      * Regression: PTY spinner lines arrived while the panel was visible and the old
-     * ClaudeSessionPanel listener called dismissIfActive() on every such line.
+     * ClaudePromptPanel listener called dismissIfActive() on every such line.
      */
     @Test
     void dismissIfActiveFiresNullCallbackImmediately() throws Exception {

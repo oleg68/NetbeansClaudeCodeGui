@@ -43,7 +43,7 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     /** Path restored from serialized state after an IDE restart. */
     private String savedPath;
 
-    private final ClaudeSessionPanel panel;
+    private final ClaudePromptPanel panel;
 
     /** Creates a new empty session (no directory selected). */
     public ClaudeSessionTopComponent() {
@@ -56,7 +56,7 @@ public final class ClaudeSessionTopComponent extends TopComponent {
      * @param dir working directory, or {@code null} for none
      */
     public ClaudeSessionTopComponent(File dir) {
-        panel = new ClaudeSessionPanel(dir, false);
+        panel = new ClaudePromptPanel(dir, false);
         setLayout(new java.awt.BorderLayout());
         add(panel, java.awt.BorderLayout.CENTER);
         setIcon(ImageUtilities.loadImage(ICON, true));
@@ -239,7 +239,7 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     public String getEditMode() { return panel.getEditMode(); }
 
     private void updateDisplayName(File dir) {
-        String name = ClaudeSessionPanel.resolveTabLabel(dir);
+        String name = ClaudePromptPanel.resolveTabLabel(dir);
         setDisplayName(name);
         setToolTipText(dir != null ? dir.getAbsolutePath() : "New Claude Code session");
     }

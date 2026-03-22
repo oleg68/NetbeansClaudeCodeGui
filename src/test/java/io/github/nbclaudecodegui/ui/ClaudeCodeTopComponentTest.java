@@ -30,7 +30,7 @@ class ClaudeCodeTopComponentTest {
         File tmpDir = Files.createTempDirectory("claude-test").toFile();
         tmpDir.deleteOnExit();
         try {
-            String label = ClaudeSessionPanel.resolveTabLabel(tmpDir);
+            String label = ClaudePromptPanel.resolveTabLabel(tmpDir);
             assertEquals(tmpDir.getName(), label);
         } finally {
             tmpDir.delete();
@@ -39,7 +39,7 @@ class ClaudeCodeTopComponentTest {
 
     @Test
     void testSessionPanelLabelResolutionNull() {
-        String label = ClaudeSessionPanel.resolveTabLabel(null);
+        String label = ClaudePromptPanel.resolveTabLabel(null);
         assertNotNull(label);
         assertFalse(label.isBlank());
     }

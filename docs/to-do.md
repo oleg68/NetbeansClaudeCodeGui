@@ -10,25 +10,11 @@
     - Отправка текстового поля: исправлено (PTY-тест показал: нужно сначала отправить номер опции, потом текст).
 - [x] Не сохраняется размер области ввода промпта при рестарте netbeans.
 - [x] Контекстное меню поля ввода промпта: включать/выключать доступность Prev/Next Message
-- [ ] ChoiceMenu не показалось при запросе.
-    ````
-    ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-     Bash command                                                                                                                                                            
-
-       grep -n "ICON_REJECT\|Reject\|Decline" /home/oleg/my-projects/NetbeansClaudeCodePlugin/src/main/java/io/github/nbclaudecodegui/ui/*.java | grep -v Binary             
-       Run shell command                                                                                                                                                     
-
-     Do you want to proceed?                                                                                                                                                 
-     ❯ 1. Yes                                                                                                                                                                
-      2. Yes, and don’t ask again for: grep -n "ICON_REJECT\|Reject\|Decline"                                                                                                
-                                     /home/oleg/my-projects/NetbeansClaudeCodePlugin/src/main/java/io/github/nbclaudecodegui/ui/*.java                                       
-       3. No                                                                                                                                                                 
-
-     Esc to cancel · Tab to amend · ctrl+e to explain                                                                                                                        
-    ```
-
-    Эффект не стабилен: иногда похожие запросы вызывают срабатывание, иногда нет.
-- [ ] Поле ввода промпта: поддержать переключение режимов по Shift+Tab (должен выбираться следующий режим из комбо)
+- [x] ChoiceMenu не показалось при запросе (нестабильный эффект).
+- [x] Поле ввода промпта: переключение режимов по Shift+Tab (следующий режим из комбо).
+- [x] Не показывается текущее имя плана в статусе.
+- [x] StatusBar: видимые разделители между лейблами (raised: controlShadow + controlHighlight) и всплывающие подсказки.
+- [x] Enter не сработал после ввода текста в вариант меню.
 
 # Features:
-  - 
+- [ ] Возможность подключения md-вьюера в FileDiff

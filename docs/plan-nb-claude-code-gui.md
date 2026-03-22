@@ -40,8 +40,8 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   │   ├── ClaudeCodeOptionsPanel.java
     │   │   └── ClaudeCodePreferences.java
     │   ├── ui/
-    │   │   ├── ClaudeSessionTopComponent.java  # One TC = one session; cancelCurrentPrompt()
-    │   │   ├── ClaudeSessionPanel.java         # Session UI (terminal + top bar)
+    │   │   ├── ClaudeSessionTopComponent.java  # One TC = one session; thin wrapper around ClaudePromptPanel
+    │   │   ├── ClaudePromptPanel.java          # Session UI: terminal + top bar + input + status bar + model discovery
     │   │   ├── PromptResponsePanel.java        # Interactive questions (Yes/No, radio, free-form)
     │   │   ├── PermissionPanel.java            # [✓ Accept][✗ Reject][reason][Cancel]
     │   │   ├── FileDiffTab.java                # Diff TopComponent + PermissionPanel; shared by hook and MCP
@@ -269,25 +269,27 @@ claude   (no flags, working directory = project root)
 
 ---
 
-### Stage 12 — Prompt panel improvements (planned)
+### Stage 12 — Prompt panel improvements ✅
 
 **Goal:** improve the UX of the prompt input area and add a session status bar.
 
-**What to add:**
+**Version:** `0.12.28-SNAPSHOT`
 
-*Input area:*
-- `inputArea` in `JScrollPane` with resizable split (`JSplitPane` between terminal and input field)
-- Context menu on `inputArea`: Cut / Copy / Paste + "History", "Favorites", "Clear"
-- Ctrl+Up / Ctrl+Down — in-memory command history navigation for the current session
-- Icons on Send and Cancel buttons (reuse pattern from `PermissionPanel`)
+**Implementation:**
 
-*Status bar (bottom of `ClaudeSessionPanel`):*
-- **Model** combo box — lists available Claude models; selected value passed to `claude` CLI via `--model` flag
-- **Edit mode** combo box — e.g. `auto` / `edit` / `diff`; passed via `--edit-mode` flag (or equivalent)
-- **Claude version** label — populated once at session start by running `claude --version` and parsing stdout
-- **Current plan** label — shows the active plan name parsed from Claude's PTY output (e.g. from `CLAUDE.md` plan header or a `plan:` line in the stream)
-
-**Files:** `ClaudeSessionPanel.java`, `ClaudeProcess.java`, `ClaudeCodePreferences.java`
+- `ClaudeSessionPanel.java` → **deleted**, replaced by `ClaudePromptPanel.java`
+- **`ClaudePromptPanel`** — comprehensive session panel:
+  - Top bar: project combo, path combo with history, Browse / Open / Settings buttons
+  - Terminal: `JediTermWidget` in `JSplitPane` with input area; divider position persisted
+  - Input area: multi-line `JTextArea`, Esc → Cancel, Ctrl+Up/Ctrl+Down in-session history (max 100), context menu (Cut/Copy/Paste + Prev/Next Message enabled/disabled)
+  - `ChoiceMenuPanel` triggered by `ScreenContentDetector` scanning the rendered terminal
+  - Status bar (bottom): edit-mode combo (`plan / default / acceptEdits`), model combo (populated via `ModelDiscovery`), state label, plan label, version label; raised separators between components (`controlShadow` + `controlHighlight`)
+- **`SessionLifecycle` enum** — `STARTING / READY / WORKING`; all transitions via `applyState()` on EDT
+- **`ModelDiscovery` record** — `parseModelDiscovery(List<String>)`: handles legacy format (cursor glyph ❯ ▶ >) and new numbered-menu format (✔ checkmark); returns model list + currentIndex
+- **`ClaudeSessionTopComponent`** — refactored to thin wrapper around `ClaudePromptPanel`; `openNewOrFocus()` / `openForDirectory(File)`; persistence via `writeExternal/readExternal`
+- **`ScreenContentDetector`** — improved screen scanning for `ChoiceMenuPanel` detection
+- **Tests:** `ClaudePromptPanelParseModelTest` (10 cases), `SessionLifecycleTest` (6 cases)
+- **Deleted:** `ClaudeSessionPanel.java`, `ClaudeSessionPanelParseModelTest.java`
 
 ---
 

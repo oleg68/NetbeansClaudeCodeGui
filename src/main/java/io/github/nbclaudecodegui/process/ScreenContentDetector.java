@@ -48,6 +48,13 @@ public final class ScreenContentDetector {
     private static final Pattern PLAN_NAME_PATTERN =
             Pattern.compile("\\b([\\w\\-]+\\.md)\\b", Pattern.CASE_INSENSITIVE);
 
+    /**
+     * Pattern matching a plan name in Claude's separator line, e.g.
+     * "──────── create-hello-world-script ──" (U+2500 box-drawing dashes).
+     */
+    private static final Pattern PLAN_NAME_DASHES_PATTERN =
+            Pattern.compile("\u2500{2,}\\s+([\\w][\\w\\-]*)\\s+\u2500+");
+
     // -------------------------------------------------------------------------
     // Session state
     // -------------------------------------------------------------------------
@@ -200,8 +207,12 @@ public final class ScreenContentDetector {
      */
     public Optional<String> detectPlanName(List<String> lines) {
         if (lines == null || lines.isEmpty()) return Optional.empty();
-        for (String line : bottomNonBlankLines(lines, 3)) {
-            Matcher m = PLAN_NAME_PATTERN.matcher(line);
+        for (String line : bottomNonBlankLines(lines, 5)) {
+            Matcher m = PLAN_NAME_DASHES_PATTERN.matcher(line);
+            if (m.find()) {
+                return Optional.of(m.group(1));
+            }
+            m = PLAN_NAME_PATTERN.matcher(line);
             if (m.find()) {
                 String name = m.group(1);
                 // Skip common non-plan occurrences like "README.md"
