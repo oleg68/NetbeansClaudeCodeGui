@@ -52,6 +52,8 @@ public final class ChoiceMenuPanel extends JPanel {
         this.callback = callback;
         removeAll();
 
+        final ChoiceMenuModel finalModel = model;
+
         // Split options into Yes/No vs others
         List<ChoiceMenuModel.Option> yesNoOptions = model.options().stream()
                 .filter(o -> o.display().trim().equalsIgnoreCase("Yes")
@@ -63,6 +65,7 @@ public final class ChoiceMenuPanel extends JPanel {
                 .toList();
 
         // Track focus targets
+        java.util.List<JButton> yesNoBtns = new java.util.ArrayList<>();
         JButton defaultYesNoBtn = null;
         JRadioButton[] radioButtons = new JRadioButton[otherOptions.size()];
         JRadioButton defaultRadioBtn = null;
@@ -117,6 +120,7 @@ public final class ChoiceMenuPanel extends JPanel {
                     LOG.info("[ChoiceMenuPanel] yes/no clicked: \"" + display + "\" → \"" + response + "\"");
                     submitAnswer(response);
                 });
+                yesNoBtns.add(btn);
                 yesNoRow.add(btn);
                 yesNoRow.add(Box.createHorizontalStrut(4));
 
@@ -145,7 +149,6 @@ public final class ChoiceMenuPanel extends JPanel {
                     JTextField tf = new JTextField(20);
                     tf.setMaximumSize(new java.awt.Dimension(
                             Integer.MAX_VALUE, tf.getPreferredSize().height));
-                    tf.setAlignmentX(Component.LEFT_ALIGNMENT);
                     tf.setEnabled(false); // disabled until radio button is selected
                     setPlaceholder(tf, opt.display().trim());
                     rb.addChangeListener(e -> tf.setEnabled(rb.isSelected()));
@@ -156,8 +159,16 @@ public final class ChoiceMenuPanel extends JPanel {
                     });
                     TextContextMenu.attach(tf);
                     typeFields[i] = tf;
-                    leftCol.add(rb);   // radio button visible so tests can find it
-                    leftCol.add(tf);
+                    // Bug 2: text field inline to the right of the radio button
+                    rb.setText(" "); // placeholder text already shown in the text field
+                    rb.setName("typeInputRb");
+                    JPanel typeRow = new JPanel();
+                    typeRow.setName("typeInputRow");
+                    typeRow.setLayout(new BoxLayout(typeRow, BoxLayout.X_AXIS));
+                    typeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    typeRow.add(rb);
+                    typeRow.add(tf);
+                    leftCol.add(typeRow);
                 } else {
                     leftCol.add(rb);
                 }
@@ -240,7 +251,11 @@ public final class ChoiceMenuPanel extends JPanel {
                             String hint = opt.display().trim();
                             String typed = finalTypeFields[i].getText().trim();
                             if (!typed.isEmpty() && !typed.equals(hint)) {
-                                submitAnswer(typed);
+                                // Bug 4: Claude needs the option number sent first to activate
+                                // text-entry mode, then the typed text + \r.
+                                // Encode as "TYPE:N:text" for writePtyAnswer to handle.
+                                int optNum = finalModel.options().indexOf(opt) + 1;
+                                submitAnswer("TYPE:" + optNum + ":" + typed);
                             }
                         } else {
                             submitAnswer(opt.response());
@@ -366,6 +381,21 @@ public final class ChoiceMenuPanel extends JPanel {
             radioButtons[i].getActionMap().put("next", nextAction);
         }
 
+        // Bug 3: explicit Tab order: Yes/No → radios (+ type-fields) → Send → Cancel
+        java.util.List<java.awt.Component> tabOrder = new java.util.ArrayList<>();
+        tabOrder.addAll(yesNoBtns);
+        for (int i = 0; i < radioButtons.length; i++) {
+            if (radioButtons[i] != null) {
+                tabOrder.add(radioButtons[i]);
+                if (typeFields[i] != null) tabOrder.add(typeFields[i]);
+            }
+        }
+        if (freeField != null) tabOrder.add(freeField);
+        if (sendBtn != null) tabOrder.add(sendBtn);
+        tabOrder.add(cancelBtn);
+        setFocusTraversalPolicy(new ListFTP(tabOrder));
+        setFocusTraversalPolicyProvider(true);
+
         setVisible(true);
         revalidate();
         repaint();
@@ -468,5 +498,24 @@ public final class ChoiceMenuPanel extends JPanel {
 
     private static String escapeHtml(String s) {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /** Focus traversal policy backed by an explicit ordered list. */
+    private static final class ListFTP extends java.awt.FocusTraversalPolicy {
+        private final java.util.List<java.awt.Component> order;
+        ListFTP(java.util.List<java.awt.Component> order) { this.order = order; }
+
+        private java.awt.Component next(java.awt.Component c, int dir) {
+            int i = order.indexOf(c);
+            if (i < 0) return order.isEmpty() ? null : order.get(0);
+            int n = order.size();
+            return order.get(((i + dir) % n + n) % n);
+        }
+
+        @Override public java.awt.Component getComponentAfter(java.awt.Container fc, java.awt.Component c) { return next(c, 1); }
+        @Override public java.awt.Component getComponentBefore(java.awt.Container fc, java.awt.Component c) { return next(c, -1); }
+        @Override public java.awt.Component getFirstComponent(java.awt.Container fc) { return order.isEmpty() ? null : order.get(0); }
+        @Override public java.awt.Component getLastComponent(java.awt.Container fc) { return order.isEmpty() ? null : order.get(order.size() - 1); }
+        @Override public java.awt.Component getDefaultComponent(java.awt.Container fc) { return getFirstComponent(fc); }
     }
 }

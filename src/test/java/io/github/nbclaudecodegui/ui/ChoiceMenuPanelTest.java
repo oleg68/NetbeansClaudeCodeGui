@@ -349,8 +349,8 @@ class ChoiceMenuPanelTest {
                             new Option("Type something.", "2")), 0);
             panel.show(model, answer -> {});
 
-            JRadioButton typeRb = findRadioButton(panel, "Type something.");
-            assertNotNull(typeRb);
+            JRadioButton typeRb = findRadioButtonByName(panel, "typeInputRb");
+            assertNotNull(typeRb, "type-input radio button must exist");
             typeRb.setSelected(true);
 
             JTextField tf = findTextField(panel);
@@ -361,45 +361,81 @@ class ChoiceMenuPanelTest {
     }
 
     @Test
-    void testTypeInputOptionSendsTypedText() throws Exception {
+    void testTypeInputOptionCallbackIncludesOptionNumber() throws Exception {
+        // Bug 4: callback must send "TYPE:N:text" so writePtyAnswer can send the digit first
         List<String> captured = new ArrayList<>();
         SwingUtilities.invokeAndWait(() -> {
             ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            // "Type something." is option index 1 (0-based) → 1-based = 2
             ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
                     List.of(new Option("Option A", "1"),
                             new Option("Type something.", "2")), 0);
             panel.show(model, captured::add);
 
-            JRadioButton typeRb = findRadioButton(panel, "Type something.");
-            assertNotNull(typeRb);
+            JRadioButton typeRb = findRadioButtonByName(panel, "typeInputRb");
+            assertNotNull(typeRb, "type-input radio button must exist with name 'typeInputRb'");
             typeRb.setSelected(true);
 
             JTextField tf = findTextField(panel);
             assertNotNull(tf);
             tf.setText("my custom text");
 
-            // Click Send
-            JButton sendBtn = null;
-            for (Component c : panel.getComponents()) {
-                if (c instanceof JPanel p) {
-                    for (Component inner : p.getComponents()) {
-                        if (inner instanceof JPanel right && "rightCol".equals(right.getName())) {
-                            for (Component btn : right.getComponents()) {
-                                if (btn instanceof JButton b && "Send".equals(b.getText())) {
-                                    sendBtn = b;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            JButton sendBtn = findButton(panel, "Send");
             assertNotNull(sendBtn, "Send button must exist");
             sendBtn.doClick();
         });
 
         assertEquals(1, captured.size(), "callback must be called once");
-        assertEquals("my custom text", captured.get(0),
-                "callback must receive typed text, not option number");
+        String answer = captured.get(0);
+        assertTrue(answer.startsWith("TYPE:2:"),
+                "callback must include option number: expected 'TYPE:2:...' but got: " + answer);
+        assertEquals("TYPE:2:my custom text", answer,
+                "callback must carry option number and typed text");
+    }
+
+    @Test
+    void testTypeInputOptionLayoutIsHorizontal() throws Exception {
+        // Bug 2: text field must be in the same row as the radio button (horizontal layout)
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0);
+            panel.show(model, s -> {});
+
+            JPanel typeInputRow = findPanelByName(panel, "typeInputRow");
+            assertNotNull(typeInputRow, "typeInputRow panel must exist");
+
+            JRadioButton rb = findRadioButtonByName(typeInputRow, "typeInputRb");
+            assertNotNull(rb, "radio button must be inside typeInputRow");
+
+            JTextField tf = findTextField(typeInputRow);
+            assertNotNull(tf, "text field must be inside typeInputRow");
+        });
+    }
+
+    @Test
+    void testFocusTraversalOrderRadiosThenSendCancel() throws Exception {
+        // Bug 3: Tab order must be: radios → Send → Cancel
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose?",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Option B", "2")), 0);
+            panel.show(model, s -> {});
+
+            java.awt.FocusTraversalPolicy ftp = panel.getFocusTraversalPolicy();
+            assertNotNull(ftp, "panel must have an explicit FocusTraversalPolicy");
+
+            JButton sendBtn = findButton(panel, "Send");
+            JButton cancelBtn = findButton(panel, "Cancel");
+            assertNotNull(sendBtn);
+            assertNotNull(cancelBtn);
+
+            // Cancel must come after Send in the traversal order
+            java.awt.Component afterSend = ftp.getComponentAfter(panel, sendBtn);
+            assertEquals(cancelBtn, afterSend, "Cancel must follow Send in Tab order");
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -448,6 +484,18 @@ class ChoiceMenuPanelTest {
                 return rb;
             } else if (c instanceof java.awt.Container sub) {
                 JRadioButton found = findRadioButton(sub, label);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static JRadioButton findRadioButtonByName(java.awt.Container container, String name) {
+        for (Component c : container.getComponents()) {
+            if (c instanceof JRadioButton rb && name.equals(rb.getName())) {
+                return rb;
+            } else if (c instanceof java.awt.Container sub) {
+                JRadioButton found = findRadioButtonByName(sub, name);
                 if (found != null) return found;
             }
         }

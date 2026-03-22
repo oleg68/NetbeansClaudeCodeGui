@@ -601,6 +601,15 @@ public final class ClaudeSessionPanel extends JPanel {
         splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southStack);
         splitPane.setResizeWeight(0.8);
         splitPane.setDividerSize(5);
+        // Bug 5: restore saved divider position
+        int savedDivider = NbPreferences.forModule(ClaudeSessionPanel.class).getInt("dividerPosition", -1);
+        if (savedDivider > 0) {
+            SwingUtilities.invokeLater(() -> splitPane.setDividerLocation(savedDivider));
+        }
+        splitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
+            int loc = (int) e.getNewValue();
+            if (loc > 0) NbPreferences.forModule(ClaudeSessionPanel.class).putInt("dividerPosition", loc);
+        });
 
         add(splitPane, BorderLayout.CENTER);
         revalidate();
@@ -659,6 +668,12 @@ public final class ClaudeSessionPanel extends JPanel {
         area.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
+                // Bug 1: Esc → Cancel
+                if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    e.consume();
+                    if (cancelButton.isEnabled()) cancelButton.doClick();
+                    return;
+                }
                 // Ctrl+Up — navigate prompt history backward (older)
                 if (e.getKeyCode() == KeyEvent.VK_UP && e.isControlDown() && !e.isShiftDown() && !e.isAltDown()) {
                     e.consume();
@@ -717,6 +732,16 @@ public final class ClaudeSessionPanel extends JPanel {
 
         JMenuItem nextPrompt = new JMenuItem("Next prompt  (Ctrl+\u2193)");
         nextPrompt.addActionListener(e -> navigateHistory(-1));
+
+        // Bug 6: enable/disable Prev/Next based on history state
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                prevPrompt.setEnabled(!promptHistory.isEmpty() && historyIndex < promptHistory.size() - 1);
+                nextPrompt.setEnabled(historyIndex > -1);
+            }
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
 
         menu.addSeparator();
         menu.add(prevPrompt);
@@ -1120,6 +1145,26 @@ public final class ClaudeSessionPanel extends JPanel {
             if (answer == null) {
                 LOG.info("[PTY write] \\x1b (Cancel/ESC)");
                 sendCancelToPty(new byte[]{0x1b});
+            } else if (answer.startsWith("TYPE:")) {
+                // Bug 4: type-input option — send the option digit first to activate
+                // Claude's text-entry mode, then the typed text + \r.
+                int sep = answer.indexOf(':', 5);
+                String digit = answer.substring(5, sep);
+                String text = answer.substring(sep + 1);
+                LOG.info("[PTY write] type-input digit=" + digit + " text=" + text);
+                Thread t = new Thread(() -> {
+                    try {
+                        connector.write(digit);
+                        Thread.sleep(300);
+                        connector.write(text + "\r");
+                    } catch (java.io.IOException ex) {
+                        SwingUtilities.invokeLater(() -> showError("Write failed: " + ex.getMessage()));
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, "pty-typeinput");
+                t.setDaemon(true);
+                t.start();
             } else {
                 boolean isMenuDigit = answer.matches("[0-9]");
                 String toWrite = isMenuDigit ? answer : answer + "\r";
