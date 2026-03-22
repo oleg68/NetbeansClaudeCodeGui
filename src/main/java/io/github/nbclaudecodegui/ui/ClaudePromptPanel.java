@@ -488,13 +488,35 @@ public final class ClaudePromptPanel extends JPanel {
         if (dir == null) {
             return NbBundle.getMessage(ClaudePromptPanel.class, "TAB_NewSession");
         }
-        for (Project p : OpenProjects.getDefault().getOpenProjects()) {
+        Project[] openProjects = OpenProjects.getDefault().getOpenProjects();
+        LOG.info("resolveTabLabel: dir=" + dir.getAbsolutePath()
+                + " openProjects=" + openProjects.length);
+        for (Project p : openProjects) {
             File projDir = FileUtil.toFile(p.getProjectDirectory());
+            String projName = ProjectUtils.getInformation(p).getDisplayName();
+            LOG.info("  comparing with project '" + projName
+                    + "' dir=" + (projDir != null ? projDir.getAbsolutePath() : "null")
+                    + " equal=" + dir.equals(projDir));
+        }
+        // Try canonical path comparison as fallback
+        for (Project p : openProjects) {
+            File projDir = FileUtil.toFile(p.getProjectDirectory());
+            if (projDir == null) continue;
             if (dir.equals(projDir)) {
                 return ProjectUtils.getInformation(p).getDisplayName();
             }
+            try {
+                if (dir.getCanonicalPath().equals(projDir.getCanonicalPath())) {
+                    LOG.info("  canonical match found for project '"
+                            + ProjectUtils.getInformation(p).getDisplayName() + "'");
+                    return ProjectUtils.getInformation(p).getDisplayName();
+                }
+            } catch (IOException e) {
+                LOG.fine("canonical path comparison failed: " + e.getMessage());
+            }
         }
-        return dir.getName();
+        LOG.warning("resolveTabLabel: no project match for " + dir.getAbsolutePath());
+        return "Claude Code";
     }
 
     // -------------------------------------------------------------------------
@@ -633,36 +655,52 @@ public final class ClaudePromptPanel extends JPanel {
 
         // Build split pane: terminal on top, southStack on bottom
         splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southStack);
-        splitPane.setResizeWeight(0.8);
+        // resizeWeight=1.0: all extra space goes to PTY (top); bottom height stays fixed
+        splitPane.setResizeWeight(1.0);
         splitPane.setDividerSize(5);
-        // Restore saved divider position after the component is fully sized (one-shot)
-        int savedDivider = NbPreferences.forModule(ClaudePromptPanel.class).getInt("dividerPosition", -1);
-        if (savedDivider > 0) {
-            splitPane.addComponentListener(new ComponentAdapter() {
-                @Override
-                public void componentResized(ComponentEvent e) {
-                    if (splitPane.getHeight() > 0) {
-                        splitPane.setDividerLocation(savedDivider);
-                        splitPane.removeComponentListener(this);
-                    }
-                }
-            });
-        }
-        // Block PropertyChangeListener from saving during initial layout phase
-        final boolean[] layoutDone = {false};
+
+        // Saved value is the bottom panel height in pixels; -1 means "use preferred size"
+        final int savedBottomHeight = NbPreferences.forModule(ClaudePromptPanel.class).getInt("bottomHeight", -1);
+        final boolean[] savingEnabled = {false};
+
         splitPane.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
-                if (splitPane.getHeight() > 0) {
-                    layoutDone[0] = true;
-                    splitPane.removeComponentListener(this);
+                int total = splitPane.getHeight();
+                if (total <= 0) return;
+                if (!savingEnabled[0]) {
+                    // First resize: set initial divider position
+                    int bottom = savedBottomHeight > 0 ? savedBottomHeight
+                                                       : southStack.getPreferredSize().height;
+                    splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
+                    savingEnabled[0] = true;
+                } else {
+                    // Subsequent resizes (output area shown/hidden): restore saved bottom height
+                    int bottom = NbPreferences.forModule(ClaudePromptPanel.class).getInt("bottomHeight", southStack.getPreferredSize().height);
+                    splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
                 }
             }
         });
         splitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
-            if (!layoutDone[0]) return;
+            if (!savingEnabled[0]) return;
+            if (!splitPane.isEnabled()) return;
+            int total = splitPane.getHeight();
             int loc = (int) e.getNewValue();
-            if (loc > 0) NbPreferences.forModule(ClaudePromptPanel.class).putInt("dividerPosition", loc);
+            if (total > 0 && loc > 0) {
+                int bottom = total - splitPane.getDividerSize() - loc;
+                if (bottom > 0) NbPreferences.forModule(ClaudePromptPanel.class).putInt("bottomHeight", bottom);
+            }
+        });
+
+        choiceMenuPanel.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentShown(ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> lockDividerForChoiceMenu());
+            }
+            @Override
+            public void componentHidden(ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> unlockDividerFromChoiceMenu());
+            }
         });
 
         add(splitPane, BorderLayout.CENTER);
@@ -676,6 +714,26 @@ public final class ClaudePromptPanel extends JPanel {
         // Start background tasks after session is set up
         startVersionDiscovery();
         startStatusPollTimer();
+    }
+
+    private void lockDividerForChoiceMenu() {
+        if (splitPane == null) return;
+        splitPane.setEnabled(false);
+        int total = splitPane.getHeight();
+        if (total <= 0) return;
+        int natural = choiceMenuPanel.getPreferredSize().height
+                    + statusBar.getPreferredSize().height;
+        splitPane.setDividerLocation(total - splitPane.getDividerSize() - natural);
+    }
+
+    private void unlockDividerFromChoiceMenu() {
+        if (splitPane == null) return;
+        splitPane.setEnabled(true);
+        int total = splitPane.getHeight();
+        if (total <= 0) return;
+        int bottom = NbPreferences.forModule(ClaudePromptPanel.class)
+            .getInt("bottomHeight", southStack.getPreferredSize().height);
+        splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
     }
 
     private void sendPrompt() {

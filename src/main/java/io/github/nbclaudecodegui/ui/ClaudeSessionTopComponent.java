@@ -139,8 +139,10 @@ public final class ClaudeSessionTopComponent extends TopComponent {
             File dir = new File(path);
             if (dir.isDirectory()) {
                 panel.autoStart(dir);
+                return;
             }
         }
+        updateDisplayName(null);  // reset stale persisted name (e.g. "Claude Code GUI")
     }
 
     /**

@@ -31,7 +31,7 @@ class ClaudeCodeTopComponentTest {
         tmpDir.deleteOnExit();
         try {
             String label = ClaudePromptPanel.resolveTabLabel(tmpDir);
-            assertEquals(tmpDir.getName(), label);
+            assertEquals("Claude Code", label);
         } finally {
             tmpDir.delete();
         }
