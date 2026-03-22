@@ -19,7 +19,7 @@ import org.openide.windows.WindowManager;
 
 /**
  * Opens a NetBeans editor tab showing a diff of two file versions together with
- * a {@link PermissionPanel} at the bottom.
+ * a {@link FileDiffPermissionPanel} at the bottom.
  *
  * <p>Used by both the PreToolUse HTTP hook handler and the {@code permission_prompt}
  * MCP tool so that both paths share identical UI.
@@ -57,7 +57,7 @@ public final class FileDiffTab {
      *                     is shown when the file is outside this directory. If null (MCP case),
      *                     the warning is shown when the file is outside all open sessions.
      * @param onAccept     called when the user clicks Accept
-     * @param onReject     called with the (possibly empty) reason when the user clicks Reject
+     * @param onDecline    called with the (possibly empty) reason when the user clicks Decline
      * @param onCancel     called when the user clicks Cancel (caller should also send Ctrl+C)
      * @param onClose      called when the tab is closed via the × button without a decision
      */
@@ -65,7 +65,7 @@ public final class FileDiffTab {
             String filePath, String before, String after, String tabName,
             String confirmedDir,
             Runnable onAccept,
-            Consumer<String> onReject,
+            Consumer<String> onDecline,
             Runnable onCancel,
             Runnable onClose) {
 
@@ -77,7 +77,7 @@ public final class FileDiffTab {
             final String outsideWarning;
             if (confirmedDir != null) {
                 outsideProject = !isFileUnderDirectory(filePath, confirmedDir);
-                outsideWarning = "⚠ File is outside current project";
+                outsideWarning = "⚠ This file is outside the current project";
             } else {
                 boolean insideAny = false;
                 for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
@@ -90,7 +90,7 @@ public final class FileDiffTab {
                     }
                 }
                 outsideProject = !insideAny;
-                outsideWarning = "⚠ File is outside any open project";
+                outsideWarning = "⚠ This file is outside any open project";
             }
 
             Diff diffService = Lookup.getDefault().lookup(Diff.class);
@@ -139,7 +139,7 @@ public final class FileDiffTab {
             diffTC.setDisplayName(tabName);
             diffTC.setLayout(new java.awt.BorderLayout());
 
-            PermissionPanel permPanel = new PermissionPanel(
+            FileDiffPermissionPanel permPanel = new FileDiffPermissionPanel(
                 () -> {
                     decided.set(true);
                     onAccept.run();
@@ -148,7 +148,7 @@ public final class FileDiffTab {
                 },
                 reason -> {
                     decided.set(true);
-                    onReject.accept(reason);
+                    onDecline.accept(reason);
                     diffTC.close();
                     activateSessionForFile(filePath);
                 },
@@ -166,18 +166,11 @@ public final class FileDiffTab {
                 toolbar = new javax.swing.JToolBar();
             }
             toolbar.setFloatable(false);
-
-            javax.swing.JPanel northPanel = new javax.swing.JPanel(new java.awt.BorderLayout());
-            northPanel.add(toolbar, java.awt.BorderLayout.NORTH);
-            if (outsideProject) {
-                javax.swing.JLabel warningLabel = new javax.swing.JLabel(outsideWarning);
-                warningLabel.setForeground(java.awt.Color.RED);
-                warningLabel.setBorder(javax.swing.BorderFactory.createEmptyBorder(2, 8, 2, 8));
-                northPanel.add(warningLabel, java.awt.BorderLayout.SOUTH);
-            }
-
-            diffTC.add(northPanel, java.awt.BorderLayout.NORTH);
+            diffTC.add(toolbar, java.awt.BorderLayout.NORTH);
             diffTC.add(diffView.getComponent(), java.awt.BorderLayout.CENTER);
+            if (outsideProject) {
+                permPanel.showWarning(outsideWarning);
+            }
             diffTC.add(permPanel, java.awt.BorderLayout.SOUTH);
 
             diffTC.open();

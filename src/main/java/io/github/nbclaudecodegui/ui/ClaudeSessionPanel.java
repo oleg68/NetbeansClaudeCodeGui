@@ -14,11 +14,8 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -39,7 +36,6 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingUtilities;
 import java.util.logging.Logger;
@@ -59,6 +55,12 @@ import org.openide.util.NbPreferences;
  * separated from the input area by a draggable JSplitPane divider.
  */
 public final class ClaudeSessionPanel extends JPanel {
+
+    /**
+     * Result of {@link #parseModelDiscovery}: all model names + index of the active model
+     * ({@code -1} if no active model was detected).
+     */
+    record ModelDiscovery(List<String> models, int currentIndex) {}
 
     private static final Logger LOG = Logger.getLogger(ClaudeSessionPanel.class.getName());
 
@@ -155,6 +157,9 @@ public final class ClaudeSessionPanel extends JPanel {
 
     // Edit mode (current session state)
     private volatile String editMode = "default";
+
+    /** Timestamp (ms) when the last ChoiceMenu answer was sent; used to suppress re-detection. */
+    private volatile long choiceMenuAnsweredAt = 0L;
 
     /**
      * Thread-safe registry of editMode per working directory path.
@@ -705,53 +710,19 @@ public final class ClaudeSessionPanel extends JPanel {
 
     /** Attaches a right-click context menu to the input area. */
     private void attachContextMenu(JTextArea area) {
-        JPopupMenu menu = new JPopupMenu();
+        JPopupMenu menu = TextContextMenu.create(area);
 
-        JMenuItem cutItem = new JMenuItem("Cut");
-        cutItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.CTRL_DOWN_MASK));
-        cutItem.addActionListener(e -> area.cut());
+        JMenuItem prevPrompt = new JMenuItem("Previous prompt  (Ctrl+\u2191)");
+        prevPrompt.addActionListener(e -> navigateHistory(1));
 
-        JMenuItem copyItem = new JMenuItem("Copy");
-        copyItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK));
-        copyItem.addActionListener(e -> area.copy());
+        JMenuItem nextPrompt = new JMenuItem("Next prompt  (Ctrl+\u2193)");
+        nextPrompt.addActionListener(e -> navigateHistory(-1));
 
-        JMenuItem pasteItem = new JMenuItem("Paste");
-        pasteItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, InputEvent.CTRL_DOWN_MASK));
-        pasteItem.addActionListener(e -> area.paste());
-
-        JMenuItem selectAllItem = new JMenuItem("Select All");
-        selectAllItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK));
-        selectAllItem.addActionListener(e -> area.selectAll());
-
-        JMenuItem historyItem = new JMenuItem("History");
-        historyItem.setEnabled(false);  // stub — Stage 14
-
-        JMenuItem favoritesItem = new JMenuItem("Favorites");
-        favoritesItem.setEnabled(false);  // stub — Stage 15
-
-        JMenuItem clearItem = new JMenuItem("Clear");
-        clearItem.addActionListener(e -> area.setText(""));
-
-        menu.add(cutItem);
-        menu.add(copyItem);
-        menu.add(pasteItem);
-        menu.add(selectAllItem);
         menu.addSeparator();
-        menu.add(historyItem);
-        menu.add(favoritesItem);
-        menu.addSeparator();
-        menu.add(clearItem);
+        menu.add(prevPrompt);
+        menu.add(nextPrompt);
 
-        area.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                if (e.isPopupTrigger()) menu.show(area, e.getX(), e.getY());
-            }
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                if (e.isPopupTrigger()) menu.show(area, e.getX(), e.getY());
-            }
-        });
+        TextContextMenu.attach(area, menu);
     }
 
     // -------------------------------------------------------------------------
@@ -932,8 +903,8 @@ public final class ClaudeSessionPanel extends JPanel {
             }
         }
 
-        // Continuously sync CC screen mode → combo (skip while switch is in progress)
-        if (modelComboPopulated && !modeSwitchInProgress) {
+        // Continuously sync CC screen mode → combo (skip while switch or discovery is in progress)
+        if (modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
             screenContentDetector.detectEditMode(lines).ifPresent(detected -> {
                 if (!detected.equals(editMode)) {
                     editMode = detected;
@@ -1005,7 +976,9 @@ public final class ClaudeSessionPanel extends JPanel {
                 if (terminalWidget == null) return;
                 TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
                 List<String> lines = buf.getScreenBuffer().getLineTexts();
-                List<String> models = parseModelList(lines);
+                ModelDiscovery discovery = parseModelDiscovery(lines);
+                List<String> models = discovery.models();
+                int selIdx = discovery.currentIndex();
 
                 // Dismiss the model menu
                 connector.write(new byte[]{0x1b});  // Esc
@@ -1015,6 +988,7 @@ public final class ClaudeSessionPanel extends JPanel {
                         DefaultComboBoxModel<String> m = new DefaultComboBoxModel<>();
                         for (String model : models) m.addElement(model);
                         modelCombo.setModel(m);
+                        if (selIdx >= 0) modelCombo.setSelectedIndex(selIdx);
                         modelCombo.setEnabled(sendButton.isEnabled());
                     });
                 } else {
@@ -1034,41 +1008,57 @@ public final class ClaudeSessionPanel extends JPanel {
     }
 
     /**
-     * Parses model names from the rendered screen after {@code /model} was sent.
+     * Parses model names from the rendered screen after {@code /model} was sent, and
+     * identifies the currently selected model by the {@code ✔} check mark Claude renders
+     * on the active entry (new format) or the cursor glyph (legacy format).
      *
      * <p>Supports two formats:
      * <ul>
      *   <li>New numbered menu: {@code ❯ 1. Default (recommended) ✔  Sonnet 4.6 · Best for everyday tasks}
-     *       → extracts version string {@code Sonnet 4.6}</li>
-     *   <li>Legacy: {@code claude-opus-4-5} — lines starting with {@code claude-}</li>
+     *       → extracts version string {@code Sonnet 4.6}; entry with {@code ✔} is current</li>
+     *   <li>Legacy: {@code claude-opus-4-5} — lines starting with {@code claude-};
+     *       entry prefixed with cursor glyph (❯ ▶ >) is current</li>
      * </ul>
+     *
+     * @return {@link ModelDiscovery} with all model names and the index of the active model
+     *         ({@code -1} if not detected)
      */
-    static List<String> parseModelList(List<String> lines) {
+    static ModelDiscovery parseModelDiscovery(List<String> lines) {
         List<String> models = new ArrayList<>();
-        // Version tail pattern: last "Word N.N" before end of string (anchored with $)
+        int currentIndex = -1;
         java.util.regex.Pattern versionTailPat =
                 java.util.regex.Pattern.compile("([A-Z][a-z]+\\s+\\d+\\.\\d+)\\s*$");
         for (String line : lines) {
+            boolean hasCursor = line.trim().matches("^[❯▶>].*");
+            boolean hasCheck  = line.contains("\u2714");  // ✔ marks the active model
             // Strip Ink cursor glyphs (❯ ▶ >) that prefix the selected item
             String trimmed = line.trim().replaceFirst("^[❯▶>]\\s*", "").trim();
-            // New format: "N. DisplayName   VersionStr · Description"
-            // Split on · (middle dot U+00B7) and look at the left part only
+            // New numbered format: "N. DisplayName ✔  VersionStr · Description"
             if (trimmed.matches("^\\d+\\..*")) {
+                // Version is always at the tail of the part before ·; ✔ appears before the version
                 String leftPart = trimmed.split("[·\u00b7]", 2)[0];
                 java.util.regex.Matcher m = versionTailPat.matcher(leftPart);
                 if (m.find()) {
+                    if (hasCheck) currentIndex = models.size();
                     models.add(m.group(1).trim());
                     continue;
                 }
             }
-            // Legacy format: claude-xxx
+            // Legacy format: claude-xxx (cursor glyph marks the active entry)
             if (trimmed.startsWith("claude-") && !trimmed.contains(" ")) {
+                if (hasCursor) currentIndex = models.size();
                 models.add(trimmed);
             } else if (trimmed.matches("(?i)claude[\\-/][\\w\\-\\.]+")) {
+                if (hasCursor) currentIndex = models.size();
                 models.add(trimmed);
             }
         }
-        return models;
+        return new ModelDiscovery(models, currentIndex);
+    }
+
+    /** Convenience wrapper — returns only the model list (used by tests). */
+    static List<String> parseModelList(List<String> lines) {
+        return parseModelDiscovery(lines).models();
     }
 
     // -------------------------------------------------------------------------
@@ -1084,15 +1074,29 @@ public final class ClaudeSessionPanel extends JPanel {
 
     /** Called by promptFlushTimer when PTY output goes silent. Reads the rendered screen. */
     private void flushPendingPrompt() {
-        if (choiceMenuPanel.isVisible() || modelDiscoveryInProgress) {
+        if (modelDiscoveryInProgress) {
             return;
         }
+
         java.util.Optional<io.github.nbclaudecodegui.model.ChoiceMenuModel> req = java.util.Optional.empty();
         if (terminalWidget != null) {
             TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
             java.util.List<String> lines = buf.getScreenBuffer().getLineTexts();
             req = screenContentDetector.detectChoiceMenu(lines);
         }
+
+        if (choiceMenuPanel.isVisible()) {
+            // Panel already shown — dismiss it if Claude has cleared the menu from screen
+            if (req.isEmpty()) {
+                LOG.info("[screen prompt] menu gone from screen, dismissing panel");
+                choiceMenuPanel.dismiss();
+                inputPanel.setVisible(true);
+                revalidate();
+                repaint();
+            }
+            return;
+        }
+
         req.ifPresent(r -> {
             LOG.info("[screen prompt flush] text=\"" + r.text() + "\" | options=" + r.options());
             inputPanel.setVisible(false);

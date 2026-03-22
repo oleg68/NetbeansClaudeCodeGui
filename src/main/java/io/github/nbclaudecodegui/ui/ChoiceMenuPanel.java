@@ -96,8 +96,8 @@ public final class ChoiceMenuPanel extends JPanel {
                 String display = opt.display().trim();
                 String response = opt.response();
                 String label = display.equalsIgnoreCase("Yes")
-                        ? PermissionPanel.ICON_ACCEPT + " " + display
-                        : PermissionPanel.ICON_REJECT + " " + display;
+                        ? FileDiffPermissionPanel.ICON_ACCEPT + " " + display
+                        : FileDiffPermissionPanel.ICON_DECLINE + " " + display;
                 JButton btn = new JButton(label);
                 Color baseColor = display.equalsIgnoreCase("Yes")
                         ? new Color(34, 139, 34) : new Color(178, 34, 34);
@@ -154,6 +154,7 @@ public final class ChoiceMenuPanel extends JPanel {
                             rb.setSelected(true); // clicking field also selects this option
                         }
                     });
+                    TextContextMenu.attach(tf);
                     typeFields[i] = tf;
                     leftCol.add(rb);   // radio button visible so tests can find it
                     leftCol.add(tf);
@@ -176,6 +177,7 @@ public final class ChoiceMenuPanel extends JPanel {
             freeField = new JTextField(30);
             freeField.setMaximumSize(new java.awt.Dimension(Integer.MAX_VALUE, freeField.getPreferredSize().height));
             freeField.setAlignmentX(Component.LEFT_ALIGNMENT);
+            TextContextMenu.attach(freeField);
             final JTextField ff = freeField;
             freeField.addKeyListener(new java.awt.event.KeyAdapter() {
                 @Override
