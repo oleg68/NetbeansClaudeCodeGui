@@ -1,6 +1,7 @@
 package io.github.nbclaudecodegui.process;
 
 import io.github.nbclaudecodegui.model.ChoiceMenuModel;
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +23,12 @@ import java.util.regex.Pattern;
 public final class ScreenContentDetector {
 
     private static final Logger LOG = Logger.getLogger(ScreenContentDetector.class.getName());
+
+    private String tag = "";
+
+    public void setSessionTag(String tag) {
+        this.tag = tag == null ? "" : tag;
+    }
 
     /**
      * Matches a numbered-menu option line in either of two forms:
@@ -121,7 +128,9 @@ public final class ScreenContentDetector {
         }
         if (!hasCursor) return Optional.empty();
 
-        LOG.info("[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
+        if (ClaudeCodePreferences.isDebugMode()) {
+            LOG.info(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
+        }
         return Optional.of(new ChoiceMenuModel(question, options, 0));
     }
 

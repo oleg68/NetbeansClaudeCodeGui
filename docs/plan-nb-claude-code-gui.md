@@ -293,26 +293,68 @@ claude   (no flags, working directory = project root)
 
 ---
 
-### Stage 13 — Claude Code profiles (planned)
+### Stage 13 — Claude Code profiles ✅ (v0.13.11-SNAPSHOT)
 
-**Goal:** support multiple API keys / proxy settings via named profiles.
+**Goal:** support multiple API keys / proxy settings via named profiles. Each non-Default profile gets an isolated `CLAUDE_CONFIG_DIR` so history, settings, and credentials are fully separated.
 
-**Profile fields:**
-- Profile name
-- `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `HTTPS_PROXY`, `HTTP_PROXY`
-- Type: `claude-subscription` / `claude-api` / `third-party-api`
+#### Fundamental principles
 
-**Two ways to assign a profile:**
-1. **Project Properties** (right-click → Properties → Claude Code) — persistent per-project assignment
-2. **When opening a new session** (toolbar or context menu) — picker dialog
+- **Default profile** — built-in, non-deletable, always first; plugin does not set `CLAUDE_CONFIG_DIR` (Claude uses `~/.claude`).
+- **Named profiles** — each gets its own `<profilesDir>/<name>/` directory; configurable base dir in Tools → Options (default: `parent(Places.getUserDirectory())/claude-profiles/`).
+- **Connection types** — `Claude managed` (no vars), `Subscription` (`CLAUDE_CODE_OAUTH_TOKEN`), `Claude API` (`ANTHROPIC_API_KEY`), `Other API` (`ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL`). Computed from stored credentials, not stored separately.
+- **Proxy modes** — `System Managed` (inherit env), `No Proxy` (clear `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`), `Custom` (user-supplied values).
+- **Extra env vars** — arbitrary key→value table for Bedrock, Vertex, etc.
+- **Session persistence** — profile name written to `writeExternal`/`readExternal`.
+- **Project assignment** — per-project profile stored in `NbPreferences`; assignable via Project Properties panel for Maven, Java SE, and Gradle projects.
 
-**Components:**
-- `settings/ClaudeProfile.java` — POJO
-- `settings/ClaudeProfileStore.java` — stored in `NbPreferences`
-- `settings/ClaudeCodeOptionsPanel.java` — profile table with Add / Edit / Delete
-- `settings/ClaudeProjectProperties.java` — Project Properties panel
-- `actions/ClaudeCodeAction.java` — profile picker when opening a session
-- `process/ClaudeProcess.java` — pass profile env vars to PTY
+#### Implementation
+
+| File | Action |
+|------|--------|
+| `settings/ClaudeProfile.java` | **created** — POJO with `ConnectionType`/`ProxyMode` enums, `toEnvVars()`, `computeConnectionType()` |
+| `settings/ClaudeProfileStore.java` | **created** — NbPreferences + Jackson; Default always first; corrupt JSON → only Default |
+| `settings/ClaudeProfilesPanel.java` | **created** — Profiles tab UI: combo + New/Copy/Rename/Delete + inline property editor |
+| `settings/ClaudeProjectProperties.java` | **created** — per-project profile assignment keyed by project path |
+| `settings/ClaudeProjectPropertiesPanel.java` | **created** — panel shown in Project Properties dialog |
+| `settings/ClaudeProjectPropertiesPanelProvider.java` | **created** — `CompositeCategoryProvider` for Maven / Java SE / Gradle |
+| `settings/CustomModel.java` | **created** — record for model entries (`id`, `alias`, `available`) |
+| `settings/CustomModelsDialog.java` | **created** — dialog for managing custom models list |
+| `settings/ClaudeCodeOptionsPanel.java` | **modified** — restructured into `JTabbedPane`: "General" + "Profiles" tabs |
+| `settings/ClaudeCodePreferences.java` | **modified** — added `profilesDir` preference |
+| `process/ClaudeProcess.java` | **modified** — `start(workingDir, profile)` + static `buildEnv(profile, profilesDir)` |
+| `ui/ClaudePromptPanel.java` | **modified** — `profileCombo` between Browse and Open; passes profile to `start()` |
+| `ui/ClaudeSessionTopComponent.java` | **modified** — profile name serialised in `writeExternal`/`readExternal` |
+| `actions/OpenWithClaudeAction.java` | **modified** — resolves profile from `ClaudeProjectProperties`; passes to `openForDirectory()` |
+
+#### UI layout — Profiles tab
+
+```
+Profiles directory: [/home/user/.netbeans/claude-profiles         ] [Change…]
+
+Profile: [Profile Name              ▼]  [New] [Copy] [Rename] [Delete]
+
+Config directory:  [/home/user/.netbeans/claude-profiles/Profile-Name    ]
+
+Connection Type
+  ○ Claude managed  │
+  ○ Subscription    │  Token:    [________________________________]
+  ● Claude API      │  API Key:  [••••••••••••••]  [Show]
+  ○ Other API       │  Base URL: [________________________________]
+
+Proxy Settings
+  ● System Managed  │  HTTP Proxy:  [________________________________]
+  ○ No Proxy        │  HTTPS Proxy: [________________________________]
+  ○ Custom          │  NO_PROXY:    [________________________________]
+
+Extra environment variables
+  Variable              │ Value                         │ [+] [-]
+```
+
+#### Control bar layout
+
+```
+[projectCombo] [pathCombo] [Browse] [Profile ▼] [Open] [⚙]
+```
 
 ---
 
@@ -476,6 +518,7 @@ Settings are stored via `NbPreferences.forModule(ClaudeCodePreferences.class)`:
 | `mcpPort` | int | `28991` | 10 |
 | `autoStart` | boolean | `false` | 12 |
 | `commandHistory` | String | `""` (JSON array) | 12 |
+| `profilesDir` | String | `~/.netbeans/claude-profiles` | 13 |
 
 ---
 

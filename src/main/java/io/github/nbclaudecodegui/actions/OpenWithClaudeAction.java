@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.actions;
 
+import io.github.nbclaudecodegui.settings.ClaudeProjectProperties;
 import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
 import java.awt.event.ActionEvent;
 import java.io.File;
@@ -88,7 +89,9 @@ public final class OpenWithClaudeAction extends AbstractAction
         @Override
         public void actionPerformed(ActionEvent e) {
             if (directory != null) {
-                ClaudeSessionTopComponent.openForDirectory(directory);
+                String profileName = ClaudeProjectProperties.getProfileName(directory);
+                ClaudeSessionTopComponent.openForDirectory(directory,
+                        profileName.isBlank() ? null : profileName);
             }
         }
 

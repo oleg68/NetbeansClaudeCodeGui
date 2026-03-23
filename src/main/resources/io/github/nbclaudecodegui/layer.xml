@@ -18,4 +18,35 @@
             <attr name="position" intvalue="1500"/>
         </file>
     </folder>
+
+    <!-- Project Properties — Claude Code panel (Maven) -->
+    <folder name="Projects">
+        <folder name="org-netbeans-modules-maven">
+            <folder name="Customizer">
+                <file name="ClaudeCodePanelProvider.instance">
+                    <attr name="instanceCreate"
+                          newvalue="io.github.nbclaudecodegui.settings.ClaudeProjectPropertiesPanelProvider"/>
+                    <attr name="position" intvalue="900"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="org-netbeans-modules-java-j2seproject">
+            <folder name="Customizer">
+                <file name="ClaudeCodePanelProvider.instance">
+                    <attr name="instanceCreate"
+                          newvalue="io.github.nbclaudecodegui.settings.ClaudeProjectPropertiesPanelProvider"/>
+                    <attr name="position" intvalue="900"/>
+                </file>
+            </folder>
+        </folder>
+        <folder name="org.netbeans.modules.gradle">
+            <folder name="Customizer">
+                <file name="ClaudeCodePanelProvider.instance">
+                    <attr name="instanceCreate"
+                          newvalue="io.github.nbclaudecodegui.settings.ClaudeProjectPropertiesPanelProvider"/>
+                    <attr name="position" intvalue="900"/>
+                </file>
+            </folder>
+        </folder>
+    </folder>
 </filesystem>

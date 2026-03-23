@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pty4j.PtyProcess;
 import com.pty4j.PtyProcessBuilder;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
+import io.github.nbclaudecodegui.settings.ClaudeProfile;
+import io.github.nbclaudecodegui.settings.ClaudeProfileStore;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -63,7 +65,8 @@ public final class ClaudeProcess {
     private volatile String workingDir;
 
     /**
-     * Starts a Claude CLI PTY process in the given working directory.
+     * Starts a Claude CLI PTY process in the given working directory using
+     * the Default profile (no extra env vars injected).
      *
      * @param workingDir absolute path to the session working directory
      * @return the started {@link PtyProcess}
@@ -71,6 +74,30 @@ public final class ClaudeProcess {
      * @throws IOException              if the process cannot be launched
      */
     public PtyProcess start(String workingDir) throws IOException {
+        return start(workingDir, null);
+    }
+
+    /**
+     * Starts a Claude CLI PTY process in the given working directory with
+     * the supplied connection profile.
+     *
+     * <p>The profile contributes:
+     * <ul>
+     *   <li>{@code CLAUDE_CONFIG_DIR} — set to the profile's isolated config
+     *       directory for non-Default profiles; not set for the Default profile.</li>
+     *   <li>Auth env vars ({@code ANTHROPIC_API_KEY}, etc.) based on the
+     *       profile's connection type.</li>
+     *   <li>Proxy env vars based on the profile's proxy mode.</li>
+     *   <li>Any extra env vars configured on the profile.</li>
+     * </ul>
+     *
+     * @param workingDir absolute path to the session working directory
+     * @param profile    connection profile to apply; {@code null} uses Default behaviour
+     * @return the started {@link PtyProcess}
+     * @throws IllegalArgumentException if {@code workingDir} is blank
+     * @throws IOException              if the process cannot be launched
+     */
+    public PtyProcess start(String workingDir, ClaudeProfile profile) throws IOException {
         if (workingDir == null || workingDir.isBlank()) {
             throw new IllegalArgumentException("workingDir must not be blank");
         }
@@ -81,8 +108,29 @@ public final class ClaudeProcess {
 
         String executable = ClaudeCodePreferences.resolveClaudeExecutable();
 
-        Map<String, String> env = new HashMap<>(System.getenv());
-        env.put("TERM", "xterm-256color");
+        Map<String, String> env = buildEnv(profile, ClaudeCodePreferences.getProfilesDir());
+
+        // One-time migration: remove availableModels from settings.json for OTHER_API profiles.
+        // Proxy model IDs (e.g. "anthropic/claude-sonnet-4.6") are not understood by CC's
+        // model-picker validation, so the field breaks /model if present.
+        if (profile != null
+                && profile.computeConnectionType() == io.github.nbclaudecodegui.settings.ClaudeProfile.ConnectionType.OTHER_API) {
+            String configDirStr = env.get("CLAUDE_CONFIG_DIR");
+            if (configDirStr != null) {
+                try {
+                    io.github.nbclaudecodegui.settings.ClaudeProfileStore.removeAvailableModels(
+                            java.nio.file.Path.of(configDirStr));
+                } catch (IOException e) {
+                    LOG.warning("Could not strip availableModels from settings.json: " + e.getMessage());
+                }
+            }
+        }
+
+        LOG.info("Starting Claude: profile=" + (profile != null ? profile.getName() + " (" + profile.computeConnectionType() + ")" : "Default")
+                + ", ANTHROPIC_API_KEY=" + (!env.getOrDefault("ANTHROPIC_API_KEY", "").isBlank() ? "SET" : "NOT SET")
+                + ", ANTHROPIC_AUTH_TOKEN=" + (!env.getOrDefault("ANTHROPIC_AUTH_TOKEN", "").isBlank() ? "SET" : "NOT SET")
+                + ", ANTHROPIC_BASE_URL=" + env.getOrDefault("ANTHROPIC_BASE_URL", "(not set)")
+                + ", CLAUDE_CONFIG_DIR=" + env.getOrDefault("CLAUDE_CONFIG_DIR", "(inherited)"));
 
         List<String> cmd = new ArrayList<>();
         cmd.add(executable);
@@ -413,6 +461,49 @@ public final class ClaudeProcess {
     // -------------------------------------------------------------------------
     // Internal helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Builds the environment map for a new PTY process.
+     *
+     * <p>Starts from a copy of {@link System#getenv()}, then:
+     * <ol>
+     *   <li>Sets {@code TERM=xterm-256color}.</li>
+     *   <li>If {@code profile} is non-null and non-Default, sets
+     *       {@code CLAUDE_CONFIG_DIR} to the profile's isolated config
+     *       directory under {@code profilesDir}.</li>
+     *   <li>Applies the profile's auth, proxy, and extra env vars via
+     *       {@link ClaudeProfile#toEnvVars()}.</li>
+     * </ol>
+     *
+     * <p>This method is {@code static} so that it can be unit-tested without
+     * instantiating a {@link ClaudeProcess}.
+     *
+     * @param profile     profile to apply; {@code null} means Default (no extra vars)
+     * @param profilesDir base directory for profile config dirs
+     * @return mutable env map ready to pass to {@link PtyProcessBuilder}
+     */
+    static Map<String, String> buildEnv(ClaudeProfile profile, java.nio.file.Path profilesDir) {
+        Map<String, String> env = new HashMap<>(System.getenv());
+        env.put("TERM", "xterm-256color");
+
+        if (profile != null && !profile.isDefault()) {
+            // Set isolated CLAUDE_CONFIG_DIR for this profile
+            java.nio.file.Path configDir = ClaudeProfileStore.resolveConfigDir(profile, profilesDir);
+            env.put("CLAUDE_CONFIG_DIR", configDir.toAbsolutePath().toString());
+            try {
+                java.nio.file.Files.createDirectories(configDir);
+            } catch (java.io.IOException e) {
+                LOG.warning("Could not create profile config dir " + configDir + ": " + e.getMessage());
+            }
+        }
+
+        if (profile != null) {
+            // Merge auth / proxy / extra vars (overwrites env-inherited values)
+            env.putAll(profile.toEnvVars());
+        }
+
+        return env;
+    }
 
     /**
      * Builds a minimal {@code settings.local.json} from scratch for the given port.

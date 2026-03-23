@@ -2,6 +2,9 @@ package io.github.nbclaudecodegui.settings;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.logging.Logger;
+import org.openide.modules.Places;
 import org.openide.util.NbPreferences;
 
 /**
@@ -28,6 +31,9 @@ public final class ClaudeCodePreferences {
 
     public static final String DEFAULT_SEND_KEY    = CTRL_ENTER;
     public static final String DEFAULT_NEWLINE_KEY = ENTER;
+
+    private static final Logger LOG =
+            Logger.getLogger(ClaudeCodePreferences.class.getName());
 
     private ClaudeCodePreferences() {}
 
@@ -207,6 +213,63 @@ public final class ClaudeCodePreferences {
     public static void setMcpPort(int port) {
         NbPreferences.forModule(ClaudeCodePreferences.class)
                 .putInt(KEY_MCP_PORT, port);
+    }
+
+    // -------------------------------------------------------------------------
+    // profilesDir
+    // -------------------------------------------------------------------------
+
+    /** Preference key: base directory for non-Default profile config dirs. */
+    public static final String KEY_PROFILES_DIR = "profilesDir";
+
+    /**
+     * Returns the configured profiles base directory, or the platform default.
+     *
+     * <p>Default: {@code parent(Places.getUserDirectory()) / claude-profiles/}.
+     * For example, if {@code getUserDirectory()} is {@code ~/.netbeans/21/},
+     * the default is {@code ~/.netbeans/claude-profiles/}.
+     *
+     * @return absolute path to the profiles base directory
+     */
+    public static Path getProfilesDir() {
+        String stored = NbPreferences.forModule(ClaudeCodePreferences.class)
+                .get(KEY_PROFILES_DIR, "");
+        if (!stored.isBlank()) {
+            return Path.of(stored);
+        }
+        return resolveDefaultProfilesDir();
+    }
+
+    /**
+     * Persists the profiles base directory.
+     *
+     * @param dir absolute path, or blank/null to use the default
+     */
+    public static void setProfilesDir(Path dir) {
+        NbPreferences.forModule(ClaudeCodePreferences.class)
+                .put(KEY_PROFILES_DIR, dir != null ? dir.toString() : "");
+    }
+
+    /**
+     * Computes the default profiles directory as
+     * {@code parent(Places.getUserDirectory())/claude-profiles/}.
+     *
+     * @return default profiles directory path
+     */
+    public static Path resolveDefaultProfilesDir() {
+        try {
+            File userDir = Places.getUserDirectory();
+            if (userDir != null) {
+                Path parent = userDir.toPath().getParent();
+                if (parent != null) {
+                    return parent.resolve("claude-profiles");
+                }
+            }
+        } catch (Exception e) {
+            LOG.warning("Could not resolve Places.getUserDirectory(): " + e.getMessage());
+        }
+        // Fallback: ~/claude-profiles
+        return Path.of(System.getProperty("user.home"), "claude-profiles");
     }
 
     private static String validated(String value, String fallback) {

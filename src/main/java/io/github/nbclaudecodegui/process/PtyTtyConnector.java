@@ -34,6 +34,8 @@ public final class PtyTtyConnector implements TtyConnector {
     private final PtyProcess process;
     private final InputStreamReader reader;
 
+    private String tag = "";
+
     /** Accumulates raw chars between newlines for line-based detection. */
     private final StringBuilder lineBuffer = new StringBuilder();
 
@@ -62,6 +64,10 @@ public final class PtyTtyConnector implements TtyConnector {
         this.lineListener = listener;
     }
 
+    public void setSessionTag(String tag) {
+        this.tag = tag == null ? "" : tag;
+    }
+
     @Override
     public int read(char[] buf, int offset, int length) throws IOException {
         int n = reader.read(buf, offset, length);
@@ -81,8 +87,8 @@ public final class PtyTtyConnector implements TtyConnector {
                         lineBuffer.setLength(0);
                         if (!stripped.isEmpty()) {
                             if (ClaudeCodePreferences.isDebugMode()) {
-                                LOG.info("[PTY raw] " + raw.replace("\u001B", "<ESC>"));
-                                LOG.info("[PTY stripped] " + stripped);
+                                LOG.info(tag + "[PTY raw] " + raw.replace("\u001B", "<ESC>"));
+                                LOG.info(tag + "[PTY stripped] " + stripped);
                             }
                             Consumer<String> l = lineListener;
                             if (l != null) l.accept(stripped);

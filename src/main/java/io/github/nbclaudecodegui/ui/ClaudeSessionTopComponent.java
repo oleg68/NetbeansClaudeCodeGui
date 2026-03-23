@@ -43,6 +43,12 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     /** Path restored from serialized state after an IDE restart. */
     private String savedPath;
 
+    /**
+     * Profile name restored from serialized state; {@code null} means Default.
+     * Set by {@link #readExternal} and consumed once by {@link #componentOpened}.
+     */
+    private String savedProfileName;
+
     private final ClaudePromptPanel panel;
 
     /** Creates a new empty session (no directory selected). */
@@ -89,14 +95,25 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     }
 
     /**
-     * Opens a session for the given directory (context menu action).
-     *
-     * <p>If an existing session for {@code dir} is already open, focuses it.
-     * Otherwise creates and opens a new session that auto-starts in {@code dir}.
+     * Opens a session for the given directory using the Default profile.
      *
      * @param dir working directory
      */
     public static void openForDirectory(File dir) {
+        openForDirectory(dir, null);
+    }
+
+    /**
+     * Opens a session for the given directory with the specified profile.
+     *
+     * <p>If an existing session for {@code dir} is already open, focuses it.
+     * Otherwise creates and opens a new session that auto-starts in {@code dir}
+     * with the given profile.
+     *
+     * @param dir         working directory
+     * @param profileName profile name to use, or {@code null} for Default
+     */
+    public static void openForDirectory(File dir, String profileName) {
         SwingUtilities.invokeLater(() -> {
             for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
                 if (tc instanceof ClaudeSessionTopComponent stc
@@ -108,7 +125,7 @@ public final class ClaudeSessionTopComponent extends TopComponent {
             ClaudeSessionTopComponent tc = new ClaudeSessionTopComponent(dir);
             tc.open();
             tc.requestActive();
-            tc.panel.autoStart(dir);
+            tc.panel.autoStart(dir, profileName);
         });
     }
 
@@ -131,14 +148,16 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     protected void componentOpened() {
         super.componentOpened();
 
-        String path = savedPath != null ? savedPath : pathToRestore;
-        savedPath = null;
-        pathToRestore = null;
+        String path        = savedPath != null ? savedPath : pathToRestore;
+        String profileName = savedProfileName;
+        savedPath        = null;
+        pathToRestore    = null;
+        savedProfileName = null;
 
         if (path != null && !path.isBlank()) {
             File dir = new File(path);
             if (dir.isDirectory()) {
-                panel.autoStart(dir);
+                panel.autoStart(dir, profileName);
                 return;
             }
         }
@@ -199,10 +218,16 @@ public final class ClaudeSessionTopComponent extends TopComponent {
         super.writeExternal(out);
         File dir = panel.getConfirmedDirectory();
         out.writeUTF(dir != null ? dir.getAbsolutePath() : "");
+        out.writeUTF(panel.getSelectedProfileName());
     }
 
     /**
-     * Reads the working directory path saved by {@link #writeExternal}.
+     * Reads the working directory path and profile name saved by
+     * {@link #writeExternal}.
+     *
+     * <p>The profile name is looked up in {@link
+     * io.github.nbclaudecodegui.settings.ClaudeProfileStore} on next open;
+     * if not found the Default profile is used.
      *
      * @param in the input stream
      * @throws IOException            on I/O error
@@ -212,6 +237,12 @@ public final class ClaudeSessionTopComponent extends TopComponent {
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         super.readExternal(in);
         savedPath = in.readUTF();
+        try {
+            savedProfileName = in.readUTF();
+        } catch (java.io.EOFException ignored) {
+            // Old serialised state without profileName — use Default
+            savedProfileName = null;
+        }
     }
 
     // -------------------------------------------------------------------------

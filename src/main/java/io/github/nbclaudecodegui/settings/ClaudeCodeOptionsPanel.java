@@ -14,18 +14,21 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
+import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 
 /**
  * Settings panel displayed inside Tools → Options → Claude Code.
  *
- * <p>Exposes:
+ * <p>Contains two tabs:
  * <ul>
- *   <li>Path to the {@code claude} CLI executable</li>
- *   <li>Send prompt key (radio buttons, mutually exclusive with newline key)</li>
- *   <li>Insert newline key (radio buttons, mutually exclusive with send key)</li>
+ *   <li><b>General</b> — Claude CLI path, MCP port, send/newline key bindings, debug mode</li>
+ *   <li><b>Profiles</b> — named connection profiles with auth, proxy, and extra env vars
+ *       (see {@link ClaudeProfilesPanel})</li>
  * </ul>
+ *
+ * <p>{@link #load()} and {@link #store()} delegate to both tabs.
  */
 public final class ClaudeCodeOptionsPanel extends JPanel {
 
@@ -51,6 +54,9 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     private final ButtonGroup sendGroup    = new ButtonGroup();
     private final ButtonGroup newlineGroup = new ButtonGroup();
 
+    /** Profiles tab panel. */
+    private final ClaudeProfilesPanel profilesPanel = new ClaudeProfilesPanel();
+
     /**
      * Creates the panel and initialises all UI components.
      */
@@ -61,6 +67,18 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     private void initComponents() {
         setLayout(new BorderLayout());
 
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("General", buildGeneralPanel());
+        tabs.addTab("Profiles", profilesPanel);
+        add(tabs, BorderLayout.CENTER);
+    }
+
+    /**
+     * Builds the General tab containing the original settings controls.
+     *
+     * @return the General tab panel
+     */
+    private JPanel buildGeneralPanel() {
         JPanel form = new JPanel(new GridBagLayout());
         int row = 0;
 
@@ -133,7 +151,7 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         spacer.fill = GridBagConstraints.VERTICAL;
         form.add(new JPanel(), spacer);
 
-        add(form, BorderLayout.CENTER);
+        return form;
     }
 
     private JPanel buildKeyPanel(String title,
@@ -187,7 +205,7 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Loads current preference values into the UI controls.
+     * Loads current preference values into the UI controls (both tabs).
      */
     void load() {
         executablePathField.setText(
@@ -204,10 +222,13 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         // apply mutual exclusion for the loaded values
         syncExclusion(sendVal, true);
         syncExclusion(newlineVal, false);
+
+        profilesPanel.load();
     }
 
     /**
-     * Persists the values currently shown in the UI controls to preferences.
+     * Persists the values currently shown in the UI controls to preferences
+     * (both tabs).
      */
     void store() {
         ClaudeCodePreferences.setClaudeExecutablePath(
@@ -216,6 +237,8 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         ClaudeCodePreferences.setDebugMode(debugCheckBox.isSelected());
         ClaudeCodePreferences.setSendKey(selectedValue(sendRadios));
         ClaudeCodePreferences.setNewlineKey(selectedValue(newlineRadios));
+
+        profilesPanel.store();
     }
 
     /**

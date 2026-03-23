@@ -2,7 +2,7 @@
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
-Current version: **0.10.0-SNAPSHOT** (Stage 10 in progress)
+Current version: **0.13.11-SNAPSHOT**
 
 ---
 
@@ -103,8 +103,8 @@ Configured via `hooks.PreToolUse` in `settings.local.json`. Before executing `Ed
 | Package | Responsibility |
 |---------|---------------|
 | `process/` | `ClaudeProcess` — PTY lifecycle + `settings.local.json` generation; `PtyTtyConnector` — PTY↔JediTerm bridge; `StreamJsonParser` — lightweight NDJSON parser |
-| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudeSessionPanel` — terminal + top bar; `PromptResponsePanel` — interactive question panel (Yes/No, radio, free-form); `PermissionPanel` — Accept/Reject/Cancel bar; `FileDiffTab` — diff TopComponent; `MarkdownRenderer` — markdown→HTML |
-| `settings/` | `ClaudeCodePreferences` (default MCP port 28991); `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options |
+| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudePromptPanel` — terminal + top bar + input + status bar; `PromptResponsePanel` — interactive question panel (Yes/No, radio, free-form); `PermissionPanel` — Accept/Reject/Cancel bar; `FileDiffTab` — diff TopComponent; `MarkdownRenderer` — markdown→HTML |
+| `settings/` | `ClaudeCodePreferences` (default MCP port 28991); `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options (General + Profiles tabs); `ClaudeProfile`, `ClaudeProfileStore` — named profiles with isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy settings, and extra env vars; `ClaudeProjectProperties` — per-project profile assignment |
 | `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project context menu |
 | `org.openbeans.claude.netbeans` | `MCPSseServer` — Jetty HTTP server (`/sse`, `/messages`, `/hook`); `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook handler; `tools/` — `PermissionPromptTool`, `DiffTabTracker`, `OpenDiff`, and other IDE tools |
 
@@ -146,6 +146,17 @@ This works via two integration paths that share the same UI (`FileDiffTab` + `Pe
 
 After any action, the Claude session window is re-activated automatically.
 
+### Profiles
+
+Multiple **named profiles** can be configured in Tools → Options → Claude Code → **Profiles**. Each profile has:
+
+- **Connection type** — Claude managed (no extra vars), Subscription (`CLAUDE_CODE_OAUTH_TOKEN`), Claude API (`ANTHROPIC_API_KEY`), or Other API (`ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL`).
+- **Proxy settings** — inherit system env, force no proxy, or supply custom `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` values.
+- **Extra env vars** — arbitrary key/value pairs for Bedrock, Vertex, etc.
+- **Isolated config dir** — each non-Default profile gets its own `CLAUDE_CONFIG_DIR` under the configured profiles directory (default: `~/.netbeans/claude-profiles/<name>/`), so history, settings, and credentials are fully separated.
+
+Profiles can be assigned per-project via **right-click → Properties → Claude Code**, or selected per-session in the control bar combo before clicking **Open**.
+
 ### Closing sessions
 
 Closing a session window while a PTY process is running shows a confirmation dialog. Confirmed close stops the process. PTY processes are children of the IDE JVM — they receive SIGHUP automatically if the IDE exits unexpectedly.
@@ -161,7 +172,7 @@ src/
       actions/          ClaudeCodeAction, OpenWithClaudeAction
       process/          ClaudeProcess, PtyTtyConnector, StreamJsonParser
       settings/         ClaudeCodePreferences, ClaudeCodeOptionsPanel(Controller)
-      ui/               ClaudeSessionTopComponent, ClaudeSessionPanel,
+      ui/               ClaudeSessionTopComponent, ClaudePromptPanel,
                         PromptResponsePanel, MarkdownRenderer
     resources/io/github/nbclaudecodegui/
       layer.xml         NetBeans layer registration
@@ -189,8 +200,9 @@ src/
 | 9 | PromptResponsePanel fixes (visibility, flush timer, ESC/Cancel) | ✅ |
 | 10 | MCP SSE server, NetBeans IDE tools for Claude CLI — [test plan](docs/manual-test-mcp.md) | ✅ |
 | 11 | Unified diff viewer with Accept/Reject/Cancel (`FileDiffTab`, `PermissionPanel`) | ✅ |
-| 12 | File attachments (`@path` syntax) | planned |
-| 13 | Full settings integration + session persistence | planned |
+| 12 | Model picker, edit-mode selector, split pane input, status bar | ✅ |
+| 13 | Named profiles: isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy, extra env vars; per-project assignment | ✅ |
+| 14 | Prompt history | planned |
 
 ---
 
