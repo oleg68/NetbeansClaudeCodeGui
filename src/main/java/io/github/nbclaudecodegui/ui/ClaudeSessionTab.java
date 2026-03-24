@@ -1,15 +1,24 @@
 package io.github.nbclaudecodegui.ui;
 
+import com.jediterm.terminal.model.TerminalTextBuffer;
+import com.jediterm.terminal.ui.JediTermWidget;
+import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
+import io.github.nbclaudecodegui.controller.ClaudeSessionController;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import io.github.nbclaudecodegui.model.ClaudeSessionModel;
 import io.github.nbclaudecodegui.model.SessionLifecycle;
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.util.List;
+import java.util.logging.Logger;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -17,26 +26,46 @@ import javax.swing.DefaultComboBoxModel;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSplitPane;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.openide.util.ImageUtilities;
+import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.windows.TopComponent;
 import org.openide.windows.WindowManager;
 
 /**
  * TopComponent representing a single Claude Code session.
  *
- * <p>Hosts a {@link ClaudePromptPanel} in the center and a status bar at the
- * bottom. The status bar (edit-mode combo, model combo, state label, plan
- * label, version label) lives here so it is always visible and is never
- * obscured by the split-pane divider inside the panel.
+ * <p>Owns the full session lifecycle: the MVC triple
+ * ({@link ClaudeSessionModel}, {@link ClaudeSessionController}),
+ * the directory/profile selector ({@link ClaudeSessionSelectorPanel}),
+ * the embedded JediTerm terminal, the interactive-choice menu
+ * ({@link ChoiceMenuPanel}), the prompt input ({@link ClaudePromptPanel}),
+ * and the status bar.
  *
- * <p>Closing the window (× button or Reset Windows) stops the PTY process and
- * saves the working directory to {@link #pathToRestore}. When the TC is
- * reopened (e.g. by Reset Windows or via Window menu) a new session starts
- * automatically in the same directory.
+ * <p>Layout while idle (no session):
+ * <pre>
+ *   NORTH  — ClaudeSessionSelectorPanel
+ *   CENTER — placeholder label
+ *   SOUTH  — status bar (hidden)
+ * </pre>
  *
- * <p>On IDE restart the directory is restored via {@link #readExternal}.
+ * Layout while a session is active:
+ * <pre>
+ *   NORTH  — (selector hidden)
+ *   CENTER — JSplitPane
+ *               top    — JediTermWidget
+ *               bottom — southStack
+ *                          NORTH — ChoiceMenuPanel (visible only during prompts)
+ *                          CENTER — ClaudePromptPanel (input area)
+ *   SOUTH  — status bar
+ * </pre>
+ *
+ * <p>On IDE restart the working directory and profile name are restored via
+ * {@link #readExternal} / {@link #writeExternal}.
  */
 @TopComponent.Description(
     preferredID = "ClaudeSessionTopComponent",  // kept for persistence compatibility
@@ -49,6 +78,8 @@ import org.openide.windows.WindowManager;
 )
 public class ClaudeSessionTab extends TopComponent
         implements ClaudeSessionModel.ClaudeSessionModelListener {
+
+    private static final Logger LOG = Logger.getLogger(ClaudeSessionTab.class.getName());
 
     private static final String ICON =
             "io/github/nbclaudecodegui/icons/claude-icon.png";
@@ -64,30 +95,50 @@ public class ClaudeSessionTab extends TopComponent
     // Persistence fields
     // -------------------------------------------------------------------------
 
-    /**
-     * Directory path set by {@link #componentClosed()} before stopping the
-     * process. Used by {@link #componentOpened()} to auto-start a new session
-     * in the same directory (e.g. after Reset Windows).
-     */
+    /** Set by {@link #componentClosed()} so {@link #componentOpened()} can restart in same dir. */
     private String pathToRestore;
 
-    /** Path restored from serialized state after an IDE restart. */
+    /** Restored from serialized state after an IDE restart. */
     private String savedPath;
 
-    /**
-     * Profile name restored from serialized state; {@code null} means Default.
-     * Set by {@link #readExternal} and consumed once by {@link #componentOpened}.
-     */
+    /** Profile name restored from serialized state; {@code null} = Default. */
     private String savedProfileName;
 
     // -------------------------------------------------------------------------
-    // Child components
+    // MVC
     // -------------------------------------------------------------------------
 
-    private final ClaudePromptPanel panel;
+    private final ClaudeSessionModel      model      = new ClaudeSessionModel();
+    private final ClaudeSessionController controller =
+            new ClaudeSessionController(model, this::getScreenLines);
+
+    /** Logging/debugging tag, e.g. {@code "[my-project] "}. */
+    private String sessionTag = "";
 
     // -------------------------------------------------------------------------
-    // Status bar components
+    // UI — selector + placeholder
+    // -------------------------------------------------------------------------
+
+    private final ClaudeSessionSelectorPanel selectorPanel;
+    private final JLabel                     placeholderLabel;
+
+    // -------------------------------------------------------------------------
+    // UI — session (created once a session starts, nulled on stop)
+    // -------------------------------------------------------------------------
+
+    private JediTermWidget  terminalWidget;
+    private JSplitPane      splitPane;
+    private JPanel          southStack;
+
+    // -------------------------------------------------------------------------
+    // UI — always present after construction
+    // -------------------------------------------------------------------------
+
+    private final ChoiceMenuPanel  choiceMenuPanel;
+    private final ClaudePromptPanel promptPanel;
+
+    // -------------------------------------------------------------------------
+    // UI — status bar
     // -------------------------------------------------------------------------
 
     private final JPanel            statusBar;
@@ -97,7 +148,7 @@ public class ClaudeSessionTab extends TopComponent
     private final JLabel            planLabel;
     private final JLabel            versionLabel;
 
-    /** Tracks the current lifecycle so model combo can be correctly enabled. */
+    /** Cached lifecycle so {@link #onModelListChanged} can correctly enable the combo. */
     private volatile SessionLifecycle currentLifecycle;
 
     // -------------------------------------------------------------------------
@@ -115,9 +166,8 @@ public class ClaudeSessionTab extends TopComponent
      * @param dir working directory, or {@code null} for none
      */
     public ClaudeSessionTab(File dir) {
-        panel = new ClaudePromptPanel(dir, false);
 
-        // build status bar
+        // --- status bar ---
         editModeCombo = new JComboBox<>(EDIT_MODE_LABELS);
         editModeCombo.setMaximumSize(new Dimension(130, 24));
         editModeCombo.setToolTipText("Edit mode");
@@ -132,11 +182,9 @@ public class ClaudeSessionTab extends TopComponent
         stateLabel   = new JLabel("Ready");
         planLabel    = new JLabel("");
         versionLabel = new JLabel("");
-
         stateLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
         planLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
         versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-
         stateLabel.setToolTipText("Session state: Ready or Working");
         planLabel.setToolTipText("Active plan file (if any)");
         versionLabel.setToolTipText("Claude CLI version");
@@ -159,30 +207,44 @@ public class ClaudeSessionTab extends TopComponent
         statusBar.add(Box.createRigidArea(new Dimension(4, 0)));
         statusBar.setVisible(false);
 
+        // --- selector + placeholder ---
+        selectorPanel    = new ClaudeSessionSelectorPanel(dir, this::onDirectoryOpened);
+        placeholderLabel = new JLabel(
+                NbBundle.getMessage(ClaudeSessionSelectorPanel.class, "LBL_SelectDir"),
+                SwingConstants.CENTER);
+        placeholderLabel.setForeground(Color.GRAY);
+
+        // --- chat UI ---
+        choiceMenuPanel = new ChoiceMenuPanel();
+        promptPanel     = new ClaudePromptPanel(
+                this::sendPrompt,
+                this::cancelPrompt,
+                model::getPromptHistory);
+
+        // --- layout ---
         setLayout(new BorderLayout());
-        add(panel, BorderLayout.CENTER);
-        add(statusBar, BorderLayout.SOUTH);
+        add(selectorPanel,    BorderLayout.NORTH);
+        add(placeholderLabel, BorderLayout.CENTER);
+        add(statusBar,        BorderLayout.SOUTH);
 
         setIcon(ImageUtilities.loadImage(ICON, true));
         updateDisplayName(dir);
-
-        panel.addModelListener(this);
+        model.addListener(this);
     }
 
     // -------------------------------------------------------------------------
-    // public static factory helpers
+    // Static factory helpers
     // -------------------------------------------------------------------------
 
     /**
      * Opens an empty session (toolbar action).
      *
-     * <p>If an existing unlocked session TC is already open, focuses it.
-     * Otherwise creates a new one.
+     * <p>Focuses an existing idle session if one is open; otherwise opens a new one.
      */
     public static void openNewOrFocus() {
         SwingUtilities.invokeLater(() -> {
             for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
-                if (tc instanceof ClaudeSessionTab tab && !tab.panel.isLocked()) {
+                if (tc instanceof ClaudeSessionTab tab && !tab.isSessionActive()) {
                     tab.requestActive();
                     return;
                 }
@@ -194,7 +256,7 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     /**
-     * Opens a session for the given directory using the Default profile.
+     * Opens a session for {@code dir} using the Default profile.
      *
      * @param dir working directory
      */
@@ -203,20 +265,18 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     /**
-     * Opens a session for the given directory with the specified profile.
+     * Opens a session for {@code dir} with the specified profile.
      *
-     * <p>If an existing session for {@code dir} is already open, focuses it.
-     * Otherwise creates and opens a new session that auto-starts in {@code dir}
-     * with the given profile.
+     * <p>Focuses an existing session for {@code dir} if one is already open.
      *
      * @param dir         working directory
-     * @param profileName profile name to use, or {@code null} for Default
+     * @param profileName profile name, or {@code null} for Default
      */
     public static void openForDirectory(File dir, String profileName) {
         SwingUtilities.invokeLater(() -> {
             for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
                 if (tc instanceof ClaudeSessionTab tab
-                        && dir.equals(tab.panel.getWorkingDirectory())) {
+                        && dir.equals(tab.getWorkingDirectory())) {
                     tab.requestActive();
                     return;
                 }
@@ -224,7 +284,7 @@ public class ClaudeSessionTab extends TopComponent
             ClaudeSessionTab tab = new ClaudeSessionTab(dir);
             tab.open();
             tab.requestActive();
-            tab.panel.autoStart(dir, profileName);
+            tab.autoStart(dir, profileName);
         });
     }
 
@@ -232,21 +292,9 @@ public class ClaudeSessionTab extends TopComponent
     // TopComponent lifecycle
     // -------------------------------------------------------------------------
 
-    /**
-     * Starts or resumes a session when the TC is opened.
-     *
-     * <ul>
-     *   <li>After IDE restart: {@code savedPath} is set by {@link #readExternal}
-     *       → auto-starts a new session.
-     *   <li>After Reset Windows (or manual reopen): {@code pathToRestore} is
-     *       set by {@link #componentClosed()} → auto-starts a new session.
-     *   <li>Otherwise: TC opens empty, user selects directory manually.
-     * </ul>
-     */
     @Override
     protected void componentOpened() {
         super.componentOpened();
-
         String path        = savedPath != null ? savedPath : pathToRestore;
         String profileName = savedProfileName;
         savedPath        = null;
@@ -256,47 +304,27 @@ public class ClaudeSessionTab extends TopComponent
         if (path != null && !path.isBlank()) {
             File dir = new File(path);
             if (dir.isDirectory()) {
-                panel.autoStart(dir, profileName);
+                autoStart(dir, profileName);
                 return;
             }
         }
-        updateDisplayName(null);  // reset stale persisted name (e.g. "Claude Code GUI")
+        updateDisplayName(null);
     }
 
-    /**
-     * Saves the current directory and stops the PTY process.
-     *
-     * <p>The saved path is picked up by {@link #componentOpened()} the next
-     * time this TC is opened — allowing Reset Windows to transparently restart
-     * the session in the same directory.
-     */
     @Override
     protected void componentClosed() {
         super.componentClosed();
-        File dir = panel.getWorkingDirectory();
+        File dir = model.getWorkingDirectory();
         pathToRestore = (dir != null) ? dir.getAbsolutePath() : null;
-        panel.stopProcess();
-        statusBar.setVisible(false);
-        currentLifecycle = null;
-        stateLabel.setText("Ready");
-        versionLabel.setText("");
-        planLabel.setText("");
+        stopProcess();
     }
 
-    /**
-     * Moves keyboard focus to the prompt input area on activation.
-     */
     @Override
     protected void componentActivated() {
         super.componentActivated();
-        panel.requestFocusOnInput();
+        requestFocusOnInput();
     }
 
-    /**
-     * Always returns {@code true} — no confirmation dialog on close.
-     *
-     * @return {@code true}
-     */
     @Override
     public boolean canClose() {
         return true;
@@ -308,35 +336,17 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     // -------------------------------------------------------------------------
-    // persistence (IDE restart)
+    // Persistence (IDE restart)
     // -------------------------------------------------------------------------
 
-    /**
-     * Saves the working directory path for IDE restart.
-     *
-     * @param out the output stream
-     * @throws IOException on I/O error
-     */
     @Override
     public void writeExternal(ObjectOutput out) throws IOException {
         super.writeExternal(out);
-        File dir = panel.getWorkingDirectory();
+        File dir = model.getWorkingDirectory();
         out.writeUTF(dir != null ? dir.getAbsolutePath() : "");
-        out.writeUTF(panel.getSelectedProfileName());
+        out.writeUTF(selectorPanel.getSelectedProfileName());
     }
 
-    /**
-     * Reads the working directory path and profile name saved by
-     * {@link #writeExternal}.
-     *
-     * <p>The profile name is looked up in {@link
-     * io.github.nbclaudecodegui.settings.ClaudeProfileStore} on next open;
-     * if not found the Default profile is used.
-     *
-     * @param in the input stream
-     * @throws IOException            on I/O error
-     * @throws ClassNotFoundException if a class cannot be found
-     */
     @Override
     public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
         super.readExternal(in);
@@ -344,32 +354,68 @@ public class ClaudeSessionTab extends TopComponent
         try {
             savedProfileName = in.readUTF();
         } catch (java.io.EOFException ignored) {
-            // Old serialised state without profileName — use Default
             savedProfileName = null;
         }
     }
 
     // -------------------------------------------------------------------------
-    // ClaudeSessionModelListener — status bar + directory title
+    // ClaudeSessionModelListener
     // -------------------------------------------------------------------------
 
-    /**
-     * Shows the status bar on the first lifecycle event (session started),
-     * then updates state label and button enables.
-     */
+    /** Updates status bar and prompt panel on lifecycle transitions. */
     @Override
     public void onLifecycleChanged(SessionLifecycle s) {
         currentLifecycle = s;
         if (!statusBar.isVisible()) {
             statusBar.setVisible(true);
             Thread vt = new Thread(() -> {
-                String ver = panel.readVersion();
+                String ver = controller.readVersion();
                 SwingUtilities.invokeLater(() -> versionLabel.setText(ver));
             }, "claude-version");
             vt.setDaemon(true);
             vt.start();
         }
-        applyState(s);
+        stateLabel.setText(switch (s) {
+            case STARTING -> "Starting";
+            case READY    -> "Ready";
+            case WORKING  -> "Working";
+        });
+        boolean ready = s == SessionLifecycle.READY;
+        modelCombo.setEnabled(ready && modelCombo.getItemCount() > 0);
+        promptPanel.setReadyState(ready);
+        if (ready) promptPanel.requestFocusOnInputArea();
+    }
+
+    /** Shows / hides the choice-menu and locks the split-pane divider. */
+    @Override
+    public void onChoiceMenuChanged(ChoiceMenuModel menu) {
+        if (menu != null) {
+            if (ClaudeCodePreferences.isDebugMode()) {
+                LOG.info(sessionTag + "[screen prompt flush] text=\"" + menu.text()
+                        + "\" | options=" + menu.options());
+            }
+            promptPanel.setVisible(false);
+            choiceMenuPanel.show(menu, answer -> {
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info(sessionTag + "[PTY prompt answer] " + answer);
+                }
+                promptPanel.setVisible(true);
+                revalidate();
+                repaint();
+                controller.writePtyAnswer(answer);
+            });
+            SwingUtilities.invokeLater(this::lockDividerForChoiceMenu);
+            revalidate();
+            repaint();
+        } else {
+            if (choiceMenuPanel.isVisible()) {
+                choiceMenuPanel.dismiss();
+                promptPanel.setVisible(true);
+                SwingUtilities.invokeLater(this::unlockDividerFromChoiceMenu);
+                revalidate();
+                repaint();
+            }
+        }
     }
 
     /** Syncs the edit-mode combo without re-triggering the action listener. */
@@ -384,7 +430,7 @@ public class ClaudeSessionTab extends TopComponent
         }
     }
 
-    /** Repopulates the model combo and enables it if non-empty and session is ready. */
+    /** Repopulates the model combo. */
     @Override
     public void onModelListChanged(List<String> models, int selectedIdx) {
         DefaultComboBoxModel<String> cbModel = new DefaultComboBoxModel<>();
@@ -413,55 +459,221 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     // -------------------------------------------------------------------------
-    // public API
+    // Public API
     // -------------------------------------------------------------------------
 
     /**
-     * Sends Ctrl+C (0x03) to the running Claude process to interrupt the current prompt.
-     * No-op if no process is running.
+     * Returns the working directory of this session, or {@code null} if not yet selected.
+     *
+     * @return working directory or {@code null}
+     */
+    public File getWorkingDirectory() {
+        return model.getWorkingDirectory();
+    }
+
+    /**
+     * Returns {@code true} if a session is currently active (controls locked).
+     *
+     * @return {@code true} when a process is running
+     */
+    public boolean isSessionActive() {
+        return selectorPanel.isLocked();
+    }
+
+    /**
+     * Starts a session for {@code dir} with {@code profileName} without showing any dialogs.
+     *
+     * @param dir         working directory
+     * @param profileName profile name, or {@code null} for Default
+     */
+    public void autoStart(File dir, String profileName) {
+        if (dir == null || !dir.isDirectory()) return;
+        selectorPanel.setPath(dir.getAbsolutePath());
+        selectorPanel.setProfile(profileName);
+        selectorPanel.preselectForDirectory(dir);
+        selectorPanel.lock();
+        startSession(dir, profileName);
+    }
+
+    /**
+     * Sends Ctrl+C to the PTY to interrupt the running prompt.
      */
     public void cancelCurrentPrompt() {
-        panel.cancelPrompt();
+        cancelPrompt();
     }
 
-    /** Returns the working directory of this session, or {@code null} if not yet selected. */
-    public File getWorkingDirectory() {
-        return panel.getWorkingDirectory();
+    /** Called by Stop hook — Claude finished its turn. */
+    public void onClaudeIdle() {
+        controller.onClaudeIdle();
     }
 
-    /** Called by Stop hook — Claude finished its turn, re-enables Send button. */
-    public void onClaudeIdle() { panel.onClaudeIdle(); }
+    /** Called by PermissionRequest hook — triggers screen scan. */
+    public void triggerPromptScan() {
+        controller.triggerPromptScan();
+    }
 
-    /** Called by PermissionRequest hook — triggers screen scan for upcoming Ink menu. */
-    public void triggerPromptScan() { panel.triggerPromptScan(); }
-
-    /** Returns the current edit mode: {@code "default"}, {@code "acceptEdits"}, or {@code "plan"}. */
-    public String getEditMode() { return panel.getEditMode(); }
+    /** Returns the current edit mode string. */
+    public String getEditMode() {
+        return model.getEditMode();
+    }
 
     // -------------------------------------------------------------------------
-    // status bar helpers
+    // Session management
     // -------------------------------------------------------------------------
 
-    private void applyState(SessionLifecycle s) {
-        stateLabel.setText(switch (s) {
-            case STARTING -> "Starting";
-            case READY    -> "Ready";
-            case WORKING  -> "Working";
+    /** Fired by the selector panel when the user confirms a valid directory. */
+    private void onDirectoryOpened(File dir, String profileName) {
+        selectorPanel.lock();
+        startSession(dir, profileName);
+    }
+
+    private void startSession(File dir, String profileName) {
+        sessionTag = "[" + dir.getName() + "] ";
+        JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
+        showChatLayout(widget);
+        try {
+            controller.startProcess(dir, profileName, widget);
+        } catch (IOException ex) {
+            selectorPanel.showError("Failed to start claude: " + ex.getMessage());
+            selectorPanel.unlock();
+        }
+    }
+
+    private void showChatLayout(JediTermWidget widget) {
+        remove(placeholderLabel);
+        selectorPanel.setVisible(false);
+        terminalWidget = widget;
+
+        southStack = new JPanel(new BorderLayout());
+        southStack.add(choiceMenuPanel, BorderLayout.NORTH);
+        southStack.add(promptPanel,     BorderLayout.CENTER);
+
+        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southStack);
+        splitPane.setResizeWeight(1.0);
+        splitPane.setDividerSize(5);
+
+        final int savedBottomHeight = NbPreferences.forModule(ClaudeSessionTab.class)
+                .getInt("bottomHeight", -1);
+        final boolean[] savingEnabled = {false};
+
+        splitPane.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                int total = splitPane.getHeight();
+                if (total <= 0) return;
+                if (!savingEnabled[0]) {
+                    int bottom = savedBottomHeight > 0 ? savedBottomHeight
+                                                       : southStack.getPreferredSize().height;
+                    splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
+                    savingEnabled[0] = true;
+                } else {
+                    int bottom = NbPreferences.forModule(ClaudeSessionTab.class)
+                            .getInt("bottomHeight", southStack.getPreferredSize().height);
+                    splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
+                }
+            }
         });
-        boolean ready = s == SessionLifecycle.READY;
-        modelCombo.setEnabled(ready && modelCombo.getItemCount() > 0);
+        splitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
+            if (!savingEnabled[0] || !splitPane.isEnabled()) return;
+            int total = splitPane.getHeight();
+            int loc   = (int) e.getNewValue();
+            if (total > 0 && loc > 0) {
+                int bottom = total - splitPane.getDividerSize() - loc;
+                if (bottom > 0) NbPreferences.forModule(ClaudeSessionTab.class)
+                        .putInt("bottomHeight", bottom);
+            }
+        });
+
+        add(splitPane, BorderLayout.CENTER);
+        revalidate();
+        repaint();
+        widget.requestFocusInWindow();
     }
+
+    private void stopProcess() {
+        controller.stopProcess();
+        if (terminalWidget != null) {
+            terminalWidget.close();
+            terminalWidget = null;
+        }
+        choiceMenuPanel.dismiss();
+        promptPanel.reset();
+        if (splitPane != null) {
+            remove(splitPane);
+            splitPane  = null;
+            southStack = null;
+        }
+        selectorPanel.setVisible(true);
+        selectorPanel.unlock();
+        add(placeholderLabel, BorderLayout.CENTER);
+        statusBar.setVisible(false);
+        currentLifecycle = null;
+        stateLabel.setText("Ready");
+        versionLabel.setText("");
+        planLabel.setText("");
+        revalidate();
+        repaint();
+    }
+
+    // -------------------------------------------------------------------------
+    // Input delegation
+    // -------------------------------------------------------------------------
+
+    private void sendPrompt(String text) {
+        model.addPromptToHistory(text);
+        controller.sendPrompt(text);
+    }
+
+    private void cancelPrompt() {
+        controller.cancelPrompt();
+    }
+
+    private void requestFocusOnInput() {
+        if (choiceMenuPanel.isVisible()) return;
+        if (promptPanel.isVisible()) {
+            promptPanel.requestFocusOnInputArea();
+        } else if (terminalWidget != null) {
+            terminalWidget.requestFocusInWindow();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Split-pane divider helpers
+    // -------------------------------------------------------------------------
+
+    private void lockDividerForChoiceMenu() {
+        if (splitPane == null) return;
+        splitPane.setEnabled(false);
+        int total = splitPane.getHeight();
+        if (total <= 0) return;
+        int natural = choiceMenuPanel.getPreferredSize().height;
+        splitPane.setDividerLocation(total - splitPane.getDividerSize() - natural);
+    }
+
+    private void unlockDividerFromChoiceMenu() {
+        if (splitPane == null) return;
+        splitPane.setEnabled(true);
+        int total = splitPane.getHeight();
+        if (total <= 0) return;
+        int bottom = NbPreferences.forModule(ClaudeSessionTab.class)
+                .getInt("bottomHeight", southStack.getPreferredSize().height);
+        splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
+    }
+
+    // -------------------------------------------------------------------------
+    // Status bar helpers
+    // -------------------------------------------------------------------------
 
     private void onEditModeComboChanged() {
         int idx = editModeCombo.getSelectedIndex();
         if (idx < 0 || idx >= EDIT_MODE_VALUES.length) return;
-        panel.sendEditModeChange(EDIT_MODE_VALUES[idx]);
+        controller.onEditModeComboChanged(EDIT_MODE_VALUES[idx]);
     }
 
     private void onModelComboChanged() {
         int idx = modelCombo.getSelectedIndex();
         if (idx < 0) return;
-        panel.switchModel(idx);
+        controller.switchModel(idx);
     }
 
     private int editModeIndexOf(String value) {
@@ -492,8 +704,18 @@ public class ClaudeSessionTab extends TopComponent
         return sep;
     }
 
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private List<String> getScreenLines() {
+        if (terminalWidget == null) return java.util.Collections.emptyList();
+        TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
+        return buf.getScreenBuffer().getLineTexts();
+    }
+
     private void updateDisplayName(File dir) {
-        String name = ClaudePromptPanel.resolveTabLabel(dir);
+        String name = ClaudeSessionSelectorPanel.resolveTabLabel(dir);
         setDisplayName(name);
         setToolTipText(dir != null ? dir.getAbsolutePath() : "New Claude Code session");
     }
