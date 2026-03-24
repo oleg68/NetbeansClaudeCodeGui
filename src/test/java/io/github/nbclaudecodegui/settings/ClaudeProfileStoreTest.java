@@ -1,11 +1,9 @@
 package io.github.nbclaudecodegui.settings;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -148,112 +146,6 @@ class ClaudeProfileStoreTest {
         List<ClaudeProfile> all = ClaudeProfileStore.getProfiles();
         // saving a list that starts with Default must not throw
         assertDoesNotThrow(() -> ClaudeProfileStore.saveProfiles(all));
-    }
-
-    // -------------------------------------------------------------------------
-    // writeCustomModels / readCustomModels
-    // -------------------------------------------------------------------------
-
-    @Test
-    void writeCustomModels_writesAvailableModels(@TempDir Path tmp) throws Exception {
-        ClaudeProfile p = ClaudeProfile.createNamed("OtherApi");
-        List<CustomModel> models = List.of(
-                new CustomModel("gpt-4o", true, ""),
-                new CustomModel("gpt-4o-mini", true, "")
-        );
-        ClaudeProfileStore.writeCustomModels(p, tmp, models);
-
-        Path settingsFile = tmp.resolve("OtherApi/settings.json");
-        assertTrue(Files.exists(settingsFile));
-        String json = Files.readString(settingsFile);
-        assertTrue(json.contains("\"gpt-4o\""), "should contain gpt-4o");
-        assertTrue(json.contains("\"gpt-4o-mini\""), "should contain gpt-4o-mini");
-        assertTrue(json.contains("\"availableModels\""));
-    }
-
-    @Test
-    void writeCustomModels_writesAliasEnvVars(@TempDir Path tmp) throws Exception {
-        ClaudeProfile p = ClaudeProfile.createNamed("OtherApi");
-        List<CustomModel> models = List.of(
-                new CustomModel("gpt-4o", true, "sonnet"),
-                new CustomModel("gpt-4o-mini", true, "haiku")
-        );
-        ClaudeProfileStore.writeCustomModels(p, tmp, models);
-
-        String json = Files.readString(tmp.resolve("OtherApi/settings.json"));
-        assertTrue(json.contains("\"ANTHROPIC_DEFAULT_SONNET_MODEL\""), "should have sonnet env key");
-        assertTrue(json.contains("\"gpt-4o\""), "sonnet should map to gpt-4o");
-        assertTrue(json.contains("\"ANTHROPIC_DEFAULT_HAIKU_MODEL\""), "should have haiku env key");
-        assertFalse(json.contains("\"ANTHROPIC_DEFAULT_OPUS_MODEL\""), "opus key not set");
-    }
-
-    @Test
-    void writeCustomModels_mergesExistingKeys(@TempDir Path tmp) throws Exception {
-        ClaudeProfile p = ClaudeProfile.createNamed("OtherApi");
-        Path dir = tmp.resolve("OtherApi");
-        Files.createDirectories(dir);
-        // Pre-existing settings.json with an unrelated key
-        Files.writeString(dir.resolve("settings.json"),
-                "{\"mcpServers\":{\"netbeans\":{\"type\":\"sse\"}}}");
-
-        ClaudeProfileStore.writeCustomModels(p, tmp, List.of(new CustomModel("gpt-4o", true, "")));
-
-        String json = Files.readString(dir.resolve("settings.json"));
-        assertTrue(json.contains("\"mcpServers\""), "existing mcpServers key should be preserved");
-        assertTrue(json.contains("\"availableModels\""), "new availableModels key should be added");
-    }
-
-    @Test
-    void readCustomModels_roundtrip(@TempDir Path tmp) throws Exception {
-        ClaudeProfile p = ClaudeProfile.createNamed("OtherApi");
-        List<CustomModel> original = List.of(
-                new CustomModel("gpt-4o", true, "sonnet"),
-                new CustomModel("llama-3", null, "")
-        );
-        ClaudeProfileStore.writeCustomModels(p, tmp, original);
-        List<CustomModel> loaded = ClaudeProfileStore.readCustomModels(p, tmp);
-
-        assertEquals(2, loaded.size());
-        assertEquals("gpt-4o", loaded.get(0).id());
-        assertEquals("sonnet", loaded.get(0).alias());
-        assertEquals("llama-3", loaded.get(1).id());
-        assertEquals("", loaded.get(1).alias());
-        // available is transient — not persisted
-        assertNull(loaded.get(0).available());
-        assertNull(loaded.get(1).available());
-    }
-
-    @Test
-    void readCustomModels_fileAbsent_returnsEmpty(@TempDir Path tmp) {
-        ClaudeProfile p = ClaudeProfile.createNamed("NoFile");
-        List<CustomModel> result = ClaudeProfileStore.readCustomModels(p, tmp);
-        assertNotNull(result);
-        assertTrue(result.isEmpty());
-    }
-
-    // -------------------------------------------------------------------------
-    // CustomModel alias uniqueness validation
-    // -------------------------------------------------------------------------
-
-    @Test
-    void validateAliasUniqueness_duplicate_returnsError() {
-        List<CustomModel> models = List.of(
-                new CustomModel("gpt-4o", null, "sonnet"),
-                new CustomModel("gpt-4o-mini", null, "sonnet")
-        );
-        String error = CustomModel.validateAliasUniqueness(models);
-        assertNotNull(error, "should return error for duplicate alias");
-        assertTrue(error.contains("sonnet"));
-    }
-
-    @Test
-    void validateAliasUniqueness_ok_returnsNull() {
-        List<CustomModel> models = List.of(
-                new CustomModel("gpt-4o", null, "sonnet"),
-                new CustomModel("gpt-4o-mini", null, "haiku"),
-                new CustomModel("llama-3", null, "")
-        );
-        assertNull(CustomModel.validateAliasUniqueness(models));
     }
 
     // -------------------------------------------------------------------------

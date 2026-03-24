@@ -110,22 +110,6 @@ public final class ClaudeProcess {
 
         Map<String, String> env = buildEnv(profile, ClaudeCodePreferences.getProfilesDir());
 
-        // One-time migration: remove availableModels from settings.json for OTHER_API profiles.
-        // Proxy model IDs (e.g. "anthropic/claude-sonnet-4.6") are not understood by CC's
-        // model-picker validation, so the field breaks /model if present.
-        if (profile != null
-                && profile.computeConnectionType() == io.github.nbclaudecodegui.settings.ClaudeProfile.ConnectionType.OTHER_API) {
-            String configDirStr = env.get("CLAUDE_CONFIG_DIR");
-            if (configDirStr != null) {
-                try {
-                    io.github.nbclaudecodegui.settings.ClaudeProfileStore.removeAvailableModels(
-                            java.nio.file.Path.of(configDirStr));
-                } catch (IOException e) {
-                    LOG.warning("Could not strip availableModels from settings.json: " + e.getMessage());
-                }
-            }
-        }
-
         LOG.info("Starting Claude: profile=" + (profile != null ? profile.getName() + " (" + profile.computeConnectionType() + ")" : "Default")
                 + ", ANTHROPIC_API_KEY=" + (!env.getOrDefault("ANTHROPIC_API_KEY", "").isBlank() ? "SET" : "NOT SET")
                 + ", ANTHROPIC_AUTH_TOKEN=" + (!env.getOrDefault("ANTHROPIC_AUTH_TOKEN", "").isBlank() ? "SET" : "NOT SET")

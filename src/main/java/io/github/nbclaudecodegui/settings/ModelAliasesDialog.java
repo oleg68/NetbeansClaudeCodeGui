@@ -31,15 +31,12 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 /**
- * Modal dialog for managing the custom model list for an Other API profile.
- *
- * <p>Models are fetched from {@code GET {baseUrl}/v1/models} and stored in
- * {@code CLAUDE_CONFIG_DIR/settings.json} via {@link ClaudeProfileStore}.
+ * Modal dialog for managing the model alias list for a connection profile.
  */
-public final class CustomModelsDialog extends JDialog {
+public final class ModelAliasesDialog extends JDialog {
 
     private static final Logger LOG =
-            Logger.getLogger(CustomModelsDialog.class.getName());
+            Logger.getLogger(ModelAliasesDialog.class.getName());
 
     private static final String[] ALIASES = {"", "sonnet", "opus", "haiku"};
 
@@ -51,7 +48,7 @@ public final class CustomModelsDialog extends JDialog {
     private JLabel statusLabel;
 
     /** Non-null after the user clicks OK; null if cancelled. */
-    private List<CustomModel> result = null;
+    private List<ModelAlias> result = null;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -61,11 +58,11 @@ public final class CustomModelsDialog extends JDialog {
      * @param parent  parent component for centering
      * @param baseUrl base URL of the Other API endpoint
      * @param apiKey  API key used in the Authorization header
-     * @param initial pre-existing models to populate the table with
+     * @param initial pre-existing model aliases to populate the table with
      */
-    public CustomModelsDialog(Component parent, String baseUrl, String apiKey,
-                              List<CustomModel> initial) {
-        super(JOptionPane.getFrameForComponent(parent), "Custom Models", true);
+    public ModelAliasesDialog(Component parent, String baseUrl, String apiKey,
+                              List<ModelAlias> initial) {
+        super(JOptionPane.getFrameForComponent(parent), "Model Aliases", true);
         this.baseUrl = baseUrl == null ? "" : baseUrl.trim();
         this.apiKey  = apiKey  == null ? "" : apiKey.trim();
 
@@ -80,9 +77,9 @@ public final class CustomModelsDialog extends JDialog {
     // -------------------------------------------------------------------------
 
     /**
-     * Returns the model list accepted by the user, or {@code null} if cancelled.
+     * Returns the model alias list accepted by the user, or {@code null} if cancelled.
      */
-    public List<CustomModel> getModels() {
+    public List<ModelAlias> getModels() {
         return result;
     }
 
@@ -90,7 +87,7 @@ public final class CustomModelsDialog extends JDialog {
     // UI construction
     // -------------------------------------------------------------------------
 
-    private void initComponents(List<CustomModel> initial) {
+    private void initComponents(List<ModelAlias> initial) {
         setLayout(new BorderLayout(8, 8));
         getRootPane().setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
@@ -138,7 +135,7 @@ public final class CustomModelsDialog extends JDialog {
         table.setTransferHandler(new TableRowTransferHandler(table));
 
         // Populate
-        for (CustomModel m : initial) {
+        for (ModelAlias m : initial) {
             tableModel.addRow(new Object[]{m.id(), m.available(), m.alias()});
         }
 
@@ -337,10 +334,10 @@ public final class CustomModelsDialog extends JDialog {
 
     private void onOk() {
         stopEditing();
-        List<CustomModel> models = collectModels();
+        List<ModelAlias> models = collectModels();
 
         // Validate alias uniqueness
-        String error = CustomModel.validateAliasUniqueness(models);
+        String error = ModelAlias.validateAliasUniqueness(models);
         if (error != null) {
             JOptionPane.showMessageDialog(this, error, "Duplicate Alias", JOptionPane.ERROR_MESSAGE);
             return;
@@ -360,14 +357,14 @@ public final class CustomModelsDialog extends JDialog {
         }
     }
 
-    private List<CustomModel> collectModels() {
-        List<CustomModel> models = new ArrayList<>();
+    private List<ModelAlias> collectModels() {
+        List<ModelAlias> models = new ArrayList<>();
         for (int i = 0; i < tableModel.getRowCount(); i++) {
             String id    = (String)  tableModel.getValueAt(i, 0);
             Boolean avail = (Boolean) tableModel.getValueAt(i, 1);
             String alias = (String)  tableModel.getValueAt(i, 2);
             if (id != null && !id.isBlank()) {
-                models.add(new CustomModel(id, avail, alias == null ? "" : alias));
+                models.add(new ModelAlias(id, avail, alias == null ? "" : alias));
             }
         }
         return models;

@@ -65,11 +65,6 @@ public final class ClaudeProfilesPanel extends JPanel {
     private static final String CONN_CLAUDE_API  = "Claude API";
     private static final String CONN_OTHER_API   = "Other API";
 
-    private static final String CARD_MANAGED      = "managed";
-    private static final String CARD_SUBSCRIPTION = "subscription";
-    private static final String CARD_CLAUDE_API   = "claude_api";
-    private static final String CARD_OTHER_API    = "other_api";
-
     private static final String PROXY_CARD_NONE   = "proxy_none";
     private static final String PROXY_CARD_CUSTOM = "proxy_custom";
 
@@ -90,13 +85,12 @@ public final class ClaudeProfilesPanel extends JPanel {
     private JRadioButton rbSubscription;
     private JRadioButton rbClaudeApi;
     private JRadioButton rbOtherApi;
-    private JPanel connCardPanel;
-    private CardLayout connCardLayout;
     private JPasswordField tokenField;
     private JPasswordField apiKeyField;
     private JTextField baseUrlField;
-    private JPasswordField otherApiKeyField;
-    private JTextField otherBaseUrlField;
+    private JButton modelAliasesBtn;
+    private JButton tokenShowBtn;
+    private JButton apiKeyShowBtn;
 
     // Proxy
     private JRadioButton rbProxySystem;
@@ -230,73 +224,87 @@ public final class ClaudeProfilesPanel extends JPanel {
     }
 
     private JPanel buildConnectionTypeSection() {
-        // Radio column
-        JPanel radioCol = new JPanel(new GridBagLayout());
         rbManaged      = new JRadioButton(CONN_MANAGED);
         rbSubscription = new JRadioButton(CONN_SUBSCRIPTION);
         rbClaudeApi    = new JRadioButton(CONN_CLAUDE_API);
         rbOtherApi     = new JRadioButton(CONN_OTHER_API);
         ButtonGroup bg = new ButtonGroup();
-        int r = 0;
         for (JRadioButton rb : new JRadioButton[]{rbManaged, rbSubscription, rbClaudeApi, rbOtherApi}) {
             bg.add(rb);
-            radioCol.add(rb, connRbGbc(r++));
         }
-        rbManaged.addActionListener(e      -> showConnCard(CARD_MANAGED));
-        rbSubscription.addActionListener(e -> showConnCard(CARD_SUBSCRIPTION));
-        rbClaudeApi.addActionListener(e    -> showConnCard(CARD_CLAUDE_API));
-        rbOtherApi.addActionListener(e     -> showConnCard(CARD_OTHER_API));
 
-        // Card panel (fields on the right)
-        connCardLayout = new CardLayout();
-        connCardPanel  = new JPanel(connCardLayout);
-        connCardPanel.add(new JPanel(), CARD_MANAGED);  // empty
-        connCardPanel.add(buildTokenCard(), CARD_SUBSCRIPTION);
-        connCardPanel.add(buildApiKeyCard(), CARD_CLAUDE_API);
-        connCardPanel.add(buildOtherApiCard(), CARD_OTHER_API);
+        tokenField  = new JPasswordField(28);
+        apiKeyField = new JPasswordField(28);
+        baseUrlField = new JTextField(28);
+        modelAliasesBtn = new JButton("Model Aliases\u2026");
+        modelAliasesBtn.addActionListener(e -> onModelAliases());
 
-        JPanel content = new JPanel(new BorderLayout(8, 0));
-        content.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
-        content.add(radioCol, BorderLayout.WEST);
-        content.add(connCardPanel, BorderLayout.CENTER);
+        DocumentListener docL = new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { updateModelAliasesBtn(); }
+            @Override public void removeUpdate(DocumentEvent e)  { updateModelAliasesBtn(); }
+            @Override public void changedUpdate(DocumentEvent e) { updateModelAliasesBtn(); }
+        };
+        apiKeyField.getDocument().addDocumentListener(docL);
+        baseUrlField.getDocument().addDocumentListener(docL);
+
+        rbManaged.addActionListener(e      -> updateFieldEnablement());
+        rbSubscription.addActionListener(e -> updateFieldEnablement());
+        rbClaudeApi.addActionListener(e    -> updateFieldEnablement());
+        rbOtherApi.addActionListener(e     -> updateFieldEnablement());
+
+        // Grid: col0=radio, col1=label, col2=field(fill), col3=button
+        JPanel grid = new JPanel(new GridBagLayout());
+        grid.setBorder(BorderFactory.createEmptyBorder(0, 16, 0, 0));
+
+        // row 0: rbManaged spans all columns
+        GridBagConstraints rbMgdGbc = new GridBagConstraints();
+        rbMgdGbc.gridx = 0; rbMgdGbc.gridy = 0; rbMgdGbc.gridwidth = 4;
+        rbMgdGbc.anchor = GridBagConstraints.NORTHWEST;
+        rbMgdGbc.insets = new Insets(2, 0, 2, 0);
+        grid.add(rbManaged, rbMgdGbc);
+
+        // row 1: rbSubscription + Token label + tokenField + [Show]
+        grid.add(rbSubscription, inlineRbGbc(0, 1));
+        grid.add(new JLabel("Token:"), inlineLblGbc(1, 1));
+        grid.add(tokenField, inlineFieldGbc(2, 1));
+        tokenShowBtn = buildShowHideButton(tokenField);
+        grid.add(tokenShowBtn, inlineBtnGbc(3, 1));
+
+        // row 2: rbClaudeApi + API Key label + apiKeyField + [Show]
+        grid.add(rbClaudeApi, inlineRbGbc(0, 2));
+        grid.add(new JLabel("API Key:"), inlineLblGbc(1, 2));
+        grid.add(apiKeyField, inlineFieldGbc(2, 2));
+        apiKeyShowBtn = buildShowHideButton(apiKeyField);
+        grid.add(apiKeyShowBtn, inlineBtnGbc(3, 2));
+
+        // row 3: rbOtherApi + Base URL label + baseUrlField + [Custom Models…]
+        grid.add(rbOtherApi, inlineRbGbc(0, 3));
+        grid.add(new JLabel("Base URL:"), inlineLblGbc(1, 3));
+        grid.add(baseUrlField, inlineFieldGbc(2, 3));
+        grid.add(modelAliasesBtn, inlineBtnGbc(3, 3));
 
         JPanel outer = new JPanel(new BorderLayout(0, 4));
         outer.add(new JLabel("Connection Type:"), BorderLayout.NORTH);
-        outer.add(content, BorderLayout.CENTER);
+        outer.add(grid, BorderLayout.CENTER);
         return outer;
     }
 
-    private JPanel buildTokenCard() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        p.add(new JLabel("Token:"));
-        tokenField = new JPasswordField(30);
-        p.add(tokenField);
-        p.add(buildShowHideButton(tokenField));
-        return p;
+    private void updateFieldEnablement() {
+        boolean sub = rbSubscription.isSelected();
+        boolean api = rbClaudeApi.isSelected() || rbOtherApi.isSelected();
+        tokenField.setEnabled(sub);
+        tokenShowBtn.setEnabled(sub);
+        apiKeyField.setEnabled(api);
+        apiKeyShowBtn.setEnabled(api);
+        baseUrlField.setEnabled(rbOtherApi.isSelected());
+        updateModelAliasesBtn();
     }
 
-    private JPanel buildApiKeyCard() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
-        p.add(new JLabel("API Key:"));
-        apiKeyField = new JPasswordField(30);
-        p.add(apiKeyField);
-        p.add(buildShowHideButton(apiKeyField));
-        return p;
-    }
-
-    private JPanel buildOtherApiCard() {
-        JPanel p = new JPanel(new GridBagLayout());
-        p.add(new JLabel("API Key:"),   connRbGbc(0));
-        otherApiKeyField = new JPasswordField(28);
-        p.add(otherApiKeyField, connFieldGbc(0));
-        p.add(buildShowHideButton(otherApiKeyField), connBtn(0));
-        p.add(new JLabel("Base URL:"),  connRbGbc(1));
-        otherBaseUrlField = new JTextField(28);
-        p.add(otherBaseUrlField, connFieldGbc(1));
-        JButton customModelsBtn = new JButton("Custom Models\u2026");
-        customModelsBtn.addActionListener(e -> onCustomModels());
-        p.add(customModelsBtn, connBtn(1));
-        return p;
+    private void updateModelAliasesBtn() {
+        boolean other  = rbOtherApi.isSelected();
+        boolean hasKey = !new String(apiKeyField.getPassword()).isBlank();
+        boolean hasUrl = !baseUrlField.getText().isBlank();
+        modelAliasesBtn.setEnabled(other && hasKey && hasUrl);
     }
 
     private JPanel buildProxySection() {
@@ -482,8 +490,8 @@ public final class ClaudeProfilesPanel extends JPanel {
             p.setToken("");
             p.setBaseUrl("");
         } else if (rbOtherApi.isSelected()) {
-            p.setApiKey(new String(otherApiKeyField.getPassword()));
-            p.setBaseUrl(otherBaseUrlField.getText().trim());
+            p.setApiKey(new String(apiKeyField.getPassword()));
+            p.setBaseUrl(baseUrlField.getText().trim());
             p.setToken("");
         } else {
             p.setToken("");
@@ -536,28 +544,26 @@ public final class ClaudeProfilesPanel extends JPanel {
 
         // Connection type
         ClaudeProfile.ConnectionType ct = p.computeConnectionType();
+        tokenField.setText("");
+        apiKeyField.setText("");
+        baseUrlField.setText("");
         switch (ct) {
             case SUBSCRIPTION -> {
                 rbSubscription.setSelected(true);
                 tokenField.setText(p.getToken());
-                showConnCard(CARD_SUBSCRIPTION);
             }
             case CLAUDE_API -> {
                 rbClaudeApi.setSelected(true);
                 apiKeyField.setText(p.getApiKey());
-                showConnCard(CARD_CLAUDE_API);
             }
             case OTHER_API -> {
                 rbOtherApi.setSelected(true);
-                otherApiKeyField.setText(p.getApiKey());
-                otherBaseUrlField.setText(p.getBaseUrl());
-                showConnCard(CARD_OTHER_API);
+                apiKeyField.setText(p.getApiKey());
+                baseUrlField.setText(p.getBaseUrl());
             }
-            default -> {
-                rbManaged.setSelected(true);
-                showConnCard(CARD_MANAGED);
-            }
+            default -> rbManaged.setSelected(true);
         }
+        updateFieldEnablement();
 
         // Proxy
         switch (p.getProxyMode()) {
@@ -618,6 +624,7 @@ public final class ClaudeProfilesPanel extends JPanel {
         copy.setHttpsProxy(src.getHttpsProxy());
         copy.setNoProxy(src.getNoProxy());
         copy.setExtraEnvVars(new ArrayList<>(src.getExtraEnvVars()));
+        copy.setModelAliases(new java.util.HashMap<>(src.getModelAliases()));
         profiles.add(copy);
         suppressProfileChange = true;
         rebuildProfileCombo();
@@ -661,27 +668,30 @@ public final class ClaudeProfilesPanel extends JPanel {
         }
     }
 
-    private void onCustomModels() {
+    private void onModelAliases() {
         flushFormToCurrentProfile();
         ClaudeProfile p = currentFormProfile;
         if (p == null) return;
-        java.nio.file.Path profilesDir = ClaudeCodePreferences.getProfilesDir();
-        java.util.List<CustomModel> existing = ClaudeProfileStore.readCustomModels(p, profilesDir);
-        CustomModelsDialog dlg = new CustomModelsDialog(
+        // Reconstruct display list from stored alias map (alias→id)
+        java.util.List<ModelAlias> existing = new ArrayList<>();
+        for (java.util.Map.Entry<String, String> e : p.getModelAliases().entrySet()) {
+            existing.add(new ModelAlias(e.getValue(), null, e.getKey()));
+        }
+        ModelAliasesDialog dlg = new ModelAliasesDialog(
                 this,
                 p.getBaseUrl(),
                 p.getApiKey(),
                 existing);
         dlg.setVisible(true);
-        java.util.List<CustomModel> chosen = dlg.getModels();
+        java.util.List<ModelAlias> chosen = dlg.getModels();
         if (chosen != null) {
-            try {
-                ClaudeProfileStore.writeCustomModels(p, profilesDir, chosen);
-            } catch (java.io.IOException ex) {
-                javax.swing.JOptionPane.showMessageDialog(this,
-                        "Could not write settings.json: " + ex.getMessage(),
-                        "Error", javax.swing.JOptionPane.ERROR_MESSAGE);
+            java.util.Map<String, String> aliasMap = new java.util.LinkedHashMap<>();
+            for (ModelAlias m : chosen) {
+                if (m.alias() != null && !m.alias().isBlank()) {
+                    aliasMap.put(m.alias(), m.id());
+                }
             }
+            p.setModelAliases(aliasMap);
         }
     }
 
@@ -762,10 +772,6 @@ public final class ClaudeProfilesPanel extends JPanel {
     // Card helpers
     // -------------------------------------------------------------------------
 
-    private void showConnCard(String card) {
-        connCardLayout.show(connCardPanel, card);
-    }
-
     private void showProxyCard(String card) {
         proxyCardLayout.show(proxyCardPanel, card);
     }
@@ -810,6 +816,40 @@ public final class ClaudeProfilesPanel extends JPanel {
     private static GridBagConstraints connBtn(int row) {
         GridBagConstraints c = new GridBagConstraints();
         c.gridx = 2; c.gridy = row;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(2, 0, 2, 0);
+        return c;
+    }
+
+    private static GridBagConstraints inlineRbGbc(int col, int row) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = col; c.gridy = row;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(2, 0, 2, 4);
+        return c;
+    }
+
+    private static GridBagConstraints inlineLblGbc(int col, int row) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = col; c.gridy = row;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(4, 0, 2, 4);
+        return c;
+    }
+
+    private static GridBagConstraints inlineFieldGbc(int col, int row) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = col; c.gridy = row;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.weightx = 1.0;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(2, 0, 2, 4);
+        return c;
+    }
+
+    private static GridBagConstraints inlineBtnGbc(int col, int row) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = col; c.gridy = row;
         c.anchor = GridBagConstraints.NORTHWEST;
         c.insets = new Insets(2, 0, 2, 0);
         return c;

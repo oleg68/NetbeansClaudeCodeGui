@@ -115,6 +115,80 @@ class ClaudeSessionControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // acceptEdits mode must not be overwritten by screen poll during WORKING
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: when lifecycle is WORKING the screen footer shows a spinner,
+     * not the mode indicator.  The fixture has "esc to interrupt" without leading
+     * spaces → detectEditMode() returns Optional.empty().  pollScreenState() must
+     * skip the update when WORKING + empty (screen transitioning), so "acceptEdits"
+     * is preserved in the model and registry.
+     */
+    @Test
+    void pollScreenStateDoesNotOverwriteAcceptEditsWhileWorking() throws Exception {
+        // Build a controller whose screenLines supplier returns a non-empty WORKING screen
+        // (spinner visible, no "accept edits" text — exactly what Claude shows while executing)
+        List<String> workingScreen = Arrays.asList(
+                "Writing file src/main/java/Foo.java…",
+                "⠙ Thinking",
+                "esc to interrupt"
+        );
+        ClaudeSessionModel m2 = new ClaudeSessionModel();
+        ClaudeSessionController c2 = new ClaudeSessionController(m2, () -> workingScreen);
+
+        m2.setWorkingDirectory(new java.io.File("/tmp/test2"));
+        m2.setEditMode("acceptEdits");
+        m2.setLifecycle(SessionLifecycle.WORKING);
+
+        // Simulate modelComboPopulated = true so the sync branch is reached
+        java.lang.reflect.Field f =
+                ClaudeSessionController.class.getDeclaredField("modelComboPopulated");
+        f.setAccessible(true);
+        f.setBoolean(c2, true);
+
+        c2.pollScreenState();
+
+        assertEquals("acceptEdits", m2.getEditMode(),
+                "acceptEdits must not be overwritten by screen poll while WORKING");
+        assertEquals("acceptEdits",
+                io.github.nbclaudecodegui.model.ClaudeSessionModel.EDIT_MODE_REGISTRY
+                        .get("/tmp/test2"),
+                "Registry must still hold acceptEdits");
+    }
+
+    /**
+     * Regression guard: if the screen shows a concrete mode (e.g. "plan mode" disappears
+     * and nothing replaces it → "default") while WORKING, the model must NOT be overwritten
+     * with "default" — but if the screen explicitly shows "plan mode" text it must still update.
+     */
+    @Test
+    void pollScreenStateDetectsPlanModeChangeWhileWorking() throws Exception {
+        // Screen shows "plan mode" text still visible during WORKING
+        List<String> planScreen = Arrays.asList(
+                "⠙ Thinking",
+                "esc to interrupt",
+                "plan mode | ? for shortcuts"
+        );
+        ClaudeSessionModel m3 = new ClaudeSessionModel();
+        ClaudeSessionController c3 = new ClaudeSessionController(m3, () -> planScreen);
+
+        m3.setWorkingDirectory(new java.io.File("/tmp/test3"));
+        m3.setEditMode("default");
+        m3.setLifecycle(SessionLifecycle.WORKING);
+
+        java.lang.reflect.Field f =
+                ClaudeSessionController.class.getDeclaredField("modelComboPopulated");
+        f.setAccessible(true);
+        f.setBoolean(c3, true);
+
+        c3.pollScreenState();
+
+        assertEquals("plan", m3.getEditMode(),
+                "plan mode must be detected even during WORKING when text is visible");
+    }
+
+    // -------------------------------------------------------------------------
     // parseModelDiscovery — representative cases (see full suite in
     // ClaudeSessionControllerParseModelTest)
     // -------------------------------------------------------------------------
@@ -136,6 +210,26 @@ class ClaudeSessionControllerTest {
         List<String> fromList = ClaudeSessionController.parseModelList(lines);
         List<String> fromDiscovery = ClaudeSessionController.parseModelDiscovery(lines).models();
         assertEquals(fromDiscovery, fromList);
+    }
+
+    // -------------------------------------------------------------------------
+    // setWorkingDirectory — propagated to listeners (required for tab title fix)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void setWorkingDirectoryNotifiesListener() {
+        AtomicReference<java.io.File> captured = new AtomicReference<>(null);
+        model.addListener(new NoOpListener() {
+            @Override public void onWorkingDirectoryChanged(java.io.File dir) {
+                captured.set(dir);
+            }
+        });
+
+        java.io.File dir = new java.io.File("/tmp/test-wd");
+        model.setWorkingDirectory(dir);
+
+        assertEquals(dir, captured.get(),
+                "model.setWorkingDirectory must fire onWorkingDirectoryChanged so the tab title updates");
     }
 
     // -------------------------------------------------------------------------

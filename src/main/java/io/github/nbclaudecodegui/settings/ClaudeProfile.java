@@ -83,6 +83,13 @@ public final class ClaudeProfile {
     /** The {@code id} value for the built-in Default profile. */
     public static final String DEFAULT_ID = "";
 
+    private static final String[] ALIAS_NAMES = {"sonnet", "opus", "haiku"};
+    private static final String[] ALIAS_ENV_KEYS = {
+        "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL"
+    };
+
     /** The display name of the built-in Default profile. */
     public static final String DEFAULT_NAME = "Default";
 
@@ -125,6 +132,12 @@ public final class ClaudeProfile {
      */
     private List<String[]> extraEnvVars;
 
+    /**
+     * Model alias map: alias name ({@code "sonnet"}, {@code "opus"}, {@code "haiku"})
+     * → model ID. Emitted as {@code ANTHROPIC_DEFAULT_*_MODEL} env vars.
+     */
+    private Map<String, String> modelAliases;
+
     // -------------------------------------------------------------------------
     // No-arg constructor (Jackson)
     // -------------------------------------------------------------------------
@@ -141,6 +154,7 @@ public final class ClaudeProfile {
         this.httpsProxy   = "";
         this.noProxy      = "";
         this.extraEnvVars = new ArrayList<>();
+        this.modelAliases = new HashMap<>();
     }
 
     // -------------------------------------------------------------------------
@@ -253,6 +267,16 @@ public final class ClaudeProfile {
                 if (!isBlank(noProxy))    env.put("NO_PROXY",    noProxy);
             }
             default -> { /* SYSTEM_MANAGED — inherit from parent process */ }
+        }
+
+        // Model aliases (ANTHROPIC_DEFAULT_*_MODEL)
+        if (modelAliases != null) {
+            for (int i = 0; i < ALIAS_NAMES.length; i++) {
+                String modelId = modelAliases.get(ALIAS_NAMES[i]);
+                if (modelId != null && !modelId.isBlank()) {
+                    env.put(ALIAS_ENV_KEYS[i], modelId);
+                }
+            }
         }
 
         // Extra vars (overwrite everything above if there is a conflict)
@@ -371,6 +395,26 @@ public final class ClaudeProfile {
      */
     public void setExtraEnvVars(List<String[]> extraEnvVars) {
         this.extraEnvVars = extraEnvVars != null ? new ArrayList<>(extraEnvVars) : new ArrayList<>();
+    }
+
+    /**
+     * Returns an unmodifiable view of the model alias map.
+     * Keys are alias names ({@code "sonnet"}, {@code "opus"}, {@code "haiku"});
+     * values are model IDs.
+     *
+     * @return unmodifiable map
+     */
+    public Map<String, String> getModelAliases() {
+        return modelAliases != null ? Collections.unmodifiableMap(modelAliases) : Collections.emptyMap();
+    }
+
+    /**
+     * Replaces the model alias map.
+     *
+     * @param modelAliases alias → model ID map; {@code null} clears the map
+     */
+    public void setModelAliases(Map<String, String> modelAliases) {
+        this.modelAliases = modelAliases != null ? new HashMap<>(modelAliases) : new HashMap<>();
     }
 
     // -------------------------------------------------------------------------

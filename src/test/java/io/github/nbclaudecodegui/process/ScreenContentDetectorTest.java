@@ -112,11 +112,11 @@ class ScreenContentDetectorTest {
     // -------------------------------------------------------------------------
 
     @org.junit.jupiter.api.Test
-    void detectEditModeDefaultWhenNoPlanMode() {
+    void detectEditModeEmptyWhenNoIndicatorNoEscPattern() {
+        // "esc to interrupt" without leading spaces → no mode indicator → Optional.empty()
         List<String> lines = List.of("Normal output", "esc to interrupt");
         java.util.Optional<String> result = detector.detectEditMode(lines);
-        assertTrue(result.isPresent());
-        assertEquals("default", result.get());
+        assertTrue(result.isEmpty(), "Expected empty Optional when no mode indicator and no leading-space esc pattern");
     }
 
     @org.junit.jupiter.api.Test
@@ -156,14 +156,27 @@ class ScreenContentDetectorTest {
     }
 
     @org.junit.jupiter.api.Test
-    void detectEditModeDefaultWhenNoModeIndicator() {
+    void detectEditModeEmptyWhenEscToInterruptNoLeadingSpaces() {
+        // "esc to interrupt" without leading spaces (e.g. in transitioning screen) → Optional.empty()
         List<String> lines = new ArrayList<>(List.of(
                 "Some output",
                 "esc to interrupt"
         ));
         for (int i = 0; i < 15; i++) lines.add("");
         java.util.Optional<String> result = detector.detectEditMode(lines);
-        assertTrue(result.isPresent());
+        assertTrue(result.isEmpty(), "Expected empty Optional when esc line has no leading spaces");
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectEditModeDefaultWhenEscToInterruptLeadingSpaces() {
+        // "  esc to interrupt" with two leading spaces → Ask/default mode confirmed
+        List<String> lines = new ArrayList<>(List.of(
+                "Some output",
+                "  esc to interrupt"
+        ));
+        for (int i = 0; i < 15; i++) lines.add("");
+        java.util.Optional<String> result = detector.detectEditMode(lines);
+        assertTrue(result.isPresent(), "Expected Optional.of(\"default\") for leading-space esc pattern");
         assertEquals("default", result.get());
     }
 

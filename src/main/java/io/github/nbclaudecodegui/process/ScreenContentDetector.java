@@ -150,7 +150,9 @@ public final class ScreenContentDetector {
      */
     public Optional<String> detectEditMode(List<String> lines) {
         if (lines == null || lines.isEmpty()) return Optional.empty();
-        for (String line : bottomNonBlankLines(lines, 3)) {
+        List<String> bottom = bottomNonBlankLines(lines, 3);
+        if (bottom.isEmpty()) return Optional.empty();
+        for (String line : bottom) {
             String lower = line.toLowerCase();
             if (lower.contains("plan mode") || lower.contains("plan-mode")) {
                 return Optional.of("plan");
@@ -159,7 +161,12 @@ public final class ScreenContentDetector {
                 return Optional.of("acceptEdits");
             }
         }
-        return Optional.of("default");
+        // "  esc to interrupt" with two leading spaces is the reliable Ask/default-mode signal.
+        // Without leading spaces the screen is in an unknown / transitioning state.
+        if (bottom.get(0).startsWith("  esc to interrupt")) {
+            return Optional.of("default");
+        }
+        return Optional.empty();
     }
 
     /**

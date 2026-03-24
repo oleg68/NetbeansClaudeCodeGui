@@ -174,6 +174,7 @@ public final class ClaudeSessionController {
         modelDiscoveryAttempts = 0;
         modelComboPopulated = false;
         model.setLifecycle(SessionLifecycle.STARTING);
+        model.setWorkingDirectory(dir);
 
         // Waiter thread: notifies when the process exits
         Thread waiter = new Thread(() -> {
@@ -569,11 +570,19 @@ public final class ClaudeSessionController {
 
         // Continuously sync CC screen mode → model (skip during switches and discovery)
         if (modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
-            screenContentDetector.detectEditMode(lines).ifPresent(detected -> {
-                if (!detected.equals(model.getEditMode())) {
-                    model.setEditMode(detected);
+            Optional<String> detected = screenContentDetector.detectEditMode(lines);
+            if (detected.isPresent()) {
+                String mode = detected.get();
+                if (!mode.equals(model.getEditMode())) {
+                    model.setEditMode(mode);
                 }
-            });
+            } else if (model.getLifecycle() != SessionLifecycle.WORKING) {
+                // Unknown mode outside WORKING (screen transitioning or idle with no indicator)
+                // → treat as Ask/default. During WORKING: preserve current registry value.
+                if (!"default".equals(model.getEditMode())) {
+                    model.setEditMode("default");
+                }
+            }
         }
     }
 

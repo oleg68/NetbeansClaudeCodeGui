@@ -243,6 +243,31 @@ class ClaudeProfileTest {
     }
 
     // -------------------------------------------------------------------------
+    // toEnvVars — modelAliases
+    // -------------------------------------------------------------------------
+
+    @Test
+    void toEnvVars_emitsAliasEnvVars() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setApiKey("key");
+        p.setBaseUrl("https://proxy.example.com");
+        p.setModelAliases(Map.of("sonnet", "gpt-4o", "haiku", "gpt-4o-mini"));
+        Map<String, String> env = p.toEnvVars();
+        assertEquals("gpt-4o",      env.get("ANTHROPIC_DEFAULT_SONNET_MODEL"));
+        assertEquals("gpt-4o-mini", env.get("ANTHROPIC_DEFAULT_HAIKU_MODEL"));
+        assertFalse(env.containsKey("ANTHROPIC_DEFAULT_OPUS_MODEL"));
+    }
+
+    @Test
+    void toEnvVars_noAliases_noAliasEnvVars() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        Map<String, String> env = p.toEnvVars();
+        assertFalse(env.containsKey("ANTHROPIC_DEFAULT_SONNET_MODEL"));
+        assertFalse(env.containsKey("ANTHROPIC_DEFAULT_OPUS_MODEL"));
+        assertFalse(env.containsKey("ANTHROPIC_DEFAULT_HAIKU_MODEL"));
+    }
+
+    // -------------------------------------------------------------------------
     // getExtraEnvVars returns unmodifiable view
     // -------------------------------------------------------------------------
 
