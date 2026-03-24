@@ -38,13 +38,11 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JSeparator;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.ListCellRenderer;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
 import java.util.logging.Logger;
 import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.api.project.Project;
@@ -64,8 +62,11 @@ import org.openide.util.NbPreferences;
  *   <li>Builds and lays out Swing components.</li>
  *   <li>Translates user gestures into controller calls.</li>
  *   <li>Implements {@link ClaudeSessionModel.ClaudeSessionModelListener} to
- *       keep the UI in sync with the model.</li>
+ *       keep the UI in sync with the model (lifecycle buttons and choice menus).</li>
  * </ul>
+ *
+ * <p>The status bar (edit-mode combo, model combo, state label, etc.) lives in
+ * {@link ClaudeSessionTab} so it is always visible outside the split pane.
  *
  * <p>Top bar: project combo, path combo, Browse, Open, Settings.
  * After Open: an embedded JediTerm terminal runs the Claude TUI,
@@ -113,13 +114,6 @@ public final class ClaudePromptPanel extends JPanel
     private static final String ICON_CANCEL = "\u2716";  // ✖
 
     // -------------------------------------------------------------------------
-    // Edit mode constants
-    // -------------------------------------------------------------------------
-
-    private static final String[] EDIT_MODE_LABELS   = {"Plan Mode", "Ask on Edit", "Accept on Edit"};
-    private static final String[] EDIT_MODE_VALUES   = {"plan",      "default",     "acceptEdits"};
-
-    // -------------------------------------------------------------------------
     // MVC wiring
     // -------------------------------------------------------------------------
 
@@ -154,17 +148,6 @@ public final class ClaudePromptPanel extends JPanel
     private ChoiceMenuPanel     choiceMenuPanel;
 
     // -------------------------------------------------------------------------
-    // UI components — status bar
-    // -------------------------------------------------------------------------
-
-    private JPanel              statusBar;
-    private JComboBox<String>   editModeCombo;
-    private JComboBox<String>   modelCombo;
-    private JLabel              stateLabel;
-    private JLabel              planLabel;
-    private JLabel              versionLabel;
-
-    // -------------------------------------------------------------------------
     // View-local state
     // -------------------------------------------------------------------------
 
@@ -175,18 +158,6 @@ public final class ClaudePromptPanel extends JPanel
     private int historyIndex = -1;
 
     private boolean suppressProjectListener;
-
-    /** Listener notified when the confirmed working directory changes. */
-    public interface DirectoryListener {
-        /**
-         * Called when the user confirms a valid directory.
-         *
-         * @param dir the confirmed directory
-         */
-        void directorySelected(File dir);
-    }
-
-    private DirectoryListener directoryListener;
 
     // -------------------------------------------------------------------------
     // Constructors
@@ -208,7 +179,7 @@ public final class ClaudePromptPanel extends JPanel
         super(new BorderLayout());
 
         if (directory != null) {
-            model.setConfirmedDirectory(directory);
+            model.setWorkingDirectory(directory);
         }
 
         // --- project combo ---
@@ -298,10 +269,7 @@ public final class ClaudePromptPanel extends JPanel
 
         choiceMenuPanel = new ChoiceMenuPanel();
 
-        // --- status bar ---
-        statusBar = buildStatusBar();
-
-        // --- south stack ---
+        // --- south stack (choice menu + input area) ---
         southStack = new JPanel(new BorderLayout());
         inputPanel = new JPanel(new BorderLayout());
         inputPanel.add(new JScrollPane(inputArea), BorderLayout.CENTER);
@@ -311,11 +279,10 @@ public final class ClaudePromptPanel extends JPanel
 
         southStack.add(choiceMenuPanel, BorderLayout.NORTH);
         southStack.add(inputPanel, BorderLayout.CENTER);
-        southStack.add(statusBar, BorderLayout.SOUTH);
 
         add(southStack, BorderLayout.SOUTH);
 
-        // Register model listener
+        // Register model listener (Panel handles lifecycle buttons + choice menu)
         model.addListener(this);
 
         if (locked) {
@@ -329,44 +296,16 @@ public final class ClaudePromptPanel extends JPanel
     // -------------------------------------------------------------------------
 
     /**
-     * Updates the Send/Cancel/Model enable state and state label.
-     * Also requests focus on the input when transitioning to READY.
+     * Updates the Send/Cancel enable state and requests focus when READY.
      */
     @Override
     public void onLifecycleChanged(SessionLifecycle s) {
-        applyState(s);
-    }
-
-    /**
-     * Syncs the edit-mode combo without re-triggering the action listener.
-     */
-    @Override
-    public void onEditModeChanged(String mode) {
-        if (mode == null) return;
-        int idx = editModeIndexOf(mode);
-        if (idx >= 0 && editModeCombo.getSelectedIndex() != idx) {
-            editModeCombo.removeActionListener(editModeCombo.getActionListeners()[0]);
-            editModeCombo.setSelectedIndex(idx);
-            editModeCombo.addActionListener(ae -> onEditModeComboChanged());
+        boolean ready = s == SessionLifecycle.READY;
+        sendButton.setEnabled(ready);
+        cancelButton.setEnabled(s == SessionLifecycle.WORKING);
+        if (s == SessionLifecycle.READY) {
+            inputArea.requestFocusInWindow();
         }
-    }
-
-    /**
-     * Repopulates the model combo and enables it if non-empty.
-     */
-    @Override
-    public void onModelListChanged(List<String> models, int selectedIdx) {
-        DefaultComboBoxModel<String> cbModel = new DefaultComboBoxModel<>();
-        for (String m : models) cbModel.addElement(m);
-        modelCombo.removeActionListener(modelCombo.getActionListeners().length > 0
-                ? modelCombo.getActionListeners()[0] : null);
-        modelCombo.setModel(cbModel);
-        if (selectedIdx >= 0 && selectedIdx < models.size()) {
-            modelCombo.setSelectedIndex(selectedIdx);
-        }
-        modelCombo.addActionListener(ae -> onModelComboChanged());
-        boolean ready = model.getLifecycle() == SessionLifecycle.READY;
-        modelCombo.setEnabled(ready && !models.isEmpty());
     }
 
     /**
@@ -401,46 +340,28 @@ public final class ClaudePromptPanel extends JPanel
         }
     }
 
-    /**
-     * Notifies the external directory listener (e.g. for tab label update).
-     */
-    @Override
-    public void onDirectoryConfirmed(File dir) {
-        if (directoryListener != null) {
-            directoryListener.directorySelected(dir);
-        }
-    }
-
-    /** Updates the plan-file label in the status bar. */
-    @Override
-    public void onPlanNameChanged(String planName) {
-        planLabel.setText(planName != null ? planName : "");
-    }
-
     // -------------------------------------------------------------------------
     // public API
     // -------------------------------------------------------------------------
 
-    /** Sets the listener notified when a directory is confirmed. */
-    public void setDirectoryListener(DirectoryListener listener) {
-        this.directoryListener = listener;
+    /**
+     * Registers an additional model listener (e.g. {@link ClaudeSessionTab}
+     * listening for status bar updates).
+     *
+     * @param l the listener to add
+     */
+    public void addModelListener(ClaudeSessionModel.ClaudeSessionModelListener l) {
+        model.addListener(l);
     }
 
-    /** Returns the confirmed working directory, or {@code null} if none. */
-    public File getConfirmedDirectory() {
-        return model.getConfirmedDirectory();
+    /** Returns the working directory, or {@code null} if none. */
+    public File getWorkingDirectory() {
+        return model.getWorkingDirectory();
     }
 
     /** Returns {@code true} if the directory controls are locked. */
     public boolean isLocked() {
         return !openButton.isEnabled();
-    }
-
-    /**
-     * Returns {@code true} if this panel has no running process.
-     */
-    public boolean canClose() {
-        return !controller.hasLiveProcess();
     }
 
     /**
@@ -475,7 +396,7 @@ public final class ClaudePromptPanel extends JPanel
      */
     public void autoStart(File dir, String profileName) {
         if (dir == null || !dir.isDirectory()) return;
-        model.setConfirmedDirectory(dir);
+        model.setWorkingDirectory(dir);
         pathCombo.setSelectedItem(dir.getAbsolutePath());
         if (profileName != null && !profileName.isBlank()) {
             profileCombo.setSelectedItem(profileName);
@@ -561,7 +482,6 @@ public final class ClaudePromptPanel extends JPanel
             splitPane = null;
             add(southStack, BorderLayout.SOUTH);
         }
-        statusBar.setVisible(false);
         revalidate();
         repaint();
     }
@@ -601,6 +521,21 @@ public final class ClaudePromptPanel extends JPanel
         }
         LOG.warning("resolveTabLabel: no project match for " + dir.getAbsolutePath());
         return "Claude Code";
+    }
+
+    /** Returns the Claude CLI version string (blocks until the subprocess exits). */
+    public String readVersion() {
+        return controller.readVersion();
+    }
+
+    /** Forwards an edit-mode change from the status bar combo to the controller. */
+    public void sendEditModeChange(String mode) {
+        controller.onEditModeComboChanged(mode);
+    }
+
+    /** Switches the active model by index (called from the status bar combo). */
+    public void switchModel(int idx) {
+        controller.switchModel(idx);
     }
 
     // -------------------------------------------------------------------------
@@ -663,7 +598,7 @@ public final class ClaudePromptPanel extends JPanel
         }
 
         errorLabel.setVisible(false);
-        model.setConfirmedDirectory(dir);
+        model.setWorkingDirectory(dir);
         setControlsLocked(true);
         placeholderLabel.setVisible(false);
 
@@ -675,7 +610,7 @@ public final class ClaudePromptPanel extends JPanel
     // -------------------------------------------------------------------------
 
     private void startProcess() {
-        File dir = model.getConfirmedDirectory();
+        File dir = model.getWorkingDirectory();
         if (dir == null) return;
 
         sessionTag = "[" + dir.getName() + "] ";
@@ -690,16 +625,7 @@ public final class ClaudePromptPanel extends JPanel
             controller.startProcess(dir, profileName, widget);
         } catch (IOException ex) {
             showError("Failed to start claude: " + ex.getMessage());
-            return;
         }
-
-        // Version discovery: background thread reads version, view updates label
-        Thread vt = new Thread(() -> {
-            String ver = controller.readVersion();
-            SwingUtilities.invokeLater(() -> versionLabel.setText(ver));
-        }, "claude-version");
-        vt.setDaemon(true);
-        vt.start();
     }
 
     /**
@@ -715,7 +641,6 @@ public final class ClaudePromptPanel extends JPanel
 
         topBar.setVisible(false);
         inputPanel.setVisible(true);
-        statusBar.setVisible(true);
 
         splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southStack);
         splitPane.setResizeWeight(1.0);
@@ -776,8 +701,7 @@ public final class ClaudePromptPanel extends JPanel
         splitPane.setEnabled(false);
         int total = splitPane.getHeight();
         if (total <= 0) return;
-        int natural = choiceMenuPanel.getPreferredSize().height
-                    + statusBar.getPreferredSize().height;
+        int natural = choiceMenuPanel.getPreferredSize().height;
         splitPane.setDividerLocation(total - splitPane.getDividerSize() - natural);
     }
 
@@ -812,11 +736,11 @@ public final class ClaudePromptPanel extends JPanel
         area.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                // Shift+Tab → advance editModeCombo to next item (cycle)
+                // Shift+Tab → advance editModeCombo to next item (cycle) — handled by Tab
                 if (e.getKeyCode() == KeyEvent.VK_TAB && e.isShiftDown()) {
                     e.consume();
-                    int next = (editModeCombo.getSelectedIndex() + 1) % editModeCombo.getItemCount();
-                    editModeCombo.setSelectedIndex(next);
+                    // bubble up to parent (ClaudeSessionTab) — no direct reference needed;
+                    // Tab registers its own key binding on its editModeCombo.
                     return;
                 }
                 // Esc → Cancel
@@ -905,119 +829,8 @@ public final class ClaudePromptPanel extends JPanel
     }
 
     // -------------------------------------------------------------------------
-    // status bar
+    // controller delegation
     // -------------------------------------------------------------------------
-
-    private JPanel buildStatusBar() {
-        JPanel bar = new JPanel();
-        bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
-        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
-
-        editModeCombo = new JComboBox<>(EDIT_MODE_LABELS);
-        editModeCombo.setMaximumSize(new Dimension(130, 24));
-        editModeCombo.setToolTipText("Edit mode");
-        editModeCombo.addActionListener(e -> onEditModeComboChanged());
-
-        modelCombo = new JComboBox<>();
-        modelCombo.setMaximumSize(new Dimension(200, 24));
-        modelCombo.setToolTipText("Active model");
-        modelCombo.setEnabled(false);
-        modelCombo.addActionListener(e -> onModelComboChanged());
-
-        stateLabel  = new JLabel("Ready");
-        planLabel   = new JLabel("");
-        versionLabel = new JLabel("");
-
-        stateLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-        planLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-        versionLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
-
-        stateLabel.setToolTipText("Session state: Ready or Working");
-        planLabel.setToolTipText("Active plan file (if any)");
-        versionLabel.setToolTipText("Claude CLI version");
-
-        bar.add(Box.createRigidArea(new Dimension(4, 0)));
-        bar.add(editModeCombo);
-        bar.add(Box.createRigidArea(new Dimension(4, 0)));
-        bar.add(makeSep());
-        bar.add(Box.createRigidArea(new Dimension(4, 0)));
-        bar.add(modelCombo);
-        bar.add(Box.createHorizontalGlue());
-        bar.add(stateLabel);
-        bar.add(makeSep());
-        bar.add(planLabel);
-        bar.add(makeSep());
-        bar.add(versionLabel);
-        bar.add(Box.createRigidArea(new Dimension(4, 0)));
-
-        bar.setVisible(false);
-        return bar;
-    }
-
-    private static JPanel makeSep() {
-        JPanel sep = new JPanel();
-        sep.setLayout(new BoxLayout(sep, BoxLayout.X_AXIS));
-        sep.setOpaque(false);
-        JPanel dark = new JPanel();
-        dark.setOpaque(true);
-        dark.setBackground(UIManager.getColor("controlShadow"));
-        dark.setMaximumSize(new Dimension(1, 16));
-        dark.setPreferredSize(new Dimension(1, 16));
-        JPanel light = new JPanel();
-        light.setOpaque(true);
-        light.setBackground(UIManager.getColor("controlHighlight"));
-        light.setMaximumSize(new Dimension(1, 16));
-        light.setPreferredSize(new Dimension(1, 16));
-        sep.add(dark);
-        sep.add(light);
-        sep.setMaximumSize(new Dimension(2, 16));
-        sep.setPreferredSize(new Dimension(2, 16));
-        return sep;
-    }
-
-    private void onEditModeComboChanged() {
-        int idx = editModeCombo.getSelectedIndex();
-        if (idx < 0 || idx >= EDIT_MODE_VALUES.length) return;
-        controller.onEditModeComboChanged(EDIT_MODE_VALUES[idx]);
-    }
-
-    private void onModelComboChanged() {
-        if (model.getAvailableModels().isEmpty()) return;
-        int idx = modelCombo.getSelectedIndex();
-        if (idx < 0) return;
-        controller.switchModel(idx);
-    }
-
-    private int editModeIndexOf(String value) {
-        for (int i = 0; i < EDIT_MODE_VALUES.length; i++) {
-            if (EDIT_MODE_VALUES[i].equals(value)) return i;
-        }
-        return -1;
-    }
-
-    // -------------------------------------------------------------------------
-    // state display
-    // -------------------------------------------------------------------------
-
-    /**
-     * Updates Send/Cancel/Model enable state and state label.
-     * Must be called on the EDT (invoked from the model listener which
-     * dispatches on EDT).
-     */
-    private void applyState(SessionLifecycle s) {
-        stateLabel.setText(switch (s) {
-            case STARTING -> "Starting";
-            case READY    -> "Ready";
-            case WORKING  -> "Working";
-        });
-        boolean ready = s == SessionLifecycle.READY;
-        sendButton.setEnabled(ready);
-        cancelButton.setEnabled(s == SessionLifecycle.WORKING);
-        modelCombo.setEnabled(ready && !model.getAvailableModels().isEmpty());
-        if (s == SessionLifecycle.READY) {
-            inputArea.requestFocusInWindow();
-        }
-    }
 
     /** Called when Claude finishes its turn (Stop hook) — re-enables Send, disables Cancel. */
     public void onClaudeIdle() {

@@ -1,6 +1,6 @@
 package io.github.nbclaudecodegui.actions;
 
-import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
+import io.github.nbclaudecodegui.ui.ClaudeSessionTab;
 import java.awt.event.ActionEvent;
 import javax.swing.AbstractAction;
 import static javax.swing.Action.SMALL_ICON;
@@ -39,6 +39,6 @@ public final class ClaudeCodeAction extends AbstractAction {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        ClaudeSessionTopComponent.openNewOrFocus();
+        ClaudeSessionTab.openNewOrFocus();
     }
 }

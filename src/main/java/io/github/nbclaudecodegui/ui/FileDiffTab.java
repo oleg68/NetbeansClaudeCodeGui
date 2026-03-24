@@ -81,8 +81,8 @@ public final class FileDiffTab {
             } else {
                 boolean insideAny = false;
                 for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
-                    if (tc instanceof ClaudeSessionTopComponent stc) {
-                        java.io.File dir = stc.getConfirmedDirectory();
+                    if (tc instanceof ClaudeSessionTab stc) {
+                        java.io.File dir = stc.getWorkingDirectory();
                         if (dir != null && isFileUnderDirectory(filePath, dir.getAbsolutePath())) {
                             insideAny = true;
                             break;
@@ -186,8 +186,8 @@ public final class FileDiffTab {
     static void activateSessionForFile(String filePath) {
         java.io.File file = new java.io.File(filePath);
         for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
-            if (tc instanceof ClaudeSessionTopComponent stc) {
-                java.io.File dir = stc.getConfirmedDirectory();
+            if (tc instanceof ClaudeSessionTab stc) {
+                java.io.File dir = stc.getWorkingDirectory();
                 if (dir != null && file.getAbsolutePath().startsWith(dir.getAbsolutePath())) {
                     stc.requestActive();
                     return;
@@ -203,8 +203,8 @@ public final class FileDiffTab {
     public static void cancelCurrentPromptForFile(String filePath) {
         java.io.File file = new java.io.File(filePath);
         for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
-            if (tc instanceof ClaudeSessionTopComponent stc) {
-                java.io.File dir = stc.getConfirmedDirectory();
+            if (tc instanceof ClaudeSessionTab stc) {
+                java.io.File dir = stc.getWorkingDirectory();
                 if (dir != null && file.getAbsolutePath().startsWith(dir.getAbsolutePath())) {
                     stc.cancelCurrentPrompt();
                     return;

@@ -46,7 +46,7 @@ class ClaudeSessionModelTest {
 
     @Test
     void initialDirectoryIsNull() {
-        assertNull(model.getConfirmedDirectory());
+        assertNull(model.getWorkingDirectory());
     }
 
     // -------------------------------------------------------------------------
@@ -90,7 +90,7 @@ class ClaudeSessionModelTest {
     @Test
     void setEditModeWritesRegistryWhenDirectorySet() {
         File dir = new File("/tmp/test-dir");
-        model.setConfirmedDirectory(dir);
+        model.setWorkingDirectory(dir);
         model.setEditMode("plan");
 
         assertEquals("plan", ClaudeSessionModel.EDIT_MODE_REGISTRY.get(dir.getAbsolutePath()));
@@ -99,7 +99,7 @@ class ClaudeSessionModelTest {
     @Test
     void setEditModeWithNullDirectoryDoesNotCrash() {
         // directory is null → registry update skipped silently
-        assertNull(model.getConfirmedDirectory());
+        assertNull(model.getWorkingDirectory());
         assertDoesNotThrow(() -> model.setEditMode("acceptEdits"));
         assertEquals("acceptEdits", model.getEditMode());
     }
@@ -107,7 +107,7 @@ class ClaudeSessionModelTest {
     @Test
     void setEditModeNullRemovesRegistryEntry() {
         File dir = new File("/tmp/test-dir");
-        model.setConfirmedDirectory(dir);
+        model.setWorkingDirectory(dir);
         model.setEditMode("plan");
         assertNotNull(ClaudeSessionModel.EDIT_MODE_REGISTRY.get(dir.getAbsolutePath()));
 
@@ -116,22 +116,22 @@ class ClaudeSessionModelTest {
     }
 
     // -------------------------------------------------------------------------
-    // setConfirmedDirectory
+    // setWorkingDirectory
     // -------------------------------------------------------------------------
 
     @Test
-    void setConfirmedDirectoryFiresListener() {
+    void setWorkingDirectoryFiresListener() {
         AtomicReference<File> captured = new AtomicReference<>();
         model.addListener(new NoOpListener() {
-            @Override public void onDirectoryConfirmed(File dir) {
+            @Override public void onWorkingDirectoryChanged(File dir) {
                 captured.set(dir);
             }
         });
 
         File dir = new File("/tmp/my-project");
-        model.setConfirmedDirectory(dir);
+        model.setWorkingDirectory(dir);
 
-        assertEquals(dir, model.getConfirmedDirectory());
+        assertEquals(dir, model.getWorkingDirectory());
         assertEquals(dir, captured.get());
     }
 
@@ -253,7 +253,7 @@ class ClaudeSessionModelTest {
     @Test
     void clearEditModeRegistryCleansEntry() {
         File dir = new File("/tmp/test-project");
-        model.setConfirmedDirectory(dir);
+        model.setWorkingDirectory(dir);
         model.setEditMode("acceptEdits");
         assertNotNull(ClaudeSessionModel.EDIT_MODE_REGISTRY.get(dir.getAbsolutePath()));
 
@@ -263,7 +263,7 @@ class ClaudeSessionModelTest {
 
     @Test
     void clearEditModeRegistryWithNullDirectoryDoesNotCrash() {
-        assertNull(model.getConfirmedDirectory());
+        assertNull(model.getWorkingDirectory());
         assertDoesNotThrow(() -> model.clearEditModeRegistry());
     }
 
@@ -277,6 +277,6 @@ class ClaudeSessionModelTest {
         @Override public void onEditModeChanged(String mode) {}
         @Override public void onModelListChanged(List<String> models, int selectedIdx) {}
         @Override public void onChoiceMenuChanged(ChoiceMenuModel menu) {}
-        @Override public void onDirectoryConfirmed(File dir) {}
+        @Override public void onWorkingDirectoryChanged(File dir) {}
     }
 }

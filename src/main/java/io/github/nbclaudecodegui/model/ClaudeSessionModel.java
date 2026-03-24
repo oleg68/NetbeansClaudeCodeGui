@@ -48,6 +48,9 @@ public final class ClaudeSessionModel {
     /**
      * Receives notifications when session state changes.
      * All methods are called on the EDT.
+     *
+     * <p>All methods have default no-op implementations so that implementors
+     * only need to override the events they care about.
      */
     public interface ClaudeSessionModelListener {
 
@@ -56,7 +59,7 @@ public final class ClaudeSessionModel {
          *
          * @param state the new lifecycle state
          */
-        void onLifecycleChanged(SessionLifecycle state);
+        default void onLifecycleChanged(SessionLifecycle state) {}
 
         /**
          * Called when the edit mode changes (e.g. {@code "default"}, {@code "plan"},
@@ -64,7 +67,7 @@ public final class ClaudeSessionModel {
          *
          * @param mode the new mode string, or {@code null} if cleared
          */
-        void onEditModeChanged(String mode);
+        default void onEditModeChanged(String mode) {}
 
         /**
          * Called when the list of available models or the selected index changes.
@@ -72,27 +75,24 @@ public final class ClaudeSessionModel {
          * @param models      available model names; never {@code null}
          * @param selectedIdx index of the active model, or {@code -1} if unknown
          */
-        void onModelListChanged(List<String> models, int selectedIdx);
+        default void onModelListChanged(List<String> models, int selectedIdx) {}
 
         /**
          * Called when a choice-menu prompt appears or is dismissed.
          *
          * @param menu the active choice menu, or {@code null} when dismissed
          */
-        void onChoiceMenuChanged(ChoiceMenuModel menu);
+        default void onChoiceMenuChanged(ChoiceMenuModel menu) {}
 
         /**
-         * Called when the user confirms a working directory.
+         * Called when the working directory is confirmed or changed.
          *
-         * @param dir the confirmed directory
+         * @param dir the working directory
          */
-        void onDirectoryConfirmed(File dir);
+        default void onWorkingDirectoryChanged(File dir) {}
 
         /**
          * Called when a new plan-file name is detected on screen, or cleared.
-         *
-         * <p>Default implementation is a no-op; override when the view displays
-         * plan-file information.
          *
          * @param planName the detected plan name, or empty string if none
          */
@@ -107,7 +107,7 @@ public final class ClaudeSessionModel {
     private volatile SessionLifecycle lifecycle = SessionLifecycle.STARTING;
 
     /** The directory Claude is running in; {@code null} until user confirms. */
-    private volatile File confirmedDirectory;
+    private volatile File workingDirectory;
 
     /**
      * Current edit mode: {@code "default"}, {@code "plan"}, or {@code "acceptEdits"}.
@@ -169,8 +169,8 @@ public final class ClaudeSessionModel {
     /** @return current lifecycle state */
     public SessionLifecycle getLifecycle() { return lifecycle; }
 
-    /** @return confirmed working directory, or {@code null} */
-    public File getConfirmedDirectory() { return confirmedDirectory; }
+    /** @return working directory, or {@code null} if not yet set */
+    public File getWorkingDirectory() { return workingDirectory; }
 
     /** @return current edit mode string, or {@code null} if not yet set */
     public String getEditMode() { return editMode; }
@@ -213,7 +213,7 @@ public final class ClaudeSessionModel {
      * Updates the edit mode, writes to {@link #EDIT_MODE_REGISTRY}, and fires
      * {@link ClaudeSessionModelListener#onEditModeChanged}.
      *
-     * <p>If {@link #confirmedDirectory} is {@code null} the registry update is
+     * <p>If {@link #workingDirectory} is {@code null} the registry update is
      * silently skipped (null-safe).
      *
      * <p>Safe to call from any thread.
@@ -222,27 +222,27 @@ public final class ClaudeSessionModel {
      */
     public void setEditMode(String mode) {
         editMode = mode;
-        if (confirmedDirectory != null) {
+        if (workingDirectory != null) {
             if (mode != null) {
-                EDIT_MODE_REGISTRY.put(confirmedDirectory.getAbsolutePath(), mode);
+                EDIT_MODE_REGISTRY.put(workingDirectory.getAbsolutePath(), mode);
             } else {
-                EDIT_MODE_REGISTRY.remove(confirmedDirectory.getAbsolutePath());
+                EDIT_MODE_REGISTRY.remove(workingDirectory.getAbsolutePath());
             }
         }
         fireOnEdt(() -> listeners.forEach(l -> l.onEditModeChanged(mode)));
     }
 
     /**
-     * Sets the confirmed working directory and fires
-     * {@link ClaudeSessionModelListener#onDirectoryConfirmed}.
+     * Sets the working directory and fires
+     * {@link ClaudeSessionModelListener#onWorkingDirectoryChanged}.
      *
      * <p>Safe to call from any thread.
      *
-     * @param dir the confirmed directory
+     * @param dir the working directory
      */
-    public void setConfirmedDirectory(File dir) {
-        confirmedDirectory = dir;
-        fireOnEdt(() -> listeners.forEach(l -> l.onDirectoryConfirmed(dir)));
+    public void setWorkingDirectory(File dir) {
+        workingDirectory = dir;
+        fireOnEdt(() -> listeners.forEach(l -> l.onWorkingDirectoryChanged(dir)));
     }
 
     /**
@@ -332,14 +332,14 @@ public final class ClaudeSessionModel {
     // -------------------------------------------------------------------------
 
     /**
-     * Removes the entry for {@link #confirmedDirectory} from {@link #EDIT_MODE_REGISTRY}.
-     * No-op if {@link #confirmedDirectory} is {@code null}.
+     * Removes the entry for {@link #workingDirectory} from {@link #EDIT_MODE_REGISTRY}.
+     * No-op if {@link #workingDirectory} is {@code null}.
      *
      * <p>Call this when a session stops so stale entries do not linger.
      */
     public void clearEditModeRegistry() {
-        if (confirmedDirectory != null) {
-            EDIT_MODE_REGISTRY.remove(confirmedDirectory.getAbsolutePath());
+        if (workingDirectory != null) {
+            EDIT_MODE_REGISTRY.remove(workingDirectory.getAbsolutePath());
         }
     }
 

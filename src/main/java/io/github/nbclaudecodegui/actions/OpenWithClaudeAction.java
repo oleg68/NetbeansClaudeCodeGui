@@ -1,7 +1,7 @@
 package io.github.nbclaudecodegui.actions;
 
 import io.github.nbclaudecodegui.settings.ClaudeProjectProperties;
-import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
+import io.github.nbclaudecodegui.ui.ClaudeSessionTab;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import javax.swing.AbstractAction;
@@ -23,7 +23,7 @@ import org.openide.util.actions.Presenter;
  * Context-menu action that opens a Claude Code session for the selected project.
  *
  * <p>If a session for the project directory is already open, it is focused.
- * Otherwise a new {@link ClaudeSessionTopComponent} is created.
+ * Otherwise a new {@link ClaudeSessionTab} is created.
  */
 @ActionID(
     category = "Project",
@@ -52,7 +52,7 @@ public final class OpenWithClaudeAction extends AbstractAction
 
     @Override
     public void actionPerformed(ActionEvent e) {
-        ClaudeSessionTopComponent.openNewOrFocus();
+        ClaudeSessionTab.openNewOrFocus();
     }
 
     @Override
@@ -90,7 +90,7 @@ public final class OpenWithClaudeAction extends AbstractAction
         public void actionPerformed(ActionEvent e) {
             if (directory != null) {
                 String profileName = ClaudeProjectProperties.getProfileName(directory);
-                ClaudeSessionTopComponent.openForDirectory(directory,
+                ClaudeSessionTab.openForDirectory(directory,
                         profileName.isBlank() ? null : profileName);
             }
         }

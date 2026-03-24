@@ -8,19 +8,19 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link ClaudeSessionTopComponent}.
+ * Unit tests for {@link ClaudeSessionTab}.
  */
 class ClaudeCodeTopComponentTest {
 
     @Test
     void testPersistenceType() {
-        ClaudeSessionTopComponent tc = new ClaudeSessionTopComponent();
+        ClaudeSessionTab tc = new ClaudeSessionTab();
         assertEquals(TopComponent.PERSISTENCE_ALWAYS, tc.getPersistenceType());
     }
 
     @Test
     void testDisplayNameDefaultIsNewSession() {
-        ClaudeSessionTopComponent tc = new ClaudeSessionTopComponent();
+        ClaudeSessionTab tc = new ClaudeSessionTab();
         // display name should contain "New Session" for an empty session
         assertNotNull(tc.getDisplayName());
     }
@@ -46,7 +46,7 @@ class ClaudeCodeTopComponentTest {
 
     @Test
     void testCanCloseWithNoActiveSession() {
-        ClaudeSessionTopComponent tc = new ClaudeSessionTopComponent();
+        ClaudeSessionTab tc = new ClaudeSessionTab();
         // No process running — canClose() must return true without prompting
         assertTrue(tc.canClose(),
                 "canClose() must be true when no process is running");

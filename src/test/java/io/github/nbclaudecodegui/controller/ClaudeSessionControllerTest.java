@@ -64,14 +64,14 @@ class ClaudeSessionControllerTest {
     @Test
     void onEditModeComboChangedUpdatesModel() {
         // Set up directory so registry write works
-        model.setConfirmedDirectory(new java.io.File("/tmp/test"));
+        model.setWorkingDirectory(new java.io.File("/tmp/test"));
         controller.onEditModeComboChanged("acceptEdits");
         assertEquals("acceptEdits", model.getEditMode());
     }
 
     @Test
     void onEditModeComboChangedNoOpWhenSameMode() {
-        model.setConfirmedDirectory(new java.io.File("/tmp/test"));
+        model.setWorkingDirectory(new java.io.File("/tmp/test"));
         model.setEditMode("default");
 
         AtomicReference<String> captured = new AtomicReference<>(null);
@@ -148,6 +148,6 @@ class ClaudeSessionControllerTest {
         @Override public void onEditModeChanged(String mode) {}
         @Override public void onModelListChanged(List<String> models, int selectedIdx) {}
         @Override public void onChoiceMenuChanged(io.github.nbclaudecodegui.model.ChoiceMenuModel menu) {}
-        @Override public void onDirectoryConfirmed(java.io.File dir) {}
+        @Override public void onWorkingDirectoryChanged(java.io.File dir) {}
     }
 }

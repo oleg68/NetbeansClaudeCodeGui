@@ -45,7 +45,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import javax.swing.SwingUtilities;
 import org.openide.windows.WindowManager;
-import io.github.nbclaudecodegui.ui.ClaudeSessionTopComponent;
+import io.github.nbclaudecodegui.ui.ClaudeSessionTab;
 import io.github.nbclaudecodegui.ui.FileDiffTab;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.openide.util.Lookup;
@@ -623,7 +623,7 @@ public class NetBeansMCPHandler {
         if (cwd == null) return;
         LOGGER.fine("handleStop cwd=" + cwd);
         SwingUtilities.invokeLater(() ->
-            findSessionByCwd(cwd).ifPresent(ClaudeSessionTopComponent::onClaudeIdle));
+            findSessionByCwd(cwd).ifPresent(ClaudeSessionTab::onClaudeIdle));
     }
 
     // -------------------------------------------------------------------------
@@ -639,7 +639,7 @@ public class NetBeansMCPHandler {
         if (cwd == null) return;
         LOGGER.fine("handlePermissionRequest cwd=" + cwd);
         SwingUtilities.invokeLater(() ->
-            findSessionByCwd(cwd).ifPresent(ClaudeSessionTopComponent::triggerPromptScan));
+            findSessionByCwd(cwd).ifPresent(ClaudeSessionTab::triggerPromptScan));
     }
 
     private static String extractCwdFromPayload(String payload) {
@@ -656,10 +656,10 @@ public class NetBeansMCPHandler {
         return payload.substring(q1 + 1, q2);
     }
 
-    private static java.util.Optional<ClaudeSessionTopComponent> findSessionByCwd(String cwd) {
+    private static java.util.Optional<ClaudeSessionTab> findSessionByCwd(String cwd) {
         for (TopComponent tc : WindowManager.getDefault().getRegistry().getOpened()) {
-            if (tc instanceof ClaudeSessionTopComponent stc) {
-                File dir = stc.getConfirmedDirectory();
+            if (tc instanceof ClaudeSessionTab stc) {
+                File dir = stc.getWorkingDirectory();
                 if (dir != null && dir.getAbsolutePath().equals(cwd)) {
                     return java.util.Optional.of(stc);
                 }
