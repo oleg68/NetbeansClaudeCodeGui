@@ -219,6 +219,7 @@ public class ClaudeSessionTab extends TopComponent
         promptPanel     = new ClaudePromptPanel(
                 this::sendPrompt,
                 this::cancelPrompt,
+                controller::sendShiftTab,
                 model::getPromptHistory);
 
         // --- layout ---

@@ -5,11 +5,13 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -19,6 +21,7 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 
 /**
  * Pure-UI input panel for a Claude Code session.
@@ -47,6 +50,7 @@ public final class ClaudePromptPanel extends JPanel {
 
     private final Consumer<String>      onSend;
     private final Runnable              onCancel;
+    private final Runnable              onShiftTab;
     private final Supplier<List<String>> promptHistorySupplier;
 
     /** Current position in the history list; {@code -1} = newest (empty field). */
@@ -62,15 +66,19 @@ public final class ClaudePromptPanel extends JPanel {
      * @param onSend                 called with the text when the user sends a prompt;
      *                               the text has already been cleared from the field
      * @param onCancel               called when the user presses Cancel or Esc
+     * @param onShiftTab             called when Shift+Tab is pressed on any control in
+     *                               the panel; used to cycle the Claude Code edit mode
      * @param promptHistorySupplier  returns the current in-session prompt history
      *                               (index 0 = most recent); queried on demand
      */
     public ClaudePromptPanel(Consumer<String> onSend,
                              Runnable onCancel,
+                             Runnable onShiftTab,
                              Supplier<List<String>> promptHistorySupplier) {
         super(new BorderLayout());
         this.onSend                = onSend;
         this.onCancel              = onCancel;
+        this.onShiftTab            = onShiftTab;
         this.promptHistorySupplier = promptHistorySupplier;
 
         inputArea = new JTextArea(3, 40);
@@ -99,6 +107,17 @@ public final class ClaudePromptPanel extends JPanel {
         setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
         add(new JScrollPane(inputArea), BorderLayout.CENTER);
         add(buttonCol, BorderLayout.EAST);
+
+        // Shift+Tab on buttons (and any other non-textarea child) → cycle edit mode.
+        // The inputArea handles its own Shift+Tab in bindKeys because
+        // setFocusTraversalKeysEnabled(false) prevents the InputMap from firing.
+        KeyStroke shiftTab = KeyStroke.getKeyStroke(KeyEvent.VK_TAB, InputEvent.SHIFT_DOWN_MASK);
+        getInputMap(WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(shiftTab, "shiftTab");
+        getActionMap().put("shiftTab", new AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                onShiftTab.run();
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -141,6 +160,12 @@ public final class ClaudePromptPanel extends JPanel {
         area.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
+                // Shift+Tab → cycle edit mode
+                if (e.getKeyCode() == KeyEvent.VK_TAB && e.isShiftDown()) {
+                    e.consume();
+                    onShiftTab.run();
+                    return;
+                }
                 // Esc → Cancel
                 if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
                     e.consume();

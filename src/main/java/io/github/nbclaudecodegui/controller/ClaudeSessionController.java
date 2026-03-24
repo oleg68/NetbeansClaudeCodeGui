@@ -348,6 +348,32 @@ public final class ClaudeSessionController {
     // -------------------------------------------------------------------------
 
     /**
+     * Sends a single Shift+Tab (ESC[Z) to the PTY and updates the model's edit mode
+     * from the screen 300 ms later.
+     *
+     * <p>Called when Shift+Tab is pressed anywhere in {@link io.github.nbclaudecodegui.ui.ClaudePromptPanel}.
+     * No-op if no connector is active.
+     */
+    public void sendShiftTab() {
+        if (connector == null) return;
+        modeSwitchInProgress = true;
+        Thread t = new Thread(() -> {
+            try {
+                connector.write(new byte[]{0x1b, '[', 'Z'});
+                Thread.sleep(300);
+                screenContentDetector.detectEditMode(screenLines.get())
+                        .ifPresent(model::setEditMode);
+            } catch (IOException | InterruptedException ex) {
+                LOG.warning("sendShiftTab failed: " + ex.getMessage());
+            } finally {
+                modeSwitchInProgress = false;
+            }
+        }, "shift-tab");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
      * Called when the user selects a different edit mode from the combo box.
      *
      * <p>If the selected mode differs from the current model state, updates the
@@ -541,9 +567,8 @@ public final class ClaudeSessionController {
             detectAndApplyInitialEditMode(lines);
         }
 
-        // Continuously sync CC screen mode → model (skip during switches)
-        if (model.getLifecycle() == SessionLifecycle.READY
-                && modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
+        // Continuously sync CC screen mode → model (skip during switches and discovery)
+        if (modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
             screenContentDetector.detectEditMode(lines).ifPresent(detected -> {
                 if (!detected.equals(model.getEditMode())) {
                     model.setEditMode(detected);
