@@ -3,11 +3,10 @@ package io.github.nbclaudecodegui.ui;
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
-import com.pty4j.PtyProcess;
-import io.github.nbclaudecodegui.process.ClaudeProcess;
-import io.github.nbclaudecodegui.process.PtyTtyConnector;
-import io.github.nbclaudecodegui.process.ScreenContentDetector;
-import io.github.nbclaudecodegui.process.TtyPromptDetector;
+import io.github.nbclaudecodegui.controller.ClaudeSessionController;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
+import io.github.nbclaudecodegui.model.ClaudeSessionModel;
+import io.github.nbclaudecodegui.model.SessionLifecycle;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import io.github.nbclaudecodegui.settings.ClaudeProfile;
 import io.github.nbclaudecodegui.settings.ClaudeProfileStore;
@@ -56,19 +55,24 @@ import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 
 /**
- * Panel representing a single Claude Code session tab.
+ * View for a single Claude Code session tab.
+ *
+ * <p>Passive View in the MVC structure: all state is owned by
+ * {@link ClaudeSessionModel}; all business logic runs in
+ * {@link ClaudeSessionController}. This class only:
+ * <ul>
+ *   <li>Builds and lays out Swing components.</li>
+ *   <li>Translates user gestures into controller calls.</li>
+ *   <li>Implements {@link ClaudeSessionModel.ClaudeSessionModelListener} to
+ *       keep the UI in sync with the model.</li>
+ * </ul>
  *
  * <p>Top bar: project combo, path combo, Browse, Open, Settings.
  * After Open: an embedded JediTerm terminal runs the Claude TUI,
  * separated from the input area by a draggable JSplitPane divider.
  */
-public final class ClaudePromptPanel extends JPanel {
-
-    /**
-     * Result of {@link #parseModelDiscovery}: all model names + index of the active model
-     * ({@code -1} if no active model was detected).
-     */
-    record ModelDiscovery(List<String> models, int currentIndex) {}
+public final class ClaudePromptPanel extends JPanel
+        implements ClaudeSessionModel.ClaudeSessionModelListener {
 
     private static final Logger LOG = Logger.getLogger(ClaudePromptPanel.class.getName());
 
@@ -105,8 +109,8 @@ public final class ClaudePromptPanel extends JPanel {
     // Icons
     // -------------------------------------------------------------------------
 
-    private static final String ICON_SEND   = "\u25b6";  // ▶ BLACK RIGHT-POINTING TRIANGLE
-    private static final String ICON_CANCEL = "\u2716";  // ✖ HEAVY MULTIPLICATION X
+    private static final String ICON_SEND   = "\u25b6";  // ▶
+    private static final String ICON_CANCEL = "\u2716";  // ✖
 
     // -------------------------------------------------------------------------
     // Edit mode constants
@@ -115,11 +119,16 @@ public final class ClaudePromptPanel extends JPanel {
     private static final String[] EDIT_MODE_LABELS   = {"Plan Mode", "Ask on Edit", "Accept on Edit"};
     private static final String[] EDIT_MODE_VALUES   = {"plan",      "default",     "acceptEdits"};
 
-    /** ESC byte sent to the PTY (dismiss autocomplete, close menus). */
-    private static final byte[] PTY_ESC = {0x1b};
+    // -------------------------------------------------------------------------
+    // MVC wiring
+    // -------------------------------------------------------------------------
+
+    private final ClaudeSessionModel model = new ClaudeSessionModel();
+    private final ClaudeSessionController controller =
+            new ClaudeSessionController(model, this::getScreenLines);
 
     // -------------------------------------------------------------------------
-    // fields
+    // UI components — top bar
     // -------------------------------------------------------------------------
 
     private final JComboBox<ProjectItem> projectCombo;
@@ -130,6 +139,10 @@ public final class ClaudePromptPanel extends JPanel {
     private final JLabel                 errorLabel;
     private final JLabel                 placeholderLabel;
 
+    // -------------------------------------------------------------------------
+    // UI components — chat area
+    // -------------------------------------------------------------------------
+
     private JediTermWidget      terminalWidget;
     private JSplitPane          splitPane;
     private JPanel              topBar;
@@ -138,77 +151,30 @@ public final class ClaudePromptPanel extends JPanel {
     private JTextArea           inputArea;
     private JButton             sendButton;
     private JButton             cancelButton;
-    private PtyTtyConnector     connector;
-    private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
-    private final ScreenContentDetector screenContentDetector = new ScreenContentDetector();
-    private ChoiceMenuPanel choiceMenuPanel;
+    private ChoiceMenuPanel     choiceMenuPanel;
+
+    // -------------------------------------------------------------------------
+    // UI components — status bar
+    // -------------------------------------------------------------------------
+
+    private JPanel              statusBar;
+    private JComboBox<String>   editModeCombo;
+    private JComboBox<String>   modelCombo;
+    private JLabel              stateLabel;
+    private JLabel              planLabel;
+    private JLabel              versionLabel;
+
+    // -------------------------------------------------------------------------
+    // View-local state
+    // -------------------------------------------------------------------------
+
+    /** Logging/debugging tag, e.g. {@code "[my-project] "}. */
     private String sessionTag = "";
-    /** Fires flushPendingPrompt() when PTY output goes silent while menu options are being collected. */
-    private final javax.swing.Timer promptFlushTimer = new javax.swing.Timer(400, e -> flushPendingPrompt());
 
-    // Status bar components
-    private JPanel      statusBar;
-    private JComboBox<String> editModeCombo;
-    private JComboBox<String> modelCombo;
-    private JLabel      stateLabel;
-    private JLabel      planLabel;
-    private JLabel      versionLabel;
-    private javax.swing.Timer statusTimer;
-    private boolean     modelComboPopulated = false;
-    private volatile boolean modelDiscoveryInProgress = false;
-    private int modelDiscoveryAttempts = 0;
-    private static final int MAX_MODEL_DISCOVERY_ATTEMPTS = 3;
-    private boolean     statusBarVisible    = false;
-
-    /**
-     * Lifecycle state of the Claude session.
-     *
-     * <ul>
-     *   <li>{@link #STARTING} — process launched, waiting for the first {@code ❯} prompt.
-     *       Send is disabled; the screen content detector drives the STARTING → READY transition.</li>
-     *   <li>{@link #READY} — Claude is idle and waiting for user input.
-     *       Send is enabled; modelCombo is enabled when populated.</li>
-     *   <li>{@link #WORKING} — Claude is executing (prompt sent, model discovery, or
-     *       edit-mode switch in progress). Send is disabled; Cancel is enabled.</li>
-     * </ul>
-     *
-     * <p>Transitions:
-     * <pre>
-     *   showChatUI()                    → STARTING
-     *   detectInputPromptReady() = true → READY   (one-shot, from STARTING only)
-     *   sendPrompt()                    → WORKING
-     *   discoverModels() start          → WORKING
-     *   sendShiftTabsUntilMode() start  → WORKING
-     *   onClaudeIdle()                  → READY
-     * </pre>
-     *
-     * <p>All transitions go through {@link #applyState(SessionLifecycle)}, which
-     * updates the UI atomically on the EDT.
-     */
-    enum SessionLifecycle { STARTING, READY, WORKING }
-    private volatile SessionLifecycle lifecycle = SessionLifecycle.STARTING;
-
-    // Prompt history (in-session)
-    private final List<String> promptHistory = new ArrayList<>();
+    /** Current position in prompt history for keyboard navigation; {@code -1} = newest. */
     private int historyIndex = -1;
-    private static final int PROMPT_HISTORY_MAX = 100;
-
-    // Edit mode (current session state)
-    private volatile String editMode = "default";
-
-    /** Timestamp (ms) when the last ChoiceMenu answer was sent; used to suppress re-detection. */
-    private volatile long choiceMenuAnsweredAt = 0L;
-
-    /**
-     * Thread-safe registry of editMode per working directory path.
-     * Updated whenever editMode changes; read by NetBeansMCPHandler on servlet threads.
-     */
-    public static final java.util.concurrent.ConcurrentHashMap<String, String> EDIT_MODE_REGISTRY =
-            new java.util.concurrent.ConcurrentHashMap<>();
 
     private boolean suppressProjectListener;
-    private File    confirmedDirectory;
-    private ClaudeProcess claudeProcess;
 
     /** Listener notified when the confirmed working directory changes. */
     public interface DirectoryListener {
@@ -223,7 +189,7 @@ public final class ClaudePromptPanel extends JPanel {
     private DirectoryListener directoryListener;
 
     // -------------------------------------------------------------------------
-    // constructors
+    // Constructors
     // -------------------------------------------------------------------------
 
     /** Creates a session panel with no pre-set directory (selector active). */
@@ -240,7 +206,10 @@ public final class ClaudePromptPanel extends JPanel {
      */
     public ClaudePromptPanel(File directory, boolean locked) {
         super(new BorderLayout());
-        this.confirmedDirectory = directory;
+
+        if (directory != null) {
+            model.setConfirmedDirectory(directory);
+        }
 
         // --- project combo ---
         projectCombo = new JComboBox<>();
@@ -300,7 +269,7 @@ public final class ClaudePromptPanel extends JPanel {
         // --- placeholder ---
         placeholderLabel = new JLabel(
                 NbBundle.getMessage(ClaudePromptPanel.class, "LBL_SelectDir"),
-                javax.swing.SwingConstants.CENTER);
+                SwingConstants.CENTER);
         placeholderLabel.setForeground(Color.GRAY);
         add(placeholderLabel, BorderLayout.CENTER);
 
@@ -344,13 +313,108 @@ public final class ClaudePromptPanel extends JPanel {
         southStack.add(inputPanel, BorderLayout.CENTER);
         southStack.add(statusBar, BorderLayout.SOUTH);
 
-        // southStack added in showChatUI (via splitPane); for initial state add as SOUTH
         add(southStack, BorderLayout.SOUTH);
+
+        // Register model listener
+        model.addListener(this);
 
         if (locked) {
             setControlsLocked(true);
             startProcess();
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // ClaudeSessionModelListener implementation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Updates the Send/Cancel/Model enable state and state label.
+     * Also requests focus on the input when transitioning to READY.
+     */
+    @Override
+    public void onLifecycleChanged(SessionLifecycle s) {
+        applyState(s);
+    }
+
+    /**
+     * Syncs the edit-mode combo without re-triggering the action listener.
+     */
+    @Override
+    public void onEditModeChanged(String mode) {
+        if (mode == null) return;
+        int idx = editModeIndexOf(mode);
+        if (idx >= 0 && editModeCombo.getSelectedIndex() != idx) {
+            editModeCombo.removeActionListener(editModeCombo.getActionListeners()[0]);
+            editModeCombo.setSelectedIndex(idx);
+            editModeCombo.addActionListener(ae -> onEditModeComboChanged());
+        }
+    }
+
+    /**
+     * Repopulates the model combo and enables it if non-empty.
+     */
+    @Override
+    public void onModelListChanged(List<String> models, int selectedIdx) {
+        DefaultComboBoxModel<String> cbModel = new DefaultComboBoxModel<>();
+        for (String m : models) cbModel.addElement(m);
+        modelCombo.removeActionListener(modelCombo.getActionListeners().length > 0
+                ? modelCombo.getActionListeners()[0] : null);
+        modelCombo.setModel(cbModel);
+        if (selectedIdx >= 0 && selectedIdx < models.size()) {
+            modelCombo.setSelectedIndex(selectedIdx);
+        }
+        modelCombo.addActionListener(ae -> onModelComboChanged());
+        boolean ready = model.getLifecycle() == SessionLifecycle.READY;
+        modelCombo.setEnabled(ready && !models.isEmpty());
+    }
+
+    /**
+     * Shows or hides the choice-menu panel based on the new model state.
+     */
+    @Override
+    public void onChoiceMenuChanged(ChoiceMenuModel menu) {
+        if (menu != null) {
+            if (ClaudeCodePreferences.isDebugMode()) {
+                LOG.info(sessionTag + "[screen prompt flush] text=\"" + menu.text()
+                        + "\" | options=" + menu.options());
+            }
+            inputPanel.setVisible(false);
+            choiceMenuPanel.show(menu, answer -> {
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info(sessionTag + "[PTY prompt answer] " + answer);
+                }
+                inputPanel.setVisible(true);
+                revalidate();
+                repaint();
+                controller.writePtyAnswer(answer);
+            });
+            revalidate();
+            repaint();
+        } else {
+            if (choiceMenuPanel.isVisible()) {
+                choiceMenuPanel.dismiss();
+                inputPanel.setVisible(true);
+                revalidate();
+                repaint();
+            }
+        }
+    }
+
+    /**
+     * Notifies the external directory listener (e.g. for tab label update).
+     */
+    @Override
+    public void onDirectoryConfirmed(File dir) {
+        if (directoryListener != null) {
+            directoryListener.directorySelected(dir);
+        }
+    }
+
+    /** Updates the plan-file label in the status bar. */
+    @Override
+    public void onPlanNameChanged(String planName) {
+        planLabel.setText(planName != null ? planName : "");
     }
 
     // -------------------------------------------------------------------------
@@ -364,7 +428,7 @@ public final class ClaudePromptPanel extends JPanel {
 
     /** Returns the confirmed working directory, or {@code null} if none. */
     public File getConfirmedDirectory() {
-        return confirmedDirectory;
+        return model.getConfirmedDirectory();
     }
 
     /** Returns {@code true} if the directory controls are locked. */
@@ -376,21 +440,21 @@ public final class ClaudePromptPanel extends JPanel {
      * Returns {@code true} if this panel has no running process.
      */
     public boolean canClose() {
-        return claudeProcess == null || !claudeProcess.isRunning();
+        return !controller.hasLiveProcess();
     }
 
     /**
      * Returns {@code true} if a PTY process is currently running.
      */
     public boolean hasLiveProcess() {
-        return claudeProcess != null && claudeProcess.isRunning();
+        return controller.hasLiveProcess();
     }
 
     /**
      * Returns the current edit mode: {@code "default"}, {@code "acceptEdits"}, or {@code "plan"}.
      */
     public String getEditMode() {
-        return editMode;
+        return model.getEditMode();
     }
 
     /**
@@ -411,7 +475,7 @@ public final class ClaudePromptPanel extends JPanel {
      */
     public void autoStart(File dir, String profileName) {
         if (dir == null || !dir.isDirectory()) return;
-        confirmedDirectory = dir;
+        model.setConfirmedDirectory(dir);
         pathCombo.setSelectedItem(dir.getAbsolutePath());
         if (profileName != null && !profileName.isBlank()) {
             profileCombo.setSelectedItem(profileName);
@@ -420,9 +484,6 @@ public final class ClaudePromptPanel extends JPanel {
         }
         setControlsLocked(true);
         placeholderLabel.setVisible(false);
-        if (directoryListener != null) {
-            directoryListener.directorySelected(dir);
-        }
         startProcess();
     }
 
@@ -487,21 +548,11 @@ public final class ClaudePromptPanel extends JPanel {
      * Stops the process unconditionally (called when the whole window closes).
      */
     public void stopProcess() {
-        if (statusTimer != null) {
-            statusTimer.stop();
-            statusTimer = null;
-        }
-        if (connector != null) {
-            connector.setLineListener(null);
-        }
+        controller.stopProcess();
         if (terminalWidget != null) {
             terminalWidget.close();
             terminalWidget = null;
         }
-        if (claudeProcess != null) {
-            claudeProcess.stop();
-        }
-        connector = null;
         choiceMenuPanel.dismiss();
         inputPanel.setVisible(false);
         topBar.setVisible(true);
@@ -511,11 +562,6 @@ public final class ClaudePromptPanel extends JPanel {
             add(southStack, BorderLayout.SOUTH);
         }
         statusBar.setVisible(false);
-        modelComboPopulated = false;
-        lifecycle = SessionLifecycle.STARTING;
-        if (confirmedDirectory != null) {
-            EDIT_MODE_REGISTRY.remove(confirmedDirectory.getAbsolutePath());
-        }
         revalidate();
         repaint();
     }
@@ -537,7 +583,6 @@ public final class ClaudePromptPanel extends JPanel {
                     + "' dir=" + (projDir != null ? projDir.getAbsolutePath() : "null")
                     + " equal=" + dir.equals(projDir));
         }
-        // Try canonical path comparison as fallback
         for (Project p : openProjects) {
             File projDir = FileUtil.toFile(p.getProjectDirectory());
             if (projDir == null) continue;
@@ -569,24 +614,22 @@ public final class ClaudePromptPanel extends JPanel {
             File dir = FileUtil.toFile(item.project().getProjectDirectory());
             if (dir != null) {
                 pathCombo.setSelectedItem(dir.getAbsolutePath());
-                // Auto-select the profile assigned to this project
                 String assignedProfile = ClaudeProjectProperties.getProfileName(dir);
                 if (!assignedProfile.isBlank()) {
                     profileCombo.setSelectedItem(assignedProfile);
                 } else {
-                    profileCombo.setSelectedIndex(0); // Default
+                    profileCombo.setSelectedIndex(0);
                 }
             }
         }
     }
 
-    /** Populates {@link #profileCombo} from {@link ClaudeProfileStore}. */
     private void populateProfileCombo() {
-        DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
+        DefaultComboBoxModel<String> cbModel = new DefaultComboBoxModel<>();
         for (ClaudeProfile p : ClaudeProfileStore.getProfiles()) {
-            model.addElement(p.getName());
+            cbModel.addElement(p.getName());
         }
-        profileCombo.setModel(model);
+        profileCombo.setModel(cbModel);
     }
 
     private void onBrowse() {
@@ -620,13 +663,9 @@ public final class ClaudePromptPanel extends JPanel {
         }
 
         errorLabel.setVisible(false);
-        confirmedDirectory = dir;
+        model.setConfirmedDirectory(dir);
         setControlsLocked(true);
         placeholderLabel.setVisible(false);
-
-        if (directoryListener != null) {
-            directoryListener.directorySelected(dir);
-        }
 
         startProcess();
     }
@@ -636,98 +675,54 @@ public final class ClaudePromptPanel extends JPanel {
     // -------------------------------------------------------------------------
 
     private void startProcess() {
-        if (confirmedDirectory == null) return;
+        File dir = model.getConfirmedDirectory();
+        if (dir == null) return;
 
-        claudeProcess = new ClaudeProcess();
+        sessionTag = "[" + dir.getName() + "] ";
 
-        // Resolve profile from combo selection
+        // Build terminal widget and layout on EDT
+        JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
+        showChatLayout(widget);
+
+        // Delegate PTY start to controller
         String profileName = (String) profileCombo.getSelectedItem();
-        ClaudeProfile profile = ClaudeProfileStore.findByName(profileName);
-
         try {
-            PtyProcess process = claudeProcess.start(confirmedDirectory.getAbsolutePath(), profile);
-            showChatUI(process);
-
-            Thread waiter = new Thread(() -> {
-                try {
-                    process.waitFor();
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
-                }
-                SwingUtilities.invokeLater(() -> {
-                    if (terminalWidget != null) {
-                        // Process ended; terminal keeps showing last output
-                    }
-                });
-            }, "claude-waiter");
-            waiter.setDaemon(true);
-            waiter.start();
+            controller.startProcess(dir, profileName, widget);
         } catch (IOException ex) {
             showError("Failed to start claude: " + ex.getMessage());
+            return;
         }
+
+        // Version discovery: background thread reads version, view updates label
+        Thread vt = new Thread(() -> {
+            String ver = controller.readVersion();
+            SwingUtilities.invokeLater(() -> versionLabel.setText(ver));
+        }, "claude-version");
+        vt.setDaemon(true);
+        vt.start();
     }
 
-    private void showChatUI(PtyProcess process) {
-        // Remove the pre-session layout pieces
+    /**
+     * Sets up the split-pane layout for the chat session and installs the
+     * terminal widget. Called from {@link #startProcess()} before
+     * {@link ClaudeSessionController#startProcess} is invoked.
+     */
+    private void showChatLayout(JediTermWidget widget) {
         remove(placeholderLabel);
-        remove(southStack);  // was added as SOUTH in constructor
+        remove(southStack);
 
-        modelDiscoveryAttempts = 0;
-        String tag = "[" + confirmedDirectory.getName() + "] ";
-        this.sessionTag = tag;
-        connector = new PtyTtyConnector(process);
-        connector.setSessionTag(tag);
-        screenContentDetector.setSessionTag(tag);
-        connector.setLineListener(line -> {
-            if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info(sessionTag + "[PTY line] " + line);
-            }
-            if (choiceMenuPanel.isVisible()) {
-                return;
-            }
-            SwingUtilities.invokeLater(() -> {
-                promptFlushTimer.restart();
-            });
-
-            ttyPromptDetector.feed(line).ifPresent(req -> {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[PTY prompt detected] text=\"" + req.text() + "\" | options=" + req.options());
-                }
-                SwingUtilities.invokeLater(() -> {
-                    inputPanel.setVisible(false);
-                    choiceMenuPanel.show(req, answer -> {
-                        if (ClaudeCodePreferences.isDebugMode()) {
-                            LOG.info(sessionTag + "[PTY prompt answer] " + answer);
-                        }
-                        inputPanel.setVisible(true);
-                        revalidate();
-                        repaint();
-                        writePtyAnswer(answer);
-                    });
-                    revalidate();
-                    repaint();
-                });
-            });
-        });
-
-        JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
-        widget.setTtyConnector(connector);
-        widget.start();
         this.terminalWidget = widget;
 
         topBar.setVisible(false);
         inputPanel.setVisible(true);
         statusBar.setVisible(true);
-        applyState(SessionLifecycle.STARTING);
 
-        // Build split pane: terminal on top, southStack on bottom
         splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southStack);
-        // resizeWeight=1.0: all extra space goes to PTY (top); bottom height stays fixed
         splitPane.setResizeWeight(1.0);
         splitPane.setDividerSize(5);
 
-        // Saved value is the bottom panel height in pixels; -1 means "use preferred size"
-        final int savedBottomHeight = NbPreferences.forModule(ClaudePromptPanel.class).getInt("bottomHeight", -1);
+        final int savedBottomHeight = NbPreferences.forModule(ClaudePromptPanel.class)
+                .getInt("bottomHeight", -1);
         final boolean[] savingEnabled = {false};
 
         splitPane.addComponentListener(new ComponentAdapter() {
@@ -736,14 +731,13 @@ public final class ClaudePromptPanel extends JPanel {
                 int total = splitPane.getHeight();
                 if (total <= 0) return;
                 if (!savingEnabled[0]) {
-                    // First resize: set initial divider position
                     int bottom = savedBottomHeight > 0 ? savedBottomHeight
                                                        : southStack.getPreferredSize().height;
                     splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
                     savingEnabled[0] = true;
                 } else {
-                    // Subsequent resizes (output area shown/hidden): restore saved bottom height
-                    int bottom = NbPreferences.forModule(ClaudePromptPanel.class).getInt("bottomHeight", southStack.getPreferredSize().height);
+                    int bottom = NbPreferences.forModule(ClaudePromptPanel.class)
+                            .getInt("bottomHeight", southStack.getPreferredSize().height);
                     splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
                 }
             }
@@ -755,7 +749,8 @@ public final class ClaudePromptPanel extends JPanel {
             int loc = (int) e.getNewValue();
             if (total > 0 && loc > 0) {
                 int bottom = total - splitPane.getDividerSize() - loc;
-                if (bottom > 0) NbPreferences.forModule(ClaudePromptPanel.class).putInt("bottomHeight", bottom);
+                if (bottom > 0) NbPreferences.forModule(ClaudePromptPanel.class)
+                        .putInt("bottomHeight", bottom);
             }
         });
 
@@ -774,13 +769,6 @@ public final class ClaudePromptPanel extends JPanel {
         revalidate();
         repaint();
         widget.requestFocusInWindow();
-
-        // Register default edit mode immediately so hook can read it
-        registerEditMode(editMode);
-
-        // Start background tasks after session is set up
-        startVersionDiscovery();
-        startStatusPollTimer();
     }
 
     private void lockDividerForChoiceMenu() {
@@ -803,54 +791,21 @@ public final class ClaudePromptPanel extends JPanel {
         splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
     }
 
+    // -------------------------------------------------------------------------
+    // input handling
+    // -------------------------------------------------------------------------
+
     private void sendPrompt() {
         String text = inputArea.getText();
-        if (text.isEmpty() || connector == null) return;
-        applyState(SessionLifecycle.WORKING);
-
-        // Add to history (prepend; ignore blank; cap at max)
-        if (!text.isBlank()) {
-            promptHistory.remove(text);
-            promptHistory.add(0, text);
-            if (promptHistory.size() > PROMPT_HISTORY_MAX) {
-                promptHistory.remove(promptHistory.size() - 1);
-            }
-            historyIndex = -1;
-        }
-
+        if (text.isEmpty()) return;
         inputArea.setText("");
         inputArea.requestFocusInWindow();
-
-        // Send text and \r separately with a small pause so CC processes the
-        // text before seeing Enter (avoids multiline-prompt / type-input timing issues).
-        Thread t = new Thread(() -> {
-            try {
-                connector.write(text);
-                Thread.sleep(200);
-                connector.write("\r");
-            } catch (IOException ex) {
-                SwingUtilities.invokeLater(() -> showError("Write failed: " + ex.getMessage()));
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
-        }, "pty-send-prompt");
-        t.setDaemon(true);
-        t.start();
+        historyIndex = -1;
+        controller.sendPrompt(text);
     }
 
     void cancelPrompt() {
-        if (connector == null) return;
-        try {
-            sendCancelToPty(new byte[]{0x03});
-        } catch (IOException ex) {
-            showError("Cancel failed: " + ex.getMessage());
-        }
-    }
-
-    /** Sends cancel bytes to the PTY and resets the session to idle state. Single place for all cancel paths. */
-    private void sendCancelToPty(byte[] bytes) throws IOException {
-        connector.write(bytes);
-        onClaudeIdle();
+        controller.cancelPrompt();
     }
 
     private void bindSendKey(JTextArea area) {
@@ -864,20 +819,22 @@ public final class ClaudePromptPanel extends JPanel {
                     editModeCombo.setSelectedIndex(next);
                     return;
                 }
-                // Bug 1: Esc → Cancel
+                // Esc → Cancel
                 if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
                     e.consume();
                     if (cancelButton.isEnabled()) cancelButton.doClick();
                     return;
                 }
                 // Ctrl+Up — navigate prompt history backward (older)
-                if (e.getKeyCode() == KeyEvent.VK_UP && e.isControlDown() && !e.isShiftDown() && !e.isAltDown()) {
+                if (e.getKeyCode() == KeyEvent.VK_UP && e.isControlDown()
+                        && !e.isShiftDown() && !e.isAltDown()) {
                     e.consume();
                     navigateHistory(1);
                     return;
                 }
                 // Ctrl+Down — navigate prompt history forward (newer)
-                if (e.getKeyCode() == KeyEvent.VK_DOWN && e.isControlDown() && !e.isShiftDown() && !e.isAltDown()) {
+                if (e.getKeyCode() == KeyEvent.VK_DOWN && e.isControlDown()
+                        && !e.isShiftDown() && !e.isAltDown()) {
                     e.consume();
                     navigateHistory(-1);
                     return;
@@ -909,12 +866,13 @@ public final class ClaudePromptPanel extends JPanel {
 
     /** Navigate prompt history. delta=1 means older (up), delta=-1 means newer (down). */
     private void navigateHistory(int delta) {
-        if (promptHistory.isEmpty()) return;
-        historyIndex = Math.max(-1, Math.min(promptHistory.size() - 1, historyIndex + delta));
+        List<String> history = model.getPromptHistory();
+        if (history.isEmpty()) return;
+        historyIndex = Math.max(-1, Math.min(history.size() - 1, historyIndex + delta));
         if (historyIndex < 0) {
             inputArea.setText("");
         } else {
-            inputArea.setText(promptHistory.get(historyIndex));
+            inputArea.setText(history.get(historyIndex));
             inputArea.setCaretPosition(inputArea.getDocument().getLength());
         }
     }
@@ -929,10 +887,10 @@ public final class ClaudePromptPanel extends JPanel {
         JMenuItem nextPrompt = new JMenuItem("Next prompt  (Ctrl+\u2193)");
         nextPrompt.addActionListener(e -> navigateHistory(-1));
 
-        // Bug 6: enable/disable Prev/Next based on history state
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
-                prevPrompt.setEnabled(!promptHistory.isEmpty() && historyIndex < promptHistory.size() - 1);
+                List<String> h = model.getPromptHistory();
+                prevPrompt.setEnabled(!h.isEmpty() && historyIndex < h.size() - 1);
                 nextPrompt.setEnabled(historyIndex > -1);
             }
             @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
@@ -955,13 +913,11 @@ public final class ClaudePromptPanel extends JPanel {
         bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
         bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
 
-        // Edit mode combo
         editModeCombo = new JComboBox<>(EDIT_MODE_LABELS);
         editModeCombo.setMaximumSize(new Dimension(130, 24));
         editModeCombo.setToolTipText("Edit mode");
         editModeCombo.addActionListener(e -> onEditModeComboChanged());
 
-        // Model combo (populated after session start)
         modelCombo = new JComboBox<>();
         modelCombo.setMaximumSize(new Dimension(200, 24));
         modelCombo.setToolTipText("Active model");
@@ -1019,157 +975,17 @@ public final class ClaudePromptPanel extends JPanel {
         return sep;
     }
 
-    /** True while a shift-tab thread is actively switching the CC edit mode. */
-    private volatile boolean modeSwitchInProgress = false;
-
     private void onEditModeComboChanged() {
         int idx = editModeCombo.getSelectedIndex();
         if (idx < 0 || idx >= EDIT_MODE_VALUES.length) return;
-        String newMode = EDIT_MODE_VALUES[idx];
-        if (newMode.equals(editMode)) return;
-
-        editMode = newMode;
-        registerEditMode(newMode);
-        sendShiftTabsUntilMode(newMode);
-    }
-
-    private void registerEditMode(String mode) {
-        if (confirmedDirectory != null) {
-            EDIT_MODE_REGISTRY.put(confirmedDirectory.getAbsolutePath(), mode);
-        }
-    }
-
-    /**
-     * Sends Shift+Tab (ESC[Z) presses until the screen shows {@code targetMode},
-     * or until 3 attempts are exhausted.  Runs on a daemon thread.
-     */
-    private void sendShiftTabsUntilMode(String targetMode) {
-        if (connector == null) return;
-        applyState(SessionLifecycle.WORKING);
-        modeSwitchInProgress = true;
-        Thread t = new Thread(() -> {
-            try {
-                for (int attempt = 0; attempt < 3; attempt++) {
-                    connector.write(new byte[]{0x1b, '[', 'Z'});
-                    Thread.sleep(200);
-                    java.util.Optional<String> detected =
-                            screenContentDetector.detectEditMode(getScreenLines());
-                    if (detected.isPresent() && detected.get().equals(targetMode)) {
-                        return;
-                    }
-                }
-                LOG.warning("sendShiftTabsUntilMode: did not reach " + targetMode + " after 3 attempts");
-            } catch (IOException | InterruptedException ex) {
-                LOG.warning("sendShiftTabsUntilMode failed: " + ex.getMessage());
-            } finally {
-                modeSwitchInProgress = false;
-                onClaudeIdle();
-            }
-        }, "shift-tab-edit-mode");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    private List<String> getScreenLines() {
-        if (terminalWidget == null) return java.util.Collections.emptyList();
-        TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
-        return buf.getScreenBuffer().getLineTexts();
+        controller.onEditModeComboChanged(EDIT_MODE_VALUES[idx]);
     }
 
     private void onModelComboChanged() {
-        if (!modelComboPopulated || modelDiscoveryInProgress) return;
+        if (model.getAvailableModels().isEmpty()) return;
         int idx = modelCombo.getSelectedIndex();
-        if (idx < 0 || connector == null) return;
-
-        // Only switch when Claude is idle
-        if (lifecycle != SessionLifecycle.READY) return;
-
-        modelDiscoveryInProgress = true;
-        Thread t = new Thread(() -> {
-            try {
-                openModelMenu();
-                // Send the 1-based number key (no Enter — menu responds to number keys)
-                connector.write(String.valueOf(idx + 1));
-                Thread.sleep(500);
-            } catch (IOException | InterruptedException ex) {
-                LOG.warning("model switch failed: " + ex.getMessage());
-            } finally {
-                try { Thread.sleep(600); } catch (InterruptedException ignored) {}
-                SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
-            }
-        }, "claude-model-switch");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /** Starts background version discovery. */
-    private void startVersionDiscovery() {
-        ClaudeProcess cp = claudeProcess;
-        if (cp == null) return;
-        Thread t = new Thread(() -> {
-            String ver = cp.readVersion();
-            SwingUtilities.invokeLater(() -> versionLabel.setText(ver));
-        }, "claude-version");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /** Polls screen state every 500ms; populates model combo once on first Ready. */
-    private void startStatusPollTimer() {
-        statusTimer = new javax.swing.Timer(500, e -> pollScreenState());
-        statusTimer.start();
-    }
-
-    private void pollScreenState() {
-        if (terminalWidget == null) return;
-        TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
-        List<String> lines = buf.getScreenBuffer().getLineTexts();
-
-        java.util.Optional<String> plan = screenContentDetector.detectPlanName(lines);
-        planLabel.setText(plan.orElse(""));
-
-        // STARTING → READY: one-shot transition when ❯ prompt appears
-        if (lifecycle == SessionLifecycle.STARTING
-                && screenContentDetector.detectInputPromptReady(lines)) {
-            applyState(SessionLifecycle.READY);
-        }
-
-        // On first READY: discover models and detect initial edit mode
-        if (lifecycle == SessionLifecycle.READY && !modelComboPopulated && !modelDiscoveryInProgress) {
-            discoverModels();
-            detectAndApplyInitialEditMode(lines);
-        }
-
-        // Continuously sync CC screen mode → combo (skip while switch or discovery is in progress)
-        if (lifecycle == SessionLifecycle.READY
-                && modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
-            screenContentDetector.detectEditMode(lines).ifPresent(detected -> {
-                if (!detected.equals(editMode)) {
-                    editMode = detected;
-                    registerEditMode(detected);
-                    int idx = editModeIndexOf(detected);
-                    if (idx >= 0) {
-                        editModeCombo.removeActionListener(editModeCombo.getActionListeners()[0]);
-                        editModeCombo.setSelectedIndex(idx);
-                        editModeCombo.addActionListener(ae -> onEditModeComboChanged());
-                    }
-                }
-            });
-        }
-    }
-
-    private void detectAndApplyInitialEditMode(List<String> lines) {
-        java.util.Optional<String> mode = screenContentDetector.detectEditMode(lines);
-        mode.ifPresent(m -> {
-            editMode = m;
-            registerEditMode(m);
-            int idx = editModeIndexOf(m);
-            if (idx >= 0 && editModeCombo.getActionListeners().length > 0) {
-                editModeCombo.removeActionListener(editModeCombo.getActionListeners()[0]);
-                editModeCombo.setSelectedIndex(idx);
-                editModeCombo.addActionListener(ae -> onEditModeComboChanged());
-            }
-        });
+        if (idx < 0) return;
+        controller.switchModel(idx);
     }
 
     private int editModeIndexOf(String value) {
@@ -1179,288 +995,55 @@ public final class ClaudePromptPanel extends JPanel {
         return -1;
     }
 
-    /**
-     * Opens the {@code /model} selection menu via a safe three-step sequence:
-     * <ol>
-     *   <li>Type {@code /model} — autocomplete popup appears</li>
-     *   <li>200 ms</li>
-     *   <li>ESC — dismiss autocomplete; {@code /model} stays in the input field</li>
-     *   <li>200 ms</li>
-     *   <li>{@code \r} — execute the command (no autocomplete active)</li>
-     *   <li>200 ms — wait for the numbered menu to render</li>
-     * </ol>
-     */
-    private void openModelMenu() throws IOException, InterruptedException {
-        connector.write("/model");
-        Thread.sleep(200);
-        connector.write(PTY_ESC);   // dismiss autocomplete; "/model" stays in input
-        Thread.sleep(200);
-        connector.write("\r");       // execute now that autocomplete is gone
-        Thread.sleep(200);
-    }
-
-    /** Sends /model to PTY and parses the screen after the menu renders to get model list. */
-    private void discoverModels() {
-        if (connector == null || modelComboPopulated || modelDiscoveryInProgress) return;
-        if (modelDiscoveryAttempts >= MAX_MODEL_DISCOVERY_ATTEMPTS) return;
-        modelComboPopulated = true;  // set early to avoid re-entry
-        modelDiscoveryInProgress = true;
-        modelDiscoveryAttempts++;
-        applyState(SessionLifecycle.WORKING);
-
-        Thread t = new Thread(() -> {
-            try {
-                openModelMenu();
-
-                if (terminalWidget == null) return;
-                TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
-                List<String> lines = buf.getScreenBuffer().getLineTexts();
-
-                // Prefer ScreenContentDetector (handles new numbered-menu format with
-                // descriptions after version strings). Fall back to legacy regex parsing.
-                List<String> models;
-                int selIdx;
-                java.util.Optional<io.github.nbclaudecodegui.model.ChoiceMenuModel> menuOpt =
-                        screenContentDetector.detectChoiceMenu(lines);
-                if (menuOpt.isPresent() && !menuOpt.get().options().isEmpty()) {
-                    java.util.List<io.github.nbclaudecodegui.model.ChoiceMenuModel.Option> opts =
-                            menuOpt.get().options();
-                    // Extract short label: text before first run of 3+ spaces or ✔
-                    java.util.regex.Pattern labelPat =
-                            java.util.regex.Pattern.compile("^(.*?)(?:\\s{3,}|\u2714)");
-                    models = new ArrayList<>();
-                    selIdx = -1;
-                    for (int i = 0; i < opts.size(); i++) {
-                        String display = opts.get(i).display();
-                        java.util.regex.Matcher lm = labelPat.matcher(display);
-                        String label = lm.find() ? lm.group(1).strip() : display.strip();
-                        if (label.isEmpty()) label = display.strip();
-                        models.add(label);
-                        if (display.contains("\u2714")) selIdx = i;
-                    }
-                } else {
-                    ModelDiscovery discovery = parseModelDiscovery(lines);
-                    models = discovery.models();
-                    selIdx = discovery.currentIndex();
-                }
-
-                // Dismiss the model menu
-                connector.write(new byte[]{0x1b});  // Esc
-
-                final List<String> finalModels = models;
-                final int finalSelIdx = selIdx;
-                if (!finalModels.isEmpty()) {
-                    SwingUtilities.invokeLater(() -> {
-                        DefaultComboBoxModel<String> m = new DefaultComboBoxModel<>();
-                        for (String model : finalModels) m.addElement(model);
-                        modelCombo.setModel(m);
-                        if (finalSelIdx >= 0) modelCombo.setSelectedIndex(finalSelIdx);
-                    });
-                    onClaudeIdle();
-                } else {
-                    // Allow retry (up to MAX_MODEL_DISCOVERY_ATTEMPTS)
-                    SwingUtilities.invokeLater(() -> modelComboPopulated = false);
-                    onClaudeIdle();
-                }
-            } catch (IOException | InterruptedException ex) {
-                LOG.warning("discoverModels failed: " + ex.getMessage());
-                SwingUtilities.invokeLater(() -> modelComboPopulated = false);
-                onClaudeIdle();
-            } finally {
-                try { Thread.sleep(600); } catch (InterruptedException ignored) {}
-                SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
-            }
-        }, "claude-model-discovery");
-        t.setDaemon(true);
-        t.start();
-    }
+    // -------------------------------------------------------------------------
+    // state display
+    // -------------------------------------------------------------------------
 
     /**
-     * Parses model names from the rendered screen after {@code /model} was sent, and
-     * identifies the currently selected model by the {@code ✔} check mark Claude renders
-     * on the active entry (new format) or the cursor glyph (legacy format).
-     *
-     * <p>Supports two formats:
-     * <ul>
-     *   <li>New numbered menu: {@code ❯ 1. Default (recommended) ✔  Sonnet 4.6 · Best for everyday tasks}
-     *       → extracts version string {@code Sonnet 4.6}; entry with {@code ✔} is current</li>
-     *   <li>Legacy: {@code claude-opus-4-5} — lines starting with {@code claude-};
-     *       entry prefixed with cursor glyph (❯ ▶ >) is current</li>
-     * </ul>
-     *
-     * @return {@link ModelDiscovery} with all model names and the index of the active model
-     *         ({@code -1} if not detected)
+     * Updates Send/Cancel/Model enable state and state label.
+     * Must be called on the EDT (invoked from the model listener which
+     * dispatches on EDT).
      */
-    static ModelDiscovery parseModelDiscovery(List<String> lines) {
-        List<String> models = new ArrayList<>();
-        int currentIndex = -1;
-        java.util.regex.Pattern versionTailPat =
-                java.util.regex.Pattern.compile("([A-Z][a-z]+\\s+\\d+\\.\\d+)\\s*$");
-        for (String line : lines) {
-            boolean hasCursor = line.trim().matches("^[❯▶>].*");
-            boolean hasCheck  = line.contains("\u2714");  // ✔ marks the active model
-            // Strip Ink cursor glyphs (❯ ▶ >) that prefix the selected item
-            String trimmed = line.trim().replaceFirst("^[❯▶>]\\s*", "").trim();
-            // New numbered format: "N. DisplayName ✔  VersionStr · Description"
-            if (trimmed.matches("^\\d+\\..*")) {
-                // Version is always at the tail of the part before ·; ✔ appears before the version
-                String leftPart = trimmed.split("[·\u00b7]", 2)[0];
-                java.util.regex.Matcher m = versionTailPat.matcher(leftPart);
-                if (m.find()) {
-                    if (hasCheck) currentIndex = models.size();
-                    models.add(m.group(1).trim());
-                    continue;
-                }
-            }
-            // Legacy format: claude-xxx (cursor glyph marks the active entry)
-            if (trimmed.startsWith("claude-") && !trimmed.contains(" ")) {
-                if (hasCursor) currentIndex = models.size();
-                models.add(trimmed);
-            } else if (trimmed.matches("(?i)claude[\\-/][\\w\\-\\.]+")) {
-                if (hasCursor) currentIndex = models.size();
-                models.add(trimmed);
-            }
+    private void applyState(SessionLifecycle s) {
+        stateLabel.setText(switch (s) {
+            case STARTING -> "Starting";
+            case READY    -> "Ready";
+            case WORKING  -> "Working";
+        });
+        boolean ready = s == SessionLifecycle.READY;
+        sendButton.setEnabled(ready);
+        cancelButton.setEnabled(s == SessionLifecycle.WORKING);
+        modelCombo.setEnabled(ready && !model.getAvailableModels().isEmpty());
+        if (s == SessionLifecycle.READY) {
+            inputArea.requestFocusInWindow();
         }
-        return new ModelDiscovery(models, currentIndex);
     }
 
-    /** Convenience wrapper — returns only the model list (used by tests). */
-    static List<String> parseModelList(List<String> lines) {
-        return parseModelDiscovery(lines).models();
+    /** Called when Claude finishes its turn (Stop hook) — re-enables Send, disables Cancel. */
+    public void onClaudeIdle() {
+        controller.onClaudeIdle();
+    }
+
+    /** Called before a PTY permission dialog appears (PermissionRequest hook) — triggers screen scan. */
+    public void triggerPromptScan() {
+        controller.triggerPromptScan();
     }
 
     // -------------------------------------------------------------------------
     // helpers
     // -------------------------------------------------------------------------
 
+    private List<String> getScreenLines() {
+        if (terminalWidget == null) return java.util.Collections.emptyList();
+        TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
+        return buf.getScreenBuffer().getLineTexts();
+    }
+
     private void setControlsLocked(boolean locked) {
         projectCombo.setEnabled(!locked);
         pathCombo.setEnabled(!locked);
         browseButton.setEnabled(!locked);
         openButton.setEnabled(!locked);
-    }
-
-    /** Called by promptFlushTimer when PTY output goes silent. Reads the rendered screen. */
-    private void flushPendingPrompt() {
-        if (modelDiscoveryInProgress) {
-            return;
-        }
-
-        java.util.Optional<io.github.nbclaudecodegui.model.ChoiceMenuModel> req = java.util.Optional.empty();
-        if (terminalWidget != null) {
-            TerminalTextBuffer buf = terminalWidget.getTerminalTextBuffer();
-            java.util.List<String> lines = buf.getScreenBuffer().getLineTexts();
-            req = screenContentDetector.detectChoiceMenu(lines);
-        }
-
-        if (choiceMenuPanel.isVisible()) {
-            // Panel already shown — dismiss it if Claude has cleared the menu from screen
-            if (req.isEmpty()) {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[screen prompt] menu gone from screen, dismissing panel");
-                }
-                choiceMenuPanel.dismiss();
-                inputPanel.setVisible(true);
-                revalidate();
-                repaint();
-            }
-            return;
-        }
-
-        req.ifPresent(r -> {
-            if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info(sessionTag + "[screen prompt flush] text=\"" + r.text() + "\" | options=" + r.options());
-            }
-            inputPanel.setVisible(false);
-            choiceMenuPanel.show(r, answer -> {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[PTY prompt answer] " + answer);
-                }
-                inputPanel.setVisible(true);
-                revalidate();
-                repaint();
-                writePtyAnswer(answer);
-            });
-            revalidate();
-            repaint();
-        });
-    }
-
-    /**
-     * Writes the user's answer to the PTY.
-     */
-    private void writePtyAnswer(String answer) {
-        try {
-            if (answer == null) {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[PTY write] \\x1b (Cancel/ESC)");
-                }
-                sendCancelToPty(new byte[]{0x1b});
-            } else if (answer.startsWith("TYPE:")) {
-                // Bug 4: type-input option — send the option digit first to activate
-                // Claude's text-entry mode, then the typed text + \r.
-                int sep = answer.indexOf(':', 5);
-                String digit = answer.substring(5, sep);
-                String text = answer.substring(sep + 1);
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[PTY write] type-input digit=" + digit + " text=" + text);
-                }
-                Thread t = new Thread(() -> {
-                    try {
-                        connector.write(digit);
-                        Thread.sleep(200);
-                        connector.write(text);
-                        Thread.sleep(200);
-                        connector.write("\r");
-                    } catch (java.io.IOException ex) {
-                        SwingUtilities.invokeLater(() -> showError("Write failed: " + ex.getMessage()));
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
-                }, "pty-typeinput");
-                t.setDaemon(true);
-                t.start();
-            } else {
-                boolean isMenuDigit = answer.matches("[0-9]");
-                String toWrite = isMenuDigit ? answer : answer + "\r";
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[PTY write] " + toWrite.replace("\r", "\\r").replace("\n", "\\n"));
-                }
-                connector.write(toWrite);
-            }
-        } catch (java.io.IOException ex) {
-            showError("Write failed: " + ex.getMessage());
-        }
-    }
-
-    /**
-     * Applies {@code s} as the new lifecycle state and updates UI components accordingly.
-     * Safe to call from any thread; dispatches to EDT internally.
-     */
-    void applyState(SessionLifecycle s) {
-        SwingUtilities.invokeLater(() -> {
-            lifecycle = s;
-            stateLabel.setText(switch (s) {
-                case STARTING -> "Starting";
-                case READY    -> "Ready";
-                case WORKING  -> "Working";
-            });
-            boolean ready = s == SessionLifecycle.READY;
-            sendButton.setEnabled(ready);
-            cancelButton.setEnabled(s == SessionLifecycle.WORKING);
-            modelCombo.setEnabled(ready && modelComboPopulated);
-        });
-    }
-
-    /** Called when Claude finishes its turn (Stop hook) — re-enables Send, disables Cancel. */
-    public void onClaudeIdle() {
-        applyState(SessionLifecycle.READY);
-        SwingUtilities.invokeLater(() -> inputArea.requestFocusInWindow());
-    }
-
-    /** Called before a PTY permission dialog appears (PermissionRequest hook) — triggers screen scan. */
-    public void triggerPromptScan() {
-        SwingUtilities.invokeLater(this::flushPendingPrompt);
     }
 
     private void showError(String message) {
@@ -1480,14 +1063,14 @@ public final class ClaudePromptPanel extends JPanel {
     }
 
     private void populateProjectCombo() {
-        DefaultComboBoxModel<ProjectItem> model = new DefaultComboBoxModel<>();
-        model.addElement(new ProjectItem(null,
+        DefaultComboBoxModel<ProjectItem> cbModel = new DefaultComboBoxModel<>();
+        cbModel.addElement(new ProjectItem(null,
                 NbBundle.getMessage(ClaudePromptPanel.class, "LBL_SelectProject")));
         for (Project p : OpenProjects.getDefault().getOpenProjects()) {
-            model.addElement(new ProjectItem(p,
+            cbModel.addElement(new ProjectItem(p,
                     ProjectUtils.getInformation(p).getDisplayName()));
         }
-        projectCombo.setModel(model);
+        projectCombo.setModel(cbModel);
     }
 
     private void populatePathHistory() {

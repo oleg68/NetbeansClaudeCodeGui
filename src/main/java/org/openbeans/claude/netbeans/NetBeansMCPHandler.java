@@ -673,11 +673,11 @@ public class NetBeansMCPHandler {
      * or {@code "default"} if the session cannot be found.
      *
      * <p>Safe to call from any thread — uses the thread-safe registry in
-     * {@link io.github.nbclaudecodegui.ui.ClaudePromptPanel#EDIT_MODE_REGISTRY}.
+     * {@link io.github.nbclaudecodegui.model.ClaudeSessionModel#EDIT_MODE_REGISTRY}.
      */
     private static String getEditModeForCwd(String cwd) {
         if (cwd == null) return "default";
-        String mode = io.github.nbclaudecodegui.ui.ClaudePromptPanel.EDIT_MODE_REGISTRY.get(cwd);
+        String mode = io.github.nbclaudecodegui.model.ClaudeSessionModel.EDIT_MODE_REGISTRY.get(cwd);
         return mode != null ? mode : "default";
     }
 

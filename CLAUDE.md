@@ -57,19 +57,32 @@ Configured via `settings.local.json`. Fires before `Edit`/`Write`/`MultiEdit`.
 
 ### Component Map
 
+The plugin follows an MVC structure for session management:
+
 | Package | Responsibility |
 |---------|---------------|
-| `process/` | `ClaudeProcess` — PTY lifecycle; `PtyTtyConnector` — PTY↔JediTerm bridge; `StreamJsonParser` — lightweight NDJSON parser (no external JSON lib) |
-| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudeSessionPanel` — terminal + top bar; `PromptResponsePanel` — interactive question panel (Yes/No buttons, radio buttons, free-form input); `PermissionPanel` — Accept/Reject/Cancel bar for file-change diffs; `FileDiffTab` — opens a diff TopComponent with `PermissionPanel`; `MarkdownRenderer` — markdown→HTML for output panes |
-| `settings/` | `ClaudeCodePreferences` — NbPreferences wrapper; `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options integration |
+| `model/` | `ClaudeSessionModel` — session state container, `SessionLifecycle` enum, `EDIT_MODE_REGISTRY` (cross-thread), listener dispatch on EDT; `ChoiceMenuModel` — interactive-prompt data |
+| `controller/` | `ClaudeSessionController` — PTY process lifecycle, connector wiring, screen polling, model/edit-mode switching, `parseModelDiscovery` |
+| `process/` | `ClaudeProcess` — PTY process start/stop/version; `PtyTtyConnector` — PTY↔JediTerm bridge; `ScreenContentDetector`/`TtyPromptDetector` — screen analysis; `StreamJsonParser` — lightweight NDJSON parser |
+| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff viewer with Accept/Reject/Cancel; `MarkdownRenderer` — markdown→HTML |
+| `settings/` | `ClaudeCodePreferences` — NbPreferences wrapper; `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options integration; `ClaudeProfileStore` — named profiles |
 | `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project node context menu |
 | `org.openbeans.claude.netbeans` | `MCPSseServer` — SSE/HTTP server Claude connects to; `NetBeansMCPHandler` — handles MCP requests including PreToolUse hook; `tools/` — `OpenDiff`, `PermissionPromptTool`, `DiffTabTracker` |
 
 ### Session lifecycle
-1. User clicks toolbar → `ClaudeSessionTopComponent` opens; user picks a directory → `ClaudeProcess.start()` writes `settings.local.json` and launches PTY.
-2. PTY output renders in JediTerm; `TtyPromptDetector`/`StreamJsonParser` detect interactive prompts → `PromptResponsePanel` shown.
+1. User clicks toolbar → `ClaudeSessionTopComponent` opens; user picks a directory → `ClaudePromptPanel.startProcess()` creates a `JediTermWidget`, then `ClaudeSessionController.startProcess()` writes `settings.local.json` and launches the PTY.
+2. PTY output renders in JediTerm; `TtyPromptDetector` (real-time) and `ScreenContentDetector` (screen-poll timer) detect interactive prompts → `ClaudeSessionModel.setActiveChoiceMenu()` → `ClaudePromptPanel.onChoiceMenuChanged()` shows the panel.
 3. Claude connects to `GET /sse`; subsequent tool calls arrive as `POST /messages`; file edits trigger `POST /hook`.
 4. Each session = isolated PTY process; closing window confirms if the process is running.
+5. Session state (`SessionLifecycle`, `editMode`, model list, choice menu) lives in `ClaudeSessionModel`; changes are dispatched to `ClaudeSessionModelListener` on the EDT.
+
+`SessionLifecycle` state machine:
+```
+showChatUI()                    → STARTING
+detectInputPromptReady() = true → READY   (one-shot, from STARTING only)
+sendPrompt() / discoverModels() → WORKING
+onClaudeIdle()                  → READY
+```
 
 ### File-change permission flow
 Claude Code can ask permission before editing files via two paths, both using `FileDiffTab` + `PermissionPanel`:

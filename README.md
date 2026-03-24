@@ -2,7 +2,7 @@
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
-Current version: **0.13.11-SNAPSHOT**
+Current version: **0.13.12-SNAPSHOT**
 
 ---
 
@@ -98,15 +98,36 @@ Configured via `hooks.PreToolUse` in `settings.local.json`. Before executing `Ed
   - `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny",...}}`
   - `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}` (fallback/timeout → Claude shows its own built-in prompt)
 
+### MVC architecture
+
+The session UI follows a three-layer MVC structure:
+
+| Layer | Package | Key class | Role |
+|-------|---------|-----------|------|
+| Model | `model/` | `ClaudeSessionModel` | Owns all session state (`SessionLifecycle`, edit mode, model list, choice menu, prompt history). Fires `ClaudeSessionModelListener` notifications on the EDT. Hosts the static `EDIT_MODE_REGISTRY` for cross-thread access by `NetBeansMCPHandler`. |
+| Controller | `controller/` | `ClaudeSessionController` | Process lifecycle, PTY writes, screen-poll timers, model/edit-mode detection, `parseModelDiscovery`. Has no layout components; communicates state changes through the model only. |
+| View | `ui/` | `ClaudePromptPanel` | Passive View: builds Swing layout, implements `ClaudeSessionModelListener` to keep UI in sync, delegates user gestures to the controller. |
+
+`SessionLifecycle` state machine:
+
+```
+showChatUI()                    → STARTING
+detectInputPromptReady() = true → READY   (one-shot, from STARTING)
+sendPrompt() / discoverModels() → WORKING
+onClaudeIdle()                  → READY
+```
+
 ### Component map
 
 | Package | Responsibility |
 |---------|---------------|
+| `model/` | `ClaudeSessionModel` — session state + listener dispatch; `SessionLifecycle` — state enum; `ChoiceMenuModel` — interactive-prompt data |
+| `controller/` | `ClaudeSessionController` — PTY lifecycle, screen polling, model switching, `parseModelDiscovery` |
 | `process/` | `ClaudeProcess` — PTY lifecycle + `settings.local.json` generation; `PtyTtyConnector` — PTY↔JediTerm bridge; `StreamJsonParser` — lightweight NDJSON parser |
-| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudePromptPanel` — terminal + top bar + input + status bar; `PromptResponsePanel` — interactive question panel (Yes/No, radio, free-form); `PermissionPanel` — Accept/Reject/Cancel bar; `FileDiffTab` — diff TopComponent; `MarkdownRenderer` — markdown→HTML |
+| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff TopComponent with permission bar; `MarkdownRenderer` — markdown→HTML |
 | `settings/` | `ClaudeCodePreferences` (default MCP port 28991); `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options (General + Profiles tabs); `ClaudeProfile`, `ClaudeProfileStore` — named profiles with isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy settings, and extra env vars; `ClaudeProjectProperties` — per-project profile assignment |
 | `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project context menu |
-| `org.openbeans.claude.netbeans` | `MCPSseServer` — Jetty HTTP server (`/sse`, `/messages`, `/hook`); `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook handler; `tools/` — `PermissionPromptTool`, `DiffTabTracker`, `OpenDiff`, and other IDE tools |
+| `org.openbeans.claude.netbeans` | `MCPSseServer` — Jetty HTTP server (`/sse`, `/messages`, `/hook`); `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook handler; reads edit mode via `ClaudeSessionModel.EDIT_MODE_REGISTRY`; `tools/` — `PermissionPromptTool`, `DiffTabTracker`, `OpenDiff`, and other IDE tools |
 
 ---
 

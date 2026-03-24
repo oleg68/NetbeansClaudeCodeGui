@@ -1,0 +1,730 @@
+package io.github.nbclaudecodegui.controller;
+
+import com.jediterm.terminal.model.TerminalTextBuffer;
+import com.jediterm.terminal.ui.JediTermWidget;
+import com.pty4j.PtyProcess;
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
+import io.github.nbclaudecodegui.model.ClaudeSessionModel;
+import io.github.nbclaudecodegui.model.SessionLifecycle;
+import io.github.nbclaudecodegui.process.ClaudeProcess;
+import io.github.nbclaudecodegui.process.PtyTtyConnector;
+import io.github.nbclaudecodegui.process.ScreenContentDetector;
+import io.github.nbclaudecodegui.process.TtyPromptDetector;
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
+import io.github.nbclaudecodegui.settings.ClaudeProfile;
+import io.github.nbclaudecodegui.settings.ClaudeProfileStore;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import javax.swing.SwingUtilities;
+
+/**
+ * Business logic and process coordination for a Claude Code session.
+ *
+ * <p>This class owns the PTY process lifecycle, the terminal connector, the
+ * screen-polling timers, and all logic that reads from or writes to the PTY.
+ * It does not reference any Swing layout components (JPanel, JLabel, etc.);
+ * all state changes are communicated back to the View via
+ * {@link ClaudeSessionModel} and its listener interface.
+ *
+ * <p><b>Dependencies:</b>
+ * <ul>
+ *   <li>{@link ClaudeSessionModel} — receives state updates; fires listener
+ *       notifications on the EDT.</li>
+ *   <li>{@code screenLines} supplier — provided by the View (from the
+ *       {@link JediTermWidget} text buffer); keeps the controller free of
+ *       direct widget references after {@link #startProcess} returns.</li>
+ * </ul>
+ */
+public final class ClaudeSessionController {
+
+    // -------------------------------------------------------------------------
+    // ModelDiscovery record
+    // -------------------------------------------------------------------------
+
+    /**
+     * Result of {@link #parseModelDiscovery}: all detected model names plus the
+     * zero-based index of the model that was active when the screen was captured.
+     *
+     * @param models       list of model display names; never {@code null}
+     * @param currentIndex zero-based index of the active model, or {@code -1} if
+     *                     no active model could be determined
+     */
+    public record ModelDiscovery(List<String> models, int currentIndex) {}
+
+    // -------------------------------------------------------------------------
+    // Fields
+    // -------------------------------------------------------------------------
+
+    private static final Logger LOG = Logger.getLogger(ClaudeSessionController.class.getName());
+
+    /** ESC byte sent to the PTY (dismiss autocomplete, close menus). */
+    private static final byte[] PTY_ESC = {0x1b};
+
+    private static final int MAX_MODEL_DISCOVERY_ATTEMPTS = 3;
+
+    private final ClaudeSessionModel model;
+
+    /**
+     * Supplier of current terminal screen lines. Provided by the View so that
+     * the controller can inspect the rendered terminal content without holding a
+     * reference to {@link JediTermWidget} after start-up.
+     */
+    private final Supplier<List<String>> screenLines;
+
+    private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
+    private final ScreenContentDetector screenContentDetector = new ScreenContentDetector();
+
+    private ClaudeProcess claudeProcess;
+    private PtyTtyConnector connector;
+
+    /** Polls screen state every 500 ms; owned here to allow proper teardown. */
+    private javax.swing.Timer statusTimer;
+
+    /**
+     * Fires {@link #flushPendingPrompt()} 400 ms after PTY output goes silent
+     * while menu options are being collected.
+     */
+    private final javax.swing.Timer promptFlushTimer =
+            new javax.swing.Timer(400, e -> flushPendingPrompt());
+
+    /** {@code true} while a shift-tab thread is actively switching the CC edit mode. */
+    private volatile boolean modeSwitchInProgress = false;
+
+    /**
+     * Set to {@code true} when model discovery starts to prevent re-entry;
+     * reset to {@code false} if the result is empty (to allow a retry).
+     */
+    private boolean modelComboPopulated = false;
+
+    /** {@code true} while the model-discovery or model-switch background thread is running. */
+    private volatile boolean modelDiscoveryInProgress = false;
+
+    /** Number of model-discovery attempts made since the last session start. */
+    private int modelDiscoveryAttempts = 0;
+
+    // -------------------------------------------------------------------------
+    // Constructor
+    // -------------------------------------------------------------------------
+
+    /**
+     * Creates a controller bound to the given model and screen-lines supplier.
+     *
+     * @param model       the session model to update; must not be {@code null}
+     * @param screenLines supplier that returns the current terminal screen lines;
+     *                    called from background threads and from the EDT
+     */
+    public ClaudeSessionController(ClaudeSessionModel model,
+                                   Supplier<List<String>> screenLines) {
+        this.model = model;
+        this.screenLines = screenLines;
+    }
+
+    // -------------------------------------------------------------------------
+    // Process lifecycle
+    // -------------------------------------------------------------------------
+
+    /**
+     * Starts the Claude PTY process for the given directory and wires it to the
+     * supplied terminal widget.
+     *
+     * <p>Precondition: must be called on the EDT (the widget was created on the EDT).
+     *
+     * <p>Post-condition: the PTY is running; the status-poll timer is started;
+     * the model lifecycle is set to {@link SessionLifecycle#STARTING}.
+     *
+     * @param dir         working directory to pass to {@code claude}
+     * @param profileName name of the profile to use, or {@code null}/{@code ""}
+     *                    for the Default profile
+     * @param widget      the terminal widget that will render the Claude TUI
+     * @throws IOException if the PTY process cannot be started
+     */
+    public void startProcess(java.io.File dir, String profileName, JediTermWidget widget)
+            throws IOException {
+        String tag = "[" + dir.getName() + "] ";
+        claudeProcess = new ClaudeProcess();
+        ClaudeProfile profile = ClaudeProfileStore.findByName(profileName);
+        PtyProcess process = claudeProcess.start(dir.getAbsolutePath(), profile);
+
+        connector = new PtyTtyConnector(process);
+        connector.setSessionTag(tag);
+        screenContentDetector.setSessionTag(tag);
+
+        connector.setLineListener(line -> {
+            if (ClaudeCodePreferences.isDebugMode()) {
+                LOG.info(tag + "[PTY line] " + line);
+            }
+            // While a choice menu is active, suppress timer-based re-detection
+            if (model.getActiveChoiceMenu() != null) {
+                return;
+            }
+            SwingUtilities.invokeLater(() -> promptFlushTimer.restart());
+
+            ttyPromptDetector.feed(line).ifPresent(menu -> {
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info(tag + "[PTY prompt detected] text=\"" + menu.text()
+                            + "\" | options=" + menu.options());
+                }
+                model.setActiveChoiceMenu(menu);
+            });
+        });
+
+        widget.setTtyConnector(connector);
+        widget.start();
+
+        // Ensure the initial edit mode is registered so the hook can read it
+        String initialMode = model.getEditMode() != null ? model.getEditMode() : "default";
+        model.setEditMode(initialMode);
+
+        modelDiscoveryAttempts = 0;
+        modelComboPopulated = false;
+        model.setLifecycle(SessionLifecycle.STARTING);
+
+        // Waiter thread: notifies when the process exits
+        Thread waiter = new Thread(() -> {
+            try {
+                process.waitFor();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
+        }, "claude-waiter");
+        waiter.setDaemon(true);
+        waiter.start();
+
+        startStatusPollTimer();
+    }
+
+    /**
+     * Stops the PTY process and all background timers.
+     *
+     * <p>Updates the model: sets lifecycle to STARTING, clears the model list,
+     * clears the choice menu, and removes the edit-mode registry entry.
+     *
+     * <p>Does <em>not</em> close the terminal widget — the View handles that.
+     */
+    public void stopProcess() {
+        if (statusTimer != null) {
+            statusTimer.stop();
+            statusTimer = null;
+        }
+        promptFlushTimer.stop();
+        if (connector != null) {
+            connector.setLineListener(null);
+        }
+        if (claudeProcess != null) {
+            claudeProcess.stop();
+        }
+        connector = null;
+        claudeProcess = null;
+        modelComboPopulated = false;
+        modelDiscoveryInProgress = false;
+        modelDiscoveryAttempts = 0;
+
+        model.setModelList(List.of(), -1);
+        model.clearChoiceMenu();
+        model.clearEditModeRegistry();
+        model.setLifecycle(SessionLifecycle.STARTING);
+    }
+
+    // -------------------------------------------------------------------------
+    // PTY writes
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sends the user's prompt text to the PTY and transitions to WORKING state.
+     *
+     * <p>The text and the {@code \r} Enter key are sent in a background thread
+     * with a 200 ms pause between them to avoid multiline-input timing issues.
+     *
+     * <p>Also records the prompt in the model's history.
+     *
+     * @param text the prompt text to send; must not be empty
+     */
+    public void sendPrompt(String text) {
+        if (connector == null) return;
+        model.setLifecycle(SessionLifecycle.WORKING);
+        if (!text.isBlank()) {
+            model.addPromptToHistory(text);
+        }
+
+        Thread t = new Thread(() -> {
+            try {
+                connector.write(text);
+                Thread.sleep(200);
+                connector.write("\r");
+            } catch (IOException ex) {
+                LOG.warning("sendPrompt write failed: " + ex.getMessage());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
+        }, "pty-send-prompt");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Sends Ctrl+C (0x03) to the PTY and transitions to READY state.
+     * No-op if no PTY connector is active.
+     */
+    public void cancelPrompt() {
+        if (connector == null) return;
+        try {
+            sendCancelToPty(new byte[]{0x03});
+        } catch (IOException ex) {
+            LOG.warning("cancelPrompt failed: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Transitions the model to {@link SessionLifecycle#READY}.
+     * Called by the Stop hook when Claude finishes its turn.
+     */
+    public void onClaudeIdle() {
+        model.setLifecycle(SessionLifecycle.READY);
+    }
+
+    /**
+     * Triggers an immediate screen scan to detect any pending choice-menu prompt.
+     * Schedules {@link #flushPendingPrompt()} on the EDT.
+     *
+     * <p>Called by the PermissionRequest hook before a PTY permission dialog appears.
+     */
+    public void triggerPromptScan() {
+        SwingUtilities.invokeLater(this::flushPendingPrompt);
+    }
+
+    /**
+     * Writes the user's answer to the PTY.
+     *
+     * <p>Handles four cases:
+     * <ul>
+     *   <li>{@code null} — sends ESC (0x1B) and transitions to READY (Cancel path).</li>
+     *   <li>{@code "TYPE:digit:text"} — activates the type-input option then sends text + \r.</li>
+     *   <li>single digit {@code "0"–"9"} — sends the digit without \r (menu selection).</li>
+     *   <li>everything else — sends the text followed by \r.</li>
+     * </ul>
+     *
+     * @param answer the answer string from the choice-menu callback
+     */
+    public void writePtyAnswer(String answer) {
+        try {
+            if (answer == null) {
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info("[PTY write] \\x1b (Cancel/ESC)");
+                }
+                sendCancelToPty(new byte[]{0x1b});
+            } else if (answer.startsWith("TYPE:")) {
+                int sep = answer.indexOf(':', 5);
+                String digit = answer.substring(5, sep);
+                String text = answer.substring(sep + 1);
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info("[PTY write] type-input digit=" + digit + " text=" + text);
+                }
+                Thread t = new Thread(() -> {
+                    try {
+                        connector.write(digit);
+                        Thread.sleep(200);
+                        connector.write(text);
+                        Thread.sleep(200);
+                        connector.write("\r");
+                    } catch (IOException ex) {
+                        LOG.warning("writePtyAnswer TYPE write failed: " + ex.getMessage());
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, "pty-typeinput");
+                t.setDaemon(true);
+                t.start();
+            } else {
+                boolean isMenuDigit = answer.matches("[0-9]");
+                String toWrite = isMenuDigit ? answer : answer + "\r";
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info("[PTY write] " + toWrite.replace("\r", "\\r").replace("\n", "\\n"));
+                }
+                connector.write(toWrite);
+            }
+        } catch (IOException ex) {
+            LOG.warning("writePtyAnswer failed: " + ex.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Edit mode
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called when the user selects a different edit mode from the combo box.
+     *
+     * <p>If the selected mode differs from the current model state, updates the
+     * model and triggers a Shift+Tab sequence to switch Claude's built-in mode.
+     *
+     * @param newMode the newly selected mode string (one of {@code "plan"},
+     *                {@code "default"}, or {@code "acceptEdits"})
+     */
+    public void onEditModeComboChanged(String newMode) {
+        if (newMode == null) return;
+        if (newMode.equals(model.getEditMode())) return;
+        model.setEditMode(newMode);
+        sendShiftTabsUntilMode(newMode);
+    }
+
+    /**
+     * Sends Shift+Tab (ESC[Z) presses until the terminal screen shows
+     * {@code targetMode}, or until 3 attempts are exhausted.
+     *
+     * <p>Runs on a daemon thread; sets lifecycle to WORKING at start and
+     * READY on completion.
+     *
+     * @param targetMode the edit mode to reach
+     */
+    private void sendShiftTabsUntilMode(String targetMode) {
+        if (connector == null) return;
+        model.setLifecycle(SessionLifecycle.WORKING);
+        modeSwitchInProgress = true;
+        Thread t = new Thread(() -> {
+            try {
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    connector.write(new byte[]{0x1b, '[', 'Z'});
+                    Thread.sleep(200);
+                    Optional<String> detected =
+                            screenContentDetector.detectEditMode(screenLines.get());
+                    if (detected.isPresent() && detected.get().equals(targetMode)) {
+                        return;
+                    }
+                }
+                LOG.warning("sendShiftTabsUntilMode: did not reach " + targetMode
+                        + " after 3 attempts");
+            } catch (IOException | InterruptedException ex) {
+                LOG.warning("sendShiftTabsUntilMode failed: " + ex.getMessage());
+            } finally {
+                modeSwitchInProgress = false;
+                onClaudeIdle();
+            }
+        }, "shift-tab-edit-mode");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    // -------------------------------------------------------------------------
+    // Model switching
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sends the {@code /model} command to the PTY and selects the model at
+     * {@code index} (1-based digit key, no Enter required).
+     *
+     * <p>Precondition: lifecycle must be {@link SessionLifecycle#READY}.
+     *
+     * @param index zero-based index into the available-models list
+     */
+    public void switchModel(int index) {
+        if (connector == null) return;
+        if (model.getLifecycle() != SessionLifecycle.READY) return;
+
+        modelDiscoveryInProgress = true;
+        Thread t = new Thread(() -> {
+            try {
+                openModelMenu();
+                connector.write(String.valueOf(index + 1));
+                Thread.sleep(500);
+            } catch (IOException | InterruptedException ex) {
+                LOG.warning("model switch failed: " + ex.getMessage());
+            } finally {
+                try { Thread.sleep(600); } catch (InterruptedException ignored) {}
+                SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
+            }
+        }, "claude-model-switch");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    // -------------------------------------------------------------------------
+    // Model discovery
+    // -------------------------------------------------------------------------
+
+    /**
+     * Opens the {@code /model} selection menu, parses the screen, and populates
+     * the model list in {@link ClaudeSessionModel}.
+     *
+     * <p>Runs on a daemon thread. Re-entrant protection via
+     * {@link #modelComboPopulated} / {@link #modelDiscoveryInProgress}.
+     * Retries up to {@value #MAX_MODEL_DISCOVERY_ATTEMPTS} times if the screen
+     * returns no models.
+     */
+    private void discoverModels() {
+        if (connector == null || modelComboPopulated || modelDiscoveryInProgress) return;
+        if (modelDiscoveryAttempts >= MAX_MODEL_DISCOVERY_ATTEMPTS) return;
+        modelComboPopulated = true;
+        modelDiscoveryInProgress = true;
+        modelDiscoveryAttempts++;
+        model.setLifecycle(SessionLifecycle.WORKING);
+
+        Thread t = new Thread(() -> {
+            try {
+                openModelMenu();
+                List<String> lines = screenLines.get();
+
+                List<String> models;
+                int selIdx;
+                Optional<ChoiceMenuModel> menuOpt = screenContentDetector.detectChoiceMenu(lines);
+                if (menuOpt.isPresent() && !menuOpt.get().options().isEmpty()) {
+                    List<ChoiceMenuModel.Option> opts = menuOpt.get().options();
+                    Pattern labelPat = Pattern.compile("^(.*?)(?:\\s{3,}|\u2714)");
+                    models = new ArrayList<>();
+                    selIdx = -1;
+                    for (int i = 0; i < opts.size(); i++) {
+                        String display = opts.get(i).display();
+                        Matcher lm = labelPat.matcher(display);
+                        String label = lm.find() ? lm.group(1).strip() : display.strip();
+                        if (label.isEmpty()) label = display.strip();
+                        models.add(label);
+                        if (display.contains("\u2714")) selIdx = i;
+                    }
+                } else {
+                    ModelDiscovery discovery = parseModelDiscovery(lines);
+                    models = discovery.models();
+                    selIdx = discovery.currentIndex();
+                }
+
+                connector.write(new byte[]{0x1b});  // Esc — dismiss model menu
+
+                final List<String> finalModels = models;
+                final int finalSelIdx = selIdx;
+                if (!finalModels.isEmpty()) {
+                    model.setModelList(finalModels, finalSelIdx);
+                    onClaudeIdle();
+                } else {
+                    SwingUtilities.invokeLater(() -> modelComboPopulated = false);
+                    onClaudeIdle();
+                }
+            } catch (IOException | InterruptedException ex) {
+                LOG.warning("discoverModels failed: " + ex.getMessage());
+                SwingUtilities.invokeLater(() -> modelComboPopulated = false);
+                onClaudeIdle();
+            } finally {
+                try { Thread.sleep(600); } catch (InterruptedException ignored) {}
+                SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
+            }
+        }, "claude-model-discovery");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    // -------------------------------------------------------------------------
+    // Screen polling
+    // -------------------------------------------------------------------------
+
+    /**
+     * Called every 500 ms by {@link #statusTimer}. Reads the current terminal
+     * screen and updates the model accordingly.
+     *
+     * <p>Responsibilities:
+     * <ul>
+     *   <li>Detect plan name and update model.</li>
+     *   <li>Drive STARTING → READY transition on first prompt.</li>
+     *   <li>Trigger model discovery and initial edit-mode detection on first READY.</li>
+     *   <li>Continuously sync CC's actual edit mode to the model.</li>
+     * </ul>
+     */
+    void pollScreenState() {
+        List<String> lines = screenLines.get();
+
+        // Plan name
+        Optional<String> plan = screenContentDetector.detectPlanName(lines);
+        model.setPlanName(plan.orElse(""));
+
+        // STARTING → READY: one-shot transition
+        if (model.getLifecycle() == SessionLifecycle.STARTING
+                && screenContentDetector.detectInputPromptReady(lines)) {
+            model.setLifecycle(SessionLifecycle.READY);
+        }
+
+        // On first READY: discover models and detect initial edit mode
+        if (model.getLifecycle() == SessionLifecycle.READY
+                && !modelComboPopulated && !modelDiscoveryInProgress) {
+            discoverModels();
+            detectAndApplyInitialEditMode(lines);
+        }
+
+        // Continuously sync CC screen mode → model (skip during switches)
+        if (model.getLifecycle() == SessionLifecycle.READY
+                && modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
+            screenContentDetector.detectEditMode(lines).ifPresent(detected -> {
+                if (!detected.equals(model.getEditMode())) {
+                    model.setEditMode(detected);
+                }
+            });
+        }
+    }
+
+    private void detectAndApplyInitialEditMode(List<String> lines) {
+        screenContentDetector.detectEditMode(lines).ifPresent(m -> model.setEditMode(m));
+    }
+
+    /**
+     * Checks the terminal screen for a pending choice-menu prompt and updates the model.
+     *
+     * <p>If a menu is currently active in the model and the screen no longer shows one,
+     * the model choice menu is cleared (dismiss path).
+     * If no menu is active and the screen shows one, the model is updated (show path).
+     */
+    private void flushPendingPrompt() {
+        if (modelDiscoveryInProgress) return;
+
+        Optional<ChoiceMenuModel> req = Optional.empty();
+        List<String> lines = screenLines.get();
+        if (!lines.isEmpty()) {
+            req = screenContentDetector.detectChoiceMenu(lines);
+        }
+
+        if (model.getActiveChoiceMenu() != null) {
+            // Menu shown — dismiss if Claude cleared it from screen
+            if (req.isEmpty()) {
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info("[screen prompt] menu gone from screen, dismissing");
+                }
+                model.clearChoiceMenu();
+            }
+            return;
+        }
+
+        req.ifPresent(r -> {
+            if (ClaudeCodePreferences.isDebugMode()) {
+                LOG.info("[screen prompt flush] text=\"" + r.text() + "\" | options=" + r.options());
+            }
+            model.setActiveChoiceMenu(r);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Queries
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns {@code true} if a PTY process is currently running.
+     *
+     * @return {@code true} if the process is alive
+     */
+    public boolean hasLiveProcess() {
+        return claudeProcess != null && claudeProcess.isRunning();
+    }
+
+    /**
+     * Reads the Claude CLI version string from the running process.
+     *
+     * <p>Blocking call; suitable for a background thread.
+     *
+     * @return version string, or empty string if not available
+     */
+    public String readVersion() {
+        ClaudeProcess cp = claudeProcess;
+        return cp != null ? cp.readVersion() : "";
+    }
+
+    // -------------------------------------------------------------------------
+    // Model parsing
+    // -------------------------------------------------------------------------
+
+    /**
+     * Parses model names from the rendered screen after {@code /model} was sent,
+     * and identifies the currently selected model.
+     *
+     * <p>Supports two formats:
+     * <ul>
+     *   <li><b>New numbered menu:</b>
+     *       {@code ❯ 1. Default (recommended) ✔  Sonnet 4.6 · Best for everyday tasks}
+     *       → extracts the version string {@code Sonnet 4.6}; the entry with {@code ✔}
+     *       is the current one.</li>
+     *   <li><b>Legacy:</b> {@code claude-xxx} — lines starting with {@code claude-};
+     *       the entry prefixed with a cursor glyph (❯ ▶ >) is the current one.</li>
+     * </ul>
+     *
+     * <p>Lines that do not match either format (e.g. "Select a model",
+     * "Use arrow keys") are silently ignored.
+     *
+     * @param lines terminal screen lines to parse
+     * @return {@link ModelDiscovery} with all model names and the index of the
+     *         active model ({@code -1} if not detected)
+     */
+    public static ModelDiscovery parseModelDiscovery(List<String> lines) {
+        List<String> models = new ArrayList<>();
+        int currentIndex = -1;
+        Pattern versionTailPat =
+                Pattern.compile("([A-Z][a-z]+\\s+\\d+\\.\\d+)\\s*$");
+        for (String line : lines) {
+            boolean hasCursor = line.trim().matches("^[❯▶>].*");
+            boolean hasCheck  = line.contains("\u2714");
+            String trimmed = line.trim().replaceFirst("^[❯▶>]\\s*", "").trim();
+            // New numbered format: "N. DisplayName ✔  VersionStr · Description"
+            if (trimmed.matches("^\\d+\\..*")) {
+                String leftPart = trimmed.split("[·\u00b7]", 2)[0];
+                Matcher m = versionTailPat.matcher(leftPart);
+                if (m.find()) {
+                    if (hasCheck) currentIndex = models.size();
+                    models.add(m.group(1).trim());
+                    continue;
+                }
+            }
+            // Legacy format: claude-xxx
+            if (trimmed.startsWith("claude-") && !trimmed.contains(" ")) {
+                if (hasCursor) currentIndex = models.size();
+                models.add(trimmed);
+            } else if (trimmed.matches("(?i)claude[\\-/][\\w\\-\\.]+")) {
+                if (hasCursor) currentIndex = models.size();
+                models.add(trimmed);
+            }
+        }
+        return new ModelDiscovery(models, currentIndex);
+    }
+
+    /**
+     * Convenience wrapper that returns only the model name list.
+     *
+     * <p>Kept for backward compatibility with code that only needs the list
+     * and not the selected index. Delegates entirely to
+     * {@link #parseModelDiscovery(List)}.
+     *
+     * @param lines terminal screen lines to parse
+     * @return list of model name strings (may be empty; never {@code null})
+     */
+    public static List<String> parseModelList(List<String> lines) {
+        return parseModelDiscovery(lines).models();
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
+
+    private void startStatusPollTimer() {
+        statusTimer = new javax.swing.Timer(500, e -> pollScreenState());
+        statusTimer.start();
+    }
+
+    /**
+     * Opens the {@code /model} selection menu via a safe three-step sequence:
+     * type {@code /model}, wait, ESC to dismiss autocomplete (keeping the
+     * command in the input), wait, then \r to execute.
+     */
+    private void openModelMenu() throws IOException, InterruptedException {
+        connector.write("/model");
+        Thread.sleep(200);
+        connector.write(PTY_ESC);
+        Thread.sleep(200);
+        connector.write("\r");
+        Thread.sleep(200);
+    }
+
+    /**
+     * Sends {@code bytes} to the PTY and transitions the model to
+     * {@link SessionLifecycle#READY}.
+     */
+    private void sendCancelToPty(byte[] bytes) throws IOException {
+        connector.write(bytes);
+        onClaudeIdle();
+    }
+}

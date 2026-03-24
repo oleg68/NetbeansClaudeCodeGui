@@ -1,4 +1,4 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.controller;
 
 import org.junit.jupiter.api.Test;
 
@@ -8,13 +8,13 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link ClaudePromptPanel#parseModelDiscovery(List)} and the
- * {@link ClaudePromptPanel#parseModelList(List)} convenience wrapper.
+ * Unit tests for {@link ClaudeSessionController#parseModelDiscovery(List)} and the
+ * {@link ClaudeSessionController#parseModelList(List)} convenience wrapper.
  *
  * Bug: model entries prefixed with ❯ cursor glyph (e.g. "❯ claude-opus-4-5") were not
  * recognized, causing an empty result and infinite discoverModels() loop.
  */
-class ClaudePromptPanelParseModelTest {
+class ClaudeSessionControllerParseModelTest {
 
     // -------------------------------------------------------------------------
     // parseModelDiscovery — currentIndex detection
@@ -27,7 +27,7 @@ class ClaudePromptPanelParseModelTest {
                 "  2. Opus                     Opus 4.6 \u00b7 Most capable for complex work",
                 "  3. Haiku                    Haiku 4.5 \u00b7 Fastest for quick answers"
         );
-        ClaudePromptPanel.ModelDiscovery d = ClaudePromptPanel.parseModelDiscovery(lines);
+        ClaudeSessionController.ModelDiscovery d = ClaudeSessionController.parseModelDiscovery(lines);
         assertEquals(List.of("Sonnet 4.6", "Opus 4.6", "Haiku 4.5"), d.models());
         assertEquals(0, d.currentIndex(), "First item has ✔ so index must be 0");
     }
@@ -39,7 +39,7 @@ class ClaudePromptPanelParseModelTest {
                 "❯ 2. Opus                  \u2714  Opus 4.6 \u00b7 Most capable for complex work",
                 "  3. Haiku                    Haiku 4.5 \u00b7 Fastest for quick answers"
         );
-        ClaudePromptPanel.ModelDiscovery d = ClaudePromptPanel.parseModelDiscovery(lines);
+        ClaudeSessionController.ModelDiscovery d = ClaudeSessionController.parseModelDiscovery(lines);
         assertEquals(1, d.currentIndex(), "Second item has ✔ so index must be 1");
     }
 
@@ -49,7 +49,7 @@ class ClaudePromptPanelParseModelTest {
                 "  1. Default (recommended)    Sonnet 4.6 \u00b7 Best for everyday tasks",
                 "  2. Opus                     Opus 4.6 \u00b7 Most capable for complex work"
         );
-        ClaudePromptPanel.ModelDiscovery d = ClaudePromptPanel.parseModelDiscovery(lines);
+        ClaudeSessionController.ModelDiscovery d = ClaudeSessionController.parseModelDiscovery(lines);
         assertEquals(-1, d.currentIndex(), "No ✔ present, currentIndex must be -1");
     }
 
@@ -59,28 +59,26 @@ class ClaudePromptPanelParseModelTest {
                 "  claude-sonnet-4-6",
                 "❯ claude-opus-4-5"
         );
-        ClaudePromptPanel.ModelDiscovery d = ClaudePromptPanel.parseModelDiscovery(lines);
+        ClaudeSessionController.ModelDiscovery d = ClaudeSessionController.parseModelDiscovery(lines);
         assertEquals(List.of("claude-sonnet-4-6", "claude-opus-4-5"), d.models());
         assertEquals(1, d.currentIndex(), "Cursor glyph marks second legacy entry as current");
     }
 
     // -------------------------------------------------------------------------
-    // parseModelList — backward-compat wrapper (existing tests unchanged below)
+    // parseModelList — backward-compat wrapper
     // -------------------------------------------------------------------------
-
 
     @Test
     void plainModelName() {
         List<String> lines = Arrays.asList("  claude-opus-4-5", "  claude-sonnet-4-6");
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertEquals(List.of("claude-opus-4-5", "claude-sonnet-4-6"), models);
     }
 
     @Test
     void modelWithCursorGlyphHeavyArrow() {
-        // ❯ is the Ink cursor glyph used in the selected item
         List<String> lines = Arrays.asList("  ❯ claude-opus-4-5", "  claude-sonnet-4-6");
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertFalse(models.isEmpty(), "Should recognize model names prefixed with ❯");
         assertTrue(models.contains("claude-opus-4-5"));
         assertTrue(models.contains("claude-sonnet-4-6"));
@@ -89,7 +87,7 @@ class ClaudePromptPanelParseModelTest {
     @Test
     void modelWithTriangleGlyph() {
         List<String> lines = Arrays.asList("  ▶ claude-haiku-4-5", "  claude-opus-4-5");
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertTrue(models.contains("claude-haiku-4-5"));
         assertTrue(models.contains("claude-opus-4-5"));
     }
@@ -97,7 +95,7 @@ class ClaudePromptPanelParseModelTest {
     @Test
     void modelWithGreaterThanGlyph() {
         List<String> lines = Arrays.asList("  > claude-sonnet-4-6");
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertTrue(models.contains("claude-sonnet-4-6"));
     }
 
@@ -109,26 +107,25 @@ class ClaudePromptPanelParseModelTest {
                 "  Use arrow keys to select",
                 "  Press Enter to confirm"
         );
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertEquals(List.of("claude-opus-4-5"), models);
     }
 
     @Test
     void emptyListWhenNoModels() {
         List<String> lines = Arrays.asList("  No models found", "  Press q to quit");
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertTrue(models.isEmpty());
     }
 
     @Test
     void newNumberedMenuFormat() {
-        // Actual menu format observed in Claude CLI
         List<String> lines = Arrays.asList(
                 "❯ 1. Default (recommended) \u2714  Sonnet 4.6 \u00b7 Best for everyday tasks",
                 "  2. Opus                     Opus 4.6 \u00b7 Most capable for complex work",
                 "  3. Haiku                    Haiku 4.5 \u00b7 Fastest for quick answers"
         );
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertEquals(List.of("Sonnet 4.6", "Opus 4.6", "Haiku 4.5"), models);
     }
 
@@ -139,7 +136,7 @@ class ClaudePromptPanelParseModelTest {
                 "❯ 2. Opus                  \u2714  Opus 4.6 \u00b7 Most capable for complex work",
                 "  3. Haiku                    Haiku 4.5 \u00b7 Fastest for quick answers"
         );
-        List<String> models = ClaudePromptPanel.parseModelList(lines);
+        List<String> models = ClaudeSessionController.parseModelList(lines);
         assertEquals(List.of("Sonnet 4.6", "Opus 4.6", "Haiku 4.5"), models);
     }
 }
