@@ -9,7 +9,6 @@ import io.github.nbclaudecodegui.model.SessionLifecycle;
 import io.github.nbclaudecodegui.process.ClaudeProcess;
 import io.github.nbclaudecodegui.process.PtyTtyConnector;
 import io.github.nbclaudecodegui.process.ScreenContentDetector;
-import io.github.nbclaudecodegui.process.TtyPromptDetector;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import io.github.nbclaudecodegui.settings.ClaudeProfile;
 import io.github.nbclaudecodegui.settings.ClaudeProfileStore;
@@ -77,7 +76,6 @@ public final class ClaudeSessionController {
      */
     private final Supplier<List<String>> screenLines;
 
-    private final TtyPromptDetector ttyPromptDetector = new TtyPromptDetector();
     private final ScreenContentDetector screenContentDetector = new ScreenContentDetector();
 
     private ClaudeProcess claudeProcess;
@@ -164,14 +162,6 @@ public final class ClaudeSessionController {
                 return;
             }
             SwingUtilities.invokeLater(() -> promptFlushTimer.restart());
-
-            ttyPromptDetector.feed(line).ifPresent(menu -> {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(tag + "[PTY prompt detected] text=\"" + menu.text()
-                            + "\" | options=" + menu.options());
-                }
-                model.setActiveChoiceMenu(menu);
-            });
         });
 
         widget.setTtyConnector(connector);
