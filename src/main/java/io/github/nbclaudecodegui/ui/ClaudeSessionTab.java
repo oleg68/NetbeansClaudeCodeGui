@@ -401,6 +401,7 @@ public class ClaudeSessionTab extends TopComponent
                     LOG.info(sessionTag + "[PTY prompt answer] " + answer);
                 }
                 promptPanel.setVisible(true);
+                SwingUtilities.invokeLater(this::unlockDividerFromChoiceMenu);
                 revalidate();
                 repaint();
                 controller.writePtyAnswer(answer);
