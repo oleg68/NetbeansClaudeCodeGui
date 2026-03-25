@@ -646,6 +646,7 @@ public class ClaudeSessionTab extends TopComponent
     private void lockDividerForChoiceMenu() {
         if (splitPane == null) return;
         splitPane.setEnabled(false);
+        splitPane.validate(); // force layout so HTML labels compute height at actual width
         int total = splitPane.getHeight();
         if (total <= 0) return;
         int natural = choiceMenuPanel.getPreferredSize().height;

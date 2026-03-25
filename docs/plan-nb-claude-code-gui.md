@@ -35,15 +35,29 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   ├── actions/
     │   │   ├── ClaudeCodeAction.java          # Toolbar action
     │   │   └── OpenWithClaudeAction.java      # Context menu action
+    │   ├── controller/
+    │   │   └── ClaudeSessionController.java   # PTY process lifecycle, screen polling, model/edit-mode switching
+    │   ├── model/
+    │   │   ├── ClaudeSessionModel.java        # Session state container, listener dispatch on EDT
+    │   │   └── ChoiceMenuModel.java           # Interactive-prompt data
     │   ├── settings/
     │   │   ├── ClaudeCodeOptionsPanelController.java
     │   │   ├── ClaudeCodeOptionsPanel.java
-    │   │   └── ClaudeCodePreferences.java
+    │   │   ├── ClaudeCodePreferences.java
+    │   │   ├── ClaudeProfile.java             # POJO: ConnectionType/ProxyMode enums, toEnvVars()
+    │   │   ├── ClaudeProfileStore.java        # NbPreferences + Jackson; Default always first
+    │   │   ├── ClaudeProfilesPanel.java       # Profiles tab UI
+    │   │   ├── ClaudeProjectProperties.java   # Per-project profile assignment
+    │   │   ├── ClaudeProjectPropertiesPanel.java
+    │   │   ├── ClaudeProjectPropertiesPanelProvider.java
+    │   │   ├── CustomModel.java               # Record: id, alias, available
+    │   │   └── CustomModelsDialog.java        # Dialog for managing custom models
     │   ├── ui/
     │   │   ├── ClaudeSessionTopComponent.java  # One TC = one session; thin wrapper around ClaudePromptPanel
     │   │   ├── ClaudePromptPanel.java          # Session UI: terminal + top bar + input + status bar + model discovery
+    │   │   ├── ChoiceMenuPanel.java            # Interactive choice UI (ChoiceMenuModel → buttons)
     │   │   ├── PromptResponsePanel.java        # Interactive questions (Yes/No, radio, free-form)
-    │   │   ├── PermissionPanel.java            # [✓ Accept][✗ Reject][reason][Cancel]
+    │   │   ├── FileDiffPermissionPanel.java    # [✓ Accept][✗ Reject][reason][Cancel]
     │   │   ├── FileDiffTab.java                # Diff TopComponent + PermissionPanel; shared by hook and MCP
     │   │   └── MarkdownRenderer.java           # Markdown → HTML
     │   └── process/
@@ -358,45 +372,44 @@ Extra environment variables
 
 ---
 
-### Stage 14 — Prompt history (planned)
+### Stage 14 — Prompt history & favorites (planned)
 
-**Goal:** persistent per-project prompt history.
+**Goal:** persistent per-project prompt history with ability to promote entries to global or per-project favorites; optional hotkey on each favorite.
 
-**What to add:**
-- Store history in `NbPreferences` as a JSON array with timestamps
-- Settings: max depth (default 200), TTL
-- Popup list UI with columns: time, prompt preview
-- Actions on an entry: **Send to input area**, **Add to favorites**, **Delete**
-- Force-clear: "Delete entries older than…" (dialog with date picker)
+**Components:**
+
+| File | Role |
+|------|------|
+| `history/PromptHistoryStore.java` | Read / write / trim history in `NbPreferences` as JSON array with timestamps; per-project key |
+| `favorites/PromptFavoritesStore.java` | Global (`~/.netbeans/…`) + per-project favorites; JSON; supports ordering |
+| `ui/PromptListPanel.java` | Tabbed panel "History \| Favorites"; shared across both stores; columns: time, preview |
+| `actions/PromptFavoriteAction.java` | Dynamically registered `Action` per favorite for NetBeans Keymap API |
+
+**History features:**
+- Store in `NbPreferences` as JSON array with timestamps; max depth (default 200) + TTL configurable in Settings
 - Ctrl+Up / Ctrl+Down in `inputArea` — navigate persistent history
+- Popup list: time + prompt preview; actions: **Send to input area**, **Add to favorites**, **Delete**
+- Force-clear: "Delete entries older than…" (dialog with date picker)
 
-**Components:**
-- `history/PromptHistoryStore.java` — read / write / trim
-- `ui/PromptListPanel.java` — reusable control (also used in stage 15)
+**Favorites features:**
+- Two levels: global (file in `~/.netbeans/`) and per-project (`NbPreferences`)
+- Actions: **Send**, **Move to global / per-project**, **Rename**, **Delete**, **Reorder** (↑↓ + drag & drop)
+- Assign hotkey to a specific favorite (NetBeans Keymap API)
 
----
+**Settings keys added:**
 
-### Stage 15 — Prompt favorites (planned)
+| Key | Type | Default |
+|-----|------|---------|
+| `historyMaxDepth` | int | `200` |
+| `historyTtlDays` | int | `0` (no expiry) |
 
-**Goal:** save frequently used prompts with optional hotkey support.
-
-**Two levels:**
-- Global (file in `~/.netbeans/`)
-- Per-project (`NbPreferences`)
-
-**What to add:**
-- `PromptListPanel` (from stage 14) — tabbed "History | Favorites" view
-- Actions on a favorite: **Send**, **Move to global**, **Rename**, **Delete**, **Reorder** (↑↓ buttons + drag & drop)
-- Assign a hotkey to a specific favorite (NetBeans Keymap API)
-
-**Components:**
-- `favorites/PromptFavoritesStore.java`
-- `ui/PromptListPanel.java` — extension from stage 14
-- `actions/PromptFavoriteAction.java` — dynamically registered Actions for hotkeys
+**Tests:**
+- `PromptHistoryStoreTest.java` — add, trim, TTL expiry
+- `PromptFavoritesStoreTest.java` — add global, add per-project, reorder, delete
 
 ---
 
-### Stage 16 — File attachments in prompt (planned)
+### Stage 15 — File attachments in prompt (planned)
 
 **Goal:** attach files to a prompt — prepended as `@/absolute/path` before the prompt text on send.
 
@@ -426,7 +439,7 @@ Extra environment variables
 
 ---
 
-### Stage 17 — FileDiff location config (planned)
+### Stage 16 — FileDiff location config (planned)
 
 **Goal:** allow the user to choose whether FileDiff appears embedded in the session window or in a separate TopComponent (current behaviour).
 
@@ -438,7 +451,7 @@ Extra environment variables
 
 ---
 
-### Stage 18 — Settings + full integration (planned)
+### Stage 17 — Settings + full integration (planned)
 
 **Goal:** settings drive plugin behaviour; session lifecycle management.
 
@@ -453,7 +466,7 @@ Extra environment variables
 
 ---
 
-### Stage 19 — GitHub CI/CD + NBM publishing (planned)
+### Stage 18 — GitHub CI/CD + NBM publishing (planned)
 
 **Goal:** automated build and release publishing.
 
@@ -465,7 +478,7 @@ Extra environment variables
 
 ---
 
-### Stage 20 — Help + user documentation (planned)
+### Stage 19 — Help + user documentation (planned)
 
 **Goal:** built-in help and end-user documentation.
 
@@ -506,8 +519,8 @@ Settings are stored via `NbPreferences.forModule(ClaudeCodePreferences.class)`:
 
 | OS | Path |
 |----|------|
-| Linux / macOS | `~/.netbeans/23/config/Preferences/io/github/nbclaudecodegui.properties` |
-| Windows | `%APPDATA%\NetBeans\23\config\Preferences\io\github\nbclaudecodegui.properties` |
+| Linux / macOS | `~/.netbeans/28/config/Preferences/io/github/nbclaudecodegui.properties` |
+| Windows | `%APPDATA%\NetBeans\28\config\Preferences\io\github\nbclaudecodegui.properties` |
 
 **Settings keys:**
 

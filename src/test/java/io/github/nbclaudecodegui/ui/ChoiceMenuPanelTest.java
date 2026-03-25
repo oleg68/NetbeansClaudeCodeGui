@@ -2,13 +2,16 @@ package io.github.nbclaudecodegui.ui;
 
 import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import io.github.nbclaudecodegui.model.ChoiceMenuModel.Option;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JButton;
+import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
@@ -435,6 +438,77 @@ class ChoiceMenuPanelTest {
             // Cancel must come after Send in the traversal order
             java.awt.Component afterSend = ftp.getComponentAfter(panel, sendBtn);
             assertEquals(cancelBtn, afterSend, "Cancel must follow Send in Tab order");
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Divider / layout tests
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: lockDividerForChoiceMenu must call splitPane.validate() before
+     * reading choiceMenuPanel.getPreferredSize().height. Without validate(), the HTML
+     * JLabel inside ChoiceMenuPanel does not know its actual width and may report an
+     * incorrect (too small) preferred height, causing the divider to be placed too low
+     * and clipping the bottom of the panel.
+     *
+     * <p>This test verifies that after the panel is placed in a container with a known
+     * width and validate() is called, getPreferredSize().height returns a value consistent
+     * with the actual layout height (i.e., the component is not clipped).
+     */
+    @Test
+    void preferredHeightAfterSplitPaneValidateCoversAllContent() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel choiceMenuPanel = new ChoiceMenuPanel();
+            JPanel promptPanel = new JPanel();
+            promptPanel.setVisible(false);
+
+            JPanel southStack = new JPanel(new BorderLayout());
+            southStack.add(choiceMenuPanel, BorderLayout.NORTH);
+            southStack.add(promptPanel,     BorderLayout.CENTER);
+
+            JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                    new JPanel(), southStack);
+            splitPane.setResizeWeight(1.0);
+            splitPane.setDividerSize(5);
+
+            JFrame frame = new JFrame();
+            frame.add(splitPane);
+            frame.setSize(400, 600);
+            frame.setVisible(true);
+
+            try {
+                choiceMenuPanel.show(new ChoiceMenuModel(
+                        "Do you want to make this edit to precious-beaming-clock.md?",
+                        List.of(new Option("Yes", "1"),
+                                new Option("Yes, and allow Claude to edit its own settings for this session", "2"),
+                                new Option("No", "3")), -1),
+                        answer -> {});
+
+                // Simulate lockDividerForChoiceMenu WITH validate() (the fix)
+                splitPane.setEnabled(false);
+                splitPane.validate();
+                int total   = splitPane.getHeight();
+                int natural = choiceMenuPanel.getPreferredSize().height;
+                assertTrue(total > 0, "splitPane must have positive height");
+                assertTrue(natural > 0, "choiceMenuPanel preferred height must be positive");
+
+                int divLoc = total - splitPane.getDividerSize() - natural;
+                assertTrue(divLoc >= 0,
+                        "Divider location must be non-negative — preferred height (" + natural
+                        + ") must fit inside splitPane (" + total + ")");
+
+                splitPane.setDividerLocation(divLoc);
+                splitPane.validate();
+
+                // After correctly placed divider, component must not be clipped
+                assertTrue(choiceMenuPanel.getHeight() >= natural,
+                        "choiceMenuPanel actual height (" + choiceMenuPanel.getHeight()
+                        + ") must be >= preferred height (" + natural
+                        + ") — divider placed too low without validate()");
+            } finally {
+                frame.dispose();
+            }
         });
     }
 
