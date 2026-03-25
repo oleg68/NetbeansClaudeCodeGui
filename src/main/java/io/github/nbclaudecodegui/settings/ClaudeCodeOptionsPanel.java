@@ -1,34 +1,42 @@
 package io.github.nbclaudecodegui.settings;
 
+import io.github.nbclaudecodegui.model.FavoriteEntry;
+import io.github.nbclaudecodegui.model.PromptFavoritesStore;
+import io.github.nbclaudecodegui.ui.FavoritesPanel;
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.table.AbstractTableModel;
 
 /**
  * Settings panel displayed inside Tools → Options → Claude Code.
  *
- * <p>Contains two tabs:
+ * <p>Contains three tabs:
  * <ul>
  *   <li><b>General</b> — Claude CLI path, MCP port, send/newline key bindings, debug mode</li>
  *   <li><b>Profiles</b> — named connection profiles with auth, proxy, and extra env vars
  *       (see {@link ClaudeProfilesPanel})</li>
+ *   <li><b>Favorites</b> — manage global favorites (text, shortcut, ordering)</li>
  * </ul>
  *
- * <p>{@link #load()} and {@link #store()} delegate to both tabs.
+ * <p>{@link #load()} and {@link #store()} delegate to all tabs.
  */
 public final class ClaudeCodeOptionsPanel extends JPanel {
 
@@ -44,6 +52,8 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
 
     private JTextField executablePathField;
     private JSpinner mcpPortSpinner;
+    private JSpinner historyMaxDepthSpinner;
+    private JSpinner historyTtlDaysSpinner;
     private javax.swing.JCheckBox debugCheckBox;
 
     /** send-key radio buttons: value → button */
@@ -56,6 +66,9 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
 
     /** Profiles tab panel. */
     private final ClaudeProfilesPanel profilesPanel = new ClaudeProfilesPanel();
+
+    /** Favorites tab panel. */
+    private final GlobalFavoritesPanel favoritesPanel = new GlobalFavoritesPanel();
 
     /**
      * Creates the panel and initialises all UI components.
@@ -70,6 +83,7 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("General", buildGeneralPanel());
         tabs.addTab("Profiles", profilesPanel);
+        tabs.addTab("Favorites", favoritesPanel);
         add(tabs, BorderLayout.CENTER);
     }
 
@@ -105,6 +119,22 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
                 ClaudeCodePreferences.DEFAULT_MCP_PORT, 1024, 65535, 1));
         mcpPortSpinner.setToolTipText("Port for the NetBeans MCP SSE server (restart required)");
         form.add(mcpPortSpinner, gbc(1, row, false));
+        row++;
+
+        // --- history max depth ---
+        form.add(new JLabel("History max depth:"), gbc(0, row, false));
+        historyMaxDepthSpinner = new JSpinner(new SpinnerNumberModel(
+                ClaudeCodePreferences.DEFAULT_HISTORY_MAX_DEPTH, 1, 2000, 10));
+        historyMaxDepthSpinner.setToolTipText("Maximum number of history entries to keep per project");
+        form.add(historyMaxDepthSpinner, gbc(1, row, false));
+        row++;
+
+        // --- history TTL ---
+        form.add(new JLabel("History TTL (days, 0 = keep forever):"), gbc(0, row, false));
+        historyTtlDaysSpinner = new JSpinner(new SpinnerNumberModel(
+                ClaudeCodePreferences.DEFAULT_HISTORY_TTL_DAYS, 0, 3650, 1));
+        historyTtlDaysSpinner.setToolTipText("Delete history entries older than this many days (0 = keep forever)");
+        form.add(historyTtlDaysSpinner, gbc(1, row, false));
         row++;
 
         // --- send key ---
@@ -211,6 +241,8 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         executablePathField.setText(
                 ClaudeCodePreferences.getClaudeExecutablePath());
         mcpPortSpinner.setValue(ClaudeCodePreferences.getMcpPort());
+        historyMaxDepthSpinner.setValue(ClaudeCodePreferences.getHistoryMaxDepth());
+        historyTtlDaysSpinner.setValue(ClaudeCodePreferences.getHistoryTtlDays());
         debugCheckBox.setSelected(ClaudeCodePreferences.isDebugMode());
 
         String sendVal    = ClaudeCodePreferences.getSendKey();
@@ -234,6 +266,8 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         ClaudeCodePreferences.setClaudeExecutablePath(
                 executablePathField.getText().trim());
         ClaudeCodePreferences.setMcpPort((Integer) mcpPortSpinner.getValue());
+        ClaudeCodePreferences.setHistoryMaxDepth((Integer) historyMaxDepthSpinner.getValue());
+        ClaudeCodePreferences.setHistoryTtlDays((Integer) historyTtlDaysSpinner.getValue());
         ClaudeCodePreferences.setDebugMode(debugCheckBox.isSelected());
         ClaudeCodePreferences.setSendKey(selectedValue(sendRadios));
         ClaudeCodePreferences.setNewlineKey(selectedValue(newlineRadios));
@@ -283,5 +317,116 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         c.fill = GridBagConstraints.HORIZONTAL;
         c.weightx = 1.0;
         return c;
+    }
+
+    // -------------------------------------------------------------------------
+    // Favorites tab
+    // -------------------------------------------------------------------------
+
+    /**
+     * Panel for managing global favorites (shown in the Favorites settings tab).
+     * Extends {@link FavoritesPanel} and adds Add/Delete buttons for global entries.
+     */
+    private final class GlobalFavoritesPanel extends FavoritesPanel {
+
+        GlobalFavoritesPanel() {
+            super(PromptFavoritesStore.getInstance(
+                    java.nio.file.Path.of(System.getProperty("user.home"))));
+
+            JButton addBtn      = new JButton("Add");
+            JButton editBtn     = new JButton("Edit");
+            JButton shortcutBtn = new JButton("Assign Shortcut");
+            JButton upBtn       = new JButton("\u2191");
+            JButton downBtn     = new JButton("\u2193");
+            JButton deleteBtn   = new JButton("Delete");
+
+            addBtn.addActionListener(e -> doAdd());
+            editBtn.addActionListener(e -> doEdit(this));
+            shortcutBtn.addActionListener(e -> doAssignShortcut(this));
+            upBtn.addActionListener(e -> doMoveGlobal(-1));
+            downBtn.addActionListener(e -> doMoveGlobal(1));
+            deleteBtn.addActionListener(e -> doDelete());
+
+            addButton(addBtn);
+            addButton(editBtn);
+            addButton(shortcutBtn);
+            addButton(upBtn);
+            addButton(downBtn);
+            addButton(deleteBtn);
+        }
+
+        @Override
+        protected List<FavoriteEntry> loadEntries() {
+            return store.getGlobal();
+        }
+
+        @Override
+        protected AbstractTableModel buildModel(List<FavoriteEntry> entries) {
+            return new GlobalFavTableModel(entries);
+        }
+
+        @Override
+        protected void configureColumns(javax.swing.JTable t) {
+            if (t.getColumnCount() < 3) return;
+            t.getColumnModel().getColumn(0).setMaxWidth(30);
+            t.getColumnModel().getColumn(2).setPreferredWidth(150);
+            t.getColumnModel().getColumn(2).setMaxWidth(220);
+        }
+
+        private void doAdd() {
+            String text = JOptionPane.showInputDialog(
+                    GlobalFavoritesPanel.this.getTopLevelAncestor(),
+                    "Enter favorite text:", "Add Global Favorite", JOptionPane.PLAIN_MESSAGE);
+            if (text == null || text.isBlank()) return;
+            store.addGlobal(FavoriteEntry.ofGlobal(text.trim()));
+            refreshTable();
+        }
+
+        private void doDelete() {
+            List<Integer> checked = checkedRows();
+            if (checked.isEmpty()) {
+                int row = table.getSelectedRow();
+                if (row >= 0) checked = List.of(row);
+            }
+            List<FavoriteEntry> toDelete = new ArrayList<>();
+            for (int row : checked) {
+                if (row < currentEntries.size()) toDelete.add(currentEntries.get(row));
+            }
+            if (toDelete.isEmpty()) return;
+            store.deleteGlobal(toDelete);
+            refreshTable();
+        }
+    }
+
+    private static final class GlobalFavTableModel extends AbstractTableModel {
+
+        private final List<FavoriteEntry> entries;
+        private final boolean[]           checked;
+
+        GlobalFavTableModel(List<FavoriteEntry> entries) {
+            this.entries = entries;
+            this.checked = new boolean[entries.size()];
+        }
+
+        @Override public int getRowCount()    { return entries.size(); }
+        @Override public int getColumnCount() { return 3; }
+        @Override public String getColumnName(int col) {
+            return switch (col) { case 0 -> ""; case 1 -> "Text"; default -> "Shortcut"; };
+        }
+        @Override public Class<?> getColumnClass(int col) {
+            return col == 0 ? Boolean.class : String.class;
+        }
+        @Override public boolean isCellEditable(int row, int col) { return col == 0; }
+        @Override public Object getValueAt(int row, int col) {
+            FavoriteEntry e = entries.get(row);
+            return switch (col) {
+                case 0 -> checked[row];
+                case 1 -> FavoritesPanel.truncate(e.getText(), 100);
+                default -> e.getShortcut() != null ? e.getShortcut() : "";
+            };
+        }
+        @Override public void setValueAt(Object val, int row, int col) {
+            if (col == 0) { checked[row] = Boolean.TRUE.equals(val); fireTableCellUpdated(row, col); }
+        }
     }
 }

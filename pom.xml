@@ -6,7 +6,7 @@
 
     <groupId>io.github.nbclaudecodegui</groupId>
     <artifactId>nb-claude-code-gui</artifactId>
-    <version>0.13.23-SNAPSHOT</version>
+    <version>0.14.5-SNAPSHOT</version>
     <packaging>nbm</packaging>
     <name>Claude Code GUI</name>
     <description>NetBeans plugin that provides a GUI for Claude Code CLI — run claude code sessions directly inside the IDE.</description>
@@ -363,10 +363,15 @@
             <artifactId>jetty-servlet</artifactId>
             <version>11.0.20</version>
         </dependency>
-        <!-- JSON processing for MCP protocol -->
+        <!-- JSON processing for MCP protocol and history/favorites persistence -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+            <version>2.16.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
             <version>2.16.2</version>
         </dependency>
 

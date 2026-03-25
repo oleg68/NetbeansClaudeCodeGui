@@ -175,6 +175,7 @@ public final class ClaudeSessionController {
         modelComboPopulated = false;
         model.setLifecycle(SessionLifecycle.STARTING);
         model.setWorkingDirectory(dir);
+        model.loadPersistedHistory();
 
         // Waiter thread: notifies when the process exits
         Thread waiter = new Thread(() -> {

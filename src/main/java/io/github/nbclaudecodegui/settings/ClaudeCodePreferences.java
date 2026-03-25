@@ -272,6 +272,64 @@ public final class ClaudeCodePreferences {
         return Path.of(System.getProperty("user.home"), "claude-profiles");
     }
 
+    // -------------------------------------------------------------------------
+    // historyMaxDepth
+    // -------------------------------------------------------------------------
+
+    /** Preference key: maximum number of persisted prompt history entries. */
+    public static final String KEY_HISTORY_MAX_DEPTH = "historyMaxDepth";
+    /** Default: keep up to 200 entries. */
+    public static final int DEFAULT_HISTORY_MAX_DEPTH = 200;
+
+    /**
+     * Returns the maximum number of history entries to keep per project.
+     *
+     * @return max depth (≥ 1)
+     */
+    public static int getHistoryMaxDepth() {
+        return NbPreferences.forModule(ClaudeCodePreferences.class)
+                .getInt(KEY_HISTORY_MAX_DEPTH, DEFAULT_HISTORY_MAX_DEPTH);
+    }
+
+    /**
+     * Persists the history max-depth setting.
+     *
+     * @param v new max depth; clamped to [1, 2000]
+     */
+    public static void setHistoryMaxDepth(int v) {
+        NbPreferences.forModule(ClaudeCodePreferences.class)
+                .putInt(KEY_HISTORY_MAX_DEPTH, Math.max(1, Math.min(2000, v)));
+    }
+
+    // -------------------------------------------------------------------------
+    // historyTtlDays
+    // -------------------------------------------------------------------------
+
+    /** Preference key: number of days after which history entries expire. */
+    public static final String KEY_HISTORY_TTL_DAYS = "historyTtlDays";
+    /** Default: 0 — entries never expire. */
+    public static final int DEFAULT_HISTORY_TTL_DAYS = 0;
+
+    /**
+     * Returns the TTL for history entries in days.
+     *
+     * @return TTL in days, or {@code 0} to keep entries forever
+     */
+    public static int getHistoryTtlDays() {
+        return NbPreferences.forModule(ClaudeCodePreferences.class)
+                .getInt(KEY_HISTORY_TTL_DAYS, DEFAULT_HISTORY_TTL_DAYS);
+    }
+
+    /**
+     * Persists the history TTL setting.
+     *
+     * @param v TTL in days; clamped to [0, 3650]
+     */
+    public static void setHistoryTtlDays(int v) {
+        NbPreferences.forModule(ClaudeCodePreferences.class)
+                .putInt(KEY_HISTORY_TTL_DAYS, Math.max(0, Math.min(3650, v)));
+    }
+
     private static String validated(String value, String fallback) {
         return ENTER.equals(value) || SHIFT_ENTER.equals(value)
                 || CTRL_ENTER.equals(value) || ALT_ENTER.equals(value)

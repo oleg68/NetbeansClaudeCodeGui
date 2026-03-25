@@ -220,7 +220,11 @@ public class ClaudeSessionTab extends TopComponent
                 this::sendPrompt,
                 this::cancelPrompt,
                 controller::sendShiftTab,
-                model::getPromptHistory);
+                model::getPromptHistory,
+                () -> {
+                    File wd = model.getWorkingDirectory();
+                    return wd != null ? wd.getAbsolutePath() : null;
+                });
 
         // --- layout ---
         setLayout(new BorderLayout());

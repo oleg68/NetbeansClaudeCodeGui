@@ -106,3 +106,25 @@ After any action the originating `ClaudeSessionTopComponent` is re-activated aut
 - Integration test: `ClaudeCodePluginIT` uses `NbModuleSuite` for full IDE lifecycle
 - Test fixtures (JSON): `src/test/resources/fixtures/`
 - `ClaudeProcessTest` skips on Windows; uses a fake `claude` shell script
+
+## Bug Fixing Protocol
+
+1. **If the bug is related to PTY interaction with claude-code:**
+   - Write Python tests that launch claude-code and verify different interaction approaches
+   - Place tests in `claude-launch-tests/`
+   - Run the tests and verify which interaction approach is correct
+   - Based on test results, choose the correct fix
+
+2. **Bump version** — increment the patch version in `pom.xml`
+
+3. **Write unit tests** that reproduce the bug. Run them and confirm the bug is reproduced
+
+4. **Fix the bug**
+
+5. **Verify with tests** that the bug is fixed (`mvn test`)
+
+6. **Build the package** (`mvn package` or `mvn nbm:nbm`)
+
+7. **Offer to install the new plugin version** and verify the bug is fixed
+
+8. **On successful fix — commit** all changed files, including Python tests and `to-do.md` if the bug was tracked there

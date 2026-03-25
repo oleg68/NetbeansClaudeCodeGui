@@ -1,13 +1,17 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.model.FavoriteEntry;
+import io.github.nbclaudecodegui.model.PromptFavoritesStore;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Window;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -22,6 +26,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 
 /**
  * Pure-UI input panel for a Claude Code session.
@@ -41,20 +46,26 @@ import javax.swing.KeyStroke;
  */
 public final class ClaudePromptPanel extends JPanel {
 
-    private static final String ICON_SEND   = "\u25b6";  // ▶
-    private static final String ICON_CANCEL = "\u2716";  // ✖
+    private static final String ICON_SEND      = "\u25b6";  // ▶
+    private static final String ICON_CANCEL    = "\u2716";  // ✖
+    private static final String ICON_FAVORITES = "\u2605";  // ★
+    private static final String ICON_HISTORY   = "\u2630";  // ☰
 
     private final JTextArea inputArea;
     private final JButton   sendButton;
     private final JButton   cancelButton;
 
-    private final Consumer<String>      onSend;
-    private final Runnable              onCancel;
-    private final Runnable              onShiftTab;
+    private final Consumer<String>       onSend;
+    private final Runnable               onCancel;
+    private final Runnable               onShiftTab;
     private final Supplier<List<String>> promptHistorySupplier;
+    private final Supplier<String>       workingDirSupplier;
 
     /** Current position in the history list; {@code -1} = newest (empty field). */
     private int historyIndex = -1;
+
+    /** Shortcut matcher; lazily initialised once a working directory is available. */
+    private ShortcutMatcher shortcutMatcher;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -70,16 +81,20 @@ public final class ClaudePromptPanel extends JPanel {
      *                               the panel; used to cycle the Claude Code edit mode
      * @param promptHistorySupplier  returns the current in-session prompt history
      *                               (index 0 = most recent); queried on demand
+     * @param workingDirSupplier     returns the current working directory path; used for
+     *                               the history/favorites popup
      */
     public ClaudePromptPanel(Consumer<String> onSend,
                              Runnable onCancel,
                              Runnable onShiftTab,
-                             Supplier<List<String>> promptHistorySupplier) {
+                             Supplier<List<String>> promptHistorySupplier,
+                             Supplier<String> workingDirSupplier) {
         super(new BorderLayout());
         this.onSend                = onSend;
         this.onCancel              = onCancel;
         this.onShiftTab            = onShiftTab;
         this.promptHistorySupplier = promptHistorySupplier;
+        this.workingDirSupplier    = workingDirSupplier;
 
         inputArea = new JTextArea(3, 40);
         inputArea.setLineWrap(true);
@@ -104,9 +119,40 @@ public final class ClaudePromptPanel extends JPanel {
         buttonCol.add(cancelButton);
         buttonCol.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
+        JButton historyButton   = new JButton("<html>" + ICON_HISTORY + " History</html>");
+        JButton favoritesButton = new JButton("<html><font color='#CC6600'>" + ICON_FAVORITES + "</font> Favorites</html>");
+        historyButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        favoritesButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        historyButton.setToolTipText("Browse prompt history");
+        favoritesButton.setToolTipText("Browse favorites");
+
+        historyButton.addActionListener(e -> showHistoryDialog(historyButton));
+        favoritesButton.addActionListener(e -> showFavoritesDialog(favoritesButton));
+
+        JPanel leftCol = new JPanel();
+        leftCol.setLayout(new BoxLayout(leftCol, BoxLayout.Y_AXIS));
+        leftCol.add(favoritesButton);
+        leftCol.add(Box.createRigidArea(new Dimension(0, 4)));
+        leftCol.add(historyButton);
+        leftCol.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+
+        // Equalize all four button widths and heights.
+        // Done after the component is shown so HTML-rendered labels are measured correctly.
+        JButton[] allButtons = {sendButton, cancelButton, historyButton, favoritesButton};
+        addAncestorListener(new javax.swing.event.AncestorListener() {
+            @Override public void ancestorAdded(javax.swing.event.AncestorEvent e) {
+                equalizeButtons(allButtons);
+                revalidate();
+                removeAncestorListener(this);
+            }
+            @Override public void ancestorRemoved(javax.swing.event.AncestorEvent e) {}
+            @Override public void ancestorMoved(javax.swing.event.AncestorEvent e) {}
+        });
+
         setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
         add(new JScrollPane(inputArea), BorderLayout.CENTER);
         add(buttonCol, BorderLayout.EAST);
+        add(leftCol, BorderLayout.WEST);
 
         // Shift+Tab on buttons (and any other non-textarea child) → cycle edit mode.
         // The inputArea handles its own Shift+Tab in bindKeys because
@@ -187,6 +233,13 @@ public final class ClaudePromptPanel extends JPanel {
                     return;
                 }
 
+                // ShortcutMatcher — try to match favorites shortcuts
+                ShortcutMatcher sm = getOrCreateShortcutMatcher();
+                if (sm != null && sm.keyPressed(e)) {
+                    e.consume();
+                    return;
+                }
+
                 String sendKey = ClaudeCodePreferences.getSendKey();
                 boolean ctrl  = e.isControlDown();
                 boolean shift = e.isShiftDown();
@@ -207,6 +260,17 @@ public final class ClaudePromptPanel extends JPanel {
                 }
             }
         });
+    }
+
+    private ShortcutMatcher getOrCreateShortcutMatcher() {
+        if (workingDirSupplier == null) return null;
+        String wd = workingDirSupplier.get();
+        if (wd == null) return null;
+        if (shortcutMatcher == null) {
+            shortcutMatcher = new ShortcutMatcher(inputArea,
+                    PromptFavoritesStore.getInstance(Path.of(wd)));
+        }
+        return shortcutMatcher;
     }
 
     private void doSend() {
@@ -244,11 +308,24 @@ public final class ClaudePromptPanel extends JPanel {
         JMenuItem nextPrompt = new JMenuItem("Next prompt  (Ctrl+\u2193)");
         nextPrompt.addActionListener(e -> navigateHistory(-1));
 
+        JMenuItem addToFav = new JMenuItem("Add to Favorites");
+        addToFav.addActionListener(e -> {
+            String text = area.getText().trim();
+            if (!text.isEmpty() && workingDirSupplier != null) {
+                String wd = workingDirSupplier.get();
+                if (wd != null) {
+                    PromptFavoritesStore.getInstance(Path.of(wd))
+                            .addProject(FavoriteEntry.ofProject(text));
+                }
+            }
+        });
+
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
                 List<String> h = promptHistorySupplier.get();
                 prevPrompt.setEnabled(!h.isEmpty() && historyIndex < h.size() - 1);
                 nextPrompt.setEnabled(historyIndex > -1);
+                addToFav.setEnabled(!area.getText().trim().isEmpty());
             }
             @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
             @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
@@ -257,7 +334,51 @@ public final class ClaudePromptPanel extends JPanel {
         menu.addSeparator();
         menu.add(prevPrompt);
         menu.add(nextPrompt);
+        menu.addSeparator();
+        menu.add(addToFav);
 
         TextContextMenu.attach(area, menu);
+    }
+
+    // -------------------------------------------------------------------------
+    // History / Favorites dialogs
+    // -------------------------------------------------------------------------
+
+    private void showHistoryDialog(JButton anchor) {
+        String wd = workingDirSupplier != null ? workingDirSupplier.get() : null;
+        if (wd == null) return;
+        Window owner = SwingUtilities.getWindowAncestor(anchor);
+        HistoryDialog dlg = new HistoryDialog(owner, Path.of(wd), text -> inputArea.setText(text));
+        dlg.setVisible(true);
+    }
+
+    private void showFavoritesDialog(JButton anchor) {
+        String wd = workingDirSupplier != null ? workingDirSupplier.get() : null;
+        if (wd == null) return;
+        Window owner = SwingUtilities.getWindowAncestor(anchor);
+        FavoritesDialog dlg = new FavoritesDialog(owner, Path.of(wd), text -> inputArea.setText(text));
+        dlg.setVisible(true);
+    }
+
+    /**
+     * Sets preferredSize, minimumSize, and maximumSize on all buttons to the same
+     * value (the maximum preferred width/height across all buttons). This prevents
+     * layout managers from shrinking buttons below their natural size and causing
+     * HTML-rendered icon+text to wrap onto separate lines.
+     *
+     * <p>Package-private for testability.
+     */
+    static void equalizeButtons(JButton[] buttons) {
+        int maxW = 0, maxH = 0;
+        for (JButton b : buttons) {
+            maxW = Math.max(maxW, b.getPreferredSize().width);
+            maxH = Math.max(maxH, b.getPreferredSize().height);
+        }
+        Dimension eq = new Dimension(maxW, maxH);
+        for (JButton b : buttons) {
+            b.setPreferredSize(eq);
+            b.setMinimumSize(eq);
+            b.setMaximumSize(eq);
+        }
     }
 }

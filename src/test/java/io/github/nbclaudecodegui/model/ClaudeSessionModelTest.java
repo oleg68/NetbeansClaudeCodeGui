@@ -206,12 +206,14 @@ class ClaudeSessionModelTest {
 
     @Test
     void addPromptToHistoryAppendsAndCaps() {
-        for (int i = 0; i < 105; i++) {
+        // Default max depth is 200 (ClaudeCodePreferences.DEFAULT_HISTORY_MAX_DEPTH).
+        // Add 205 entries so the cap is triggered.
+        for (int i = 0; i < 205; i++) {
             model.addPromptToHistory("prompt-" + i);
         }
         List<String> history = model.getPromptHistory();
-        assertEquals(100, history.size(), "History must be capped at 100");
-        assertEquals("prompt-104", history.get(0), "Most recent prompt is first");
+        assertEquals(200, history.size(), "History must be capped at default max depth (200)");
+        assertEquals("prompt-204", history.get(0), "Most recent prompt is first");
     }
 
     @Test

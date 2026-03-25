@@ -1,5 +1,8 @@
 package io.github.nbclaudecodegui.model;
 
+import io.github.nbclaudecodegui.model.HistoryEntry;
+import io.github.nbclaudecodegui.model.PromptHistoryStore;
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -312,8 +315,9 @@ public final class ClaudeSessionModel {
     // -------------------------------------------------------------------------
 
     /**
-     * Prepends {@code text} to the in-session prompt history (max 100 entries).
+     * Prepends {@code text} to the in-session prompt history and persists it.
      * Duplicate entries are moved to the front.
+     * The in-memory list is capped at {@link ClaudeCodePreferences#getHistoryMaxDepth()}.
      *
      * <p>Should only be called on the EDT.
      *
@@ -322,8 +326,30 @@ public final class ClaudeSessionModel {
     public void addPromptToHistory(String text) {
         promptHistory.remove(text);
         promptHistory.add(0, text);
-        if (promptHistory.size() > 100) {
+        int maxDepth = ClaudeCodePreferences.getHistoryMaxDepth();
+        while (promptHistory.size() > maxDepth) {
             promptHistory.remove(promptHistory.size() - 1);
+        }
+        if (workingDirectory != null) {
+            PromptHistoryStore.getInstance(workingDirectory.toPath()).add(text);
+        }
+    }
+
+    /**
+     * Loads persisted history for {@code workingDir} into the in-memory list.
+     * Should be called after {@link #setWorkingDirectory} when a session starts.
+     *
+     * <p>Should only be called on the EDT.
+     */
+    public void loadPersistedHistory() {
+        if (workingDirectory == null) return;
+        List<HistoryEntry> persisted =
+                PromptHistoryStore.getInstance(workingDirectory.toPath()).getAll();
+        promptHistory.clear();
+        int maxDepth = ClaudeCodePreferences.getHistoryMaxDepth();
+        for (HistoryEntry e : persisted) {
+            if (promptHistory.size() >= maxDepth) break;
+            promptHistory.add(e.getText());
         }
     }
 
