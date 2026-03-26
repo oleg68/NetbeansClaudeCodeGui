@@ -1,4 +1,4 @@
-package org.openbeans.claude.netbeans.tools;
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.util.Collections;
 import java.util.List;

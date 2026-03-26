@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/MCPSseServer.java
+package io.github.nbclaudecodegui.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans.tools;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/tools/OpenDiff.java
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +19,9 @@ import org.openbeans.claude.netbeans.EditorUtils;
 import org.openbeans.claude.netbeans.NbUtils;
 import java.util.ArrayList;
 import java.util.List;
+import org.openbeans.claude.netbeans.tools.AsyncHandler;
+import org.openbeans.claude.netbeans.tools.AsyncResponse;
+import org.openbeans.claude.netbeans.tools.Tool;
 import org.openbeans.claude.netbeans.tools.params.OpenDiffParams;
 import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
 import org.openbeans.claude.netbeans.tools.params.Content;
@@ -237,18 +242,6 @@ public class OpenDiff implements Tool<OpenDiffParams, AsyncResponse<OpenDiffResu
                             LOGGER.info("Diff approved: " + finalDiffTabName);
 
                             //NOTE: While the message says FILE_SAVED, the IDE does not need to save it. Claude will want to write to it.
-                            // If needed, we could also do it via
-                            //
-                            //    FileObject fo = FileUtil.toFileObject(file);
-                            //    DataObject dao = DataObject.find(fo);
-                            //    EditorCookie ec = dao.getLookup().lookup(EditorCookie.class);
-                            //    StyledDocument doc = ec.openDocument();
-                            //    doc.remove(0, doc.getLength());
-                            //    doc.insertString(0, content, null);
-                            //    SaveCookie save = dao.getLookup().lookup(SaveCookie.class);
-                            //    save.save();
-                            // but then Claude actually gets confused:
-                            //    > Error: File has been unexpectedly modified. Read it again before attempting to write it.
 
                             // Create response with DIFF_ACCEPTED status
                             List<Content> contentList = new ArrayList<>();

@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/NetBeansMCPHandler.java
+package io.github.nbclaudecodegui.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,6 +49,12 @@ import javax.swing.SwingUtilities;
 import org.openide.windows.WindowManager;
 import io.github.nbclaudecodegui.ui.ClaudeSessionTab;
 import io.github.nbclaudecodegui.ui.FileDiffTab;
+import io.github.nbclaudecodegui.mcp.tools.DiffTabTracker;
+import io.github.nbclaudecodegui.mcp.tools.GetDiagnostics;
+import io.github.nbclaudecodegui.mcp.tools.GetOpenEditors;
+import io.github.nbclaudecodegui.mcp.tools.OpenDiff;
+import io.github.nbclaudecodegui.mcp.tools.OpenFile;
+import io.github.nbclaudecodegui.mcp.tools.PermissionPromptTool;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.openide.util.Lookup;
 import org.openbeans.claude.netbeans.tools.AsyncHandler;
@@ -54,14 +62,8 @@ import org.openbeans.claude.netbeans.tools.AsyncResponse;
 import org.openbeans.claude.netbeans.tools.CheckDocumentDirty;
 import org.openbeans.claude.netbeans.tools.CloseAllDiffTabs;
 import org.openbeans.claude.netbeans.tools.CloseTab;
-import org.openbeans.claude.netbeans.tools.DiffTabTracker;
 import org.openbeans.claude.netbeans.tools.GetCurrentSelection;
-import org.openbeans.claude.netbeans.tools.GetDiagnostics;
-import org.openbeans.claude.netbeans.tools.GetOpenEditors;
 import org.openbeans.claude.netbeans.tools.GetWorkspaceFolders;
-import org.openbeans.claude.netbeans.tools.OpenDiff;
-import org.openbeans.claude.netbeans.tools.OpenFile;
-import org.openbeans.claude.netbeans.tools.PermissionPromptTool;
 import org.openbeans.claude.netbeans.tools.SaveDocument;
 import org.openbeans.claude.netbeans.tools.params.Content;
 import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
@@ -72,18 +74,18 @@ import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
  */
 public class NetBeansMCPHandler {
 
-    
+
     private static final Logger LOGGER = Logger.getLogger(NetBeansMCPHandler.class.getName());
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final MCPResponseBuilder responseBuilder;
     private volatile BlockingQueue<String> sseQueue;
-    
+
     // Selection tracking
     private final Map<JTextComponent, CaretListener> selectionListeners = new WeakHashMap<>();
     private PropertyChangeListener topComponentListener;
     private PropertyChangeListener diffTabListener;
     private JTextComponent currentTextComponent;
-    
+
     private final CheckDocumentDirty checkDocumentDirtyTool;
     private final CloseAllDiffTabs closeAllDiffTabsTool;
     private final CloseTab closeTabTool;
@@ -110,10 +112,10 @@ public class NetBeansMCPHandler {
         this.permissionPromptTool = new PermissionPromptTool();
         this.saveDocument = new SaveDocument();
     }
-    
+
     /**
      * Handles incoming MCP messages and routes them to appropriate handlers.
-     * 
+     *
      * @param message the JSON-RPC message
      * @return response JSON string, or null if no response needed
      */
@@ -122,15 +124,15 @@ public class NetBeansMCPHandler {
             String method = message.get("method").asText();
             JsonNode params = message.get("params");
             Integer id = message.has("id") ? message.get("id").asInt() : null;
-            
+
             LOGGER.log(Level.FINE, "Processing MCP method: {0}", method);
-            
+
             ObjectNode response = responseBuilder.objectNode();
             response.put("jsonrpc", "2.0");
             if (id != null) {
                 response.put("id", id);
             }
-            
+
             switch (method) {
                 case "initialize":
                     response.set("result", handleInitialize(params));
@@ -139,11 +141,11 @@ public class NetBeansMCPHandler {
                     // Then send notifications/initialized notification
                     sendInitializedNotification();
                     return initResponse;
-                    
+
                 case "tools/list":
                     response.set("result", handleToolsList());
                     break;
-                    
+
                 case "tools/call":
                     JsonNode toolResult = handleToolsCall(params, id);
                     if (toolResult == null) {
@@ -152,64 +154,64 @@ public class NetBeansMCPHandler {
                     }
                     response.set("result", toolResult);
                     break;
-                    
+
                 case "resources/list":
                     response.set("result", handleResourcesList());
                     break;
-                    
+
                 case "resources/read":
                     response.set("result", handleResourcesRead(params));
                     break;
-                    
+
                 case "prompts/list":
                     response.set("result", handlePromptsList());
                     break;
-                    
+
                 default:
                     LOGGER.log(Level.WARNING, "Unknown MCP method: {0}", method);
                     return responseBuilder.createErrorResponse(id, -32601, "Method not found", method);
             }
-            
+
             return objectMapper.writeValueAsString(response);
-            
+
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error handling MCP message", e);
             return responseBuilder.createErrorResponse(null, -32603, "Internal error", e.getMessage());
         }
     }
-    
+
     /**
      * Handles MCP initialize request.
      */
     private JsonNode handleInitialize(JsonNode params) {
         ObjectNode result = responseBuilder.objectNode();
         result.put("protocolVersion", "2024-11-05");
-        
+
         ObjectNode capabilities = responseBuilder.objectNode();
-        
+
         ObjectNode toolsCapability = responseBuilder.objectNode();
         toolsCapability.put("listChanged", true);
         capabilities.set("tools", toolsCapability);
-        
+
         ObjectNode resourcesCapability = responseBuilder.objectNode();
         resourcesCapability.put("subscribe", true);
         resourcesCapability.put("listChanged", true);
         capabilities.set("resources", resourcesCapability);
-        
+
         ObjectNode promptsCapability = responseBuilder.objectNode();
         promptsCapability.put("listChanged", true);
         capabilities.set("prompts", promptsCapability);
-        
+
         result.set("capabilities", capabilities);
-        
+
         ObjectNode serverInfo = responseBuilder.objectNode();
         serverInfo.put("name", "netbeans-mcp-server");
         serverInfo.put("version", "1.0.0");
         result.set("serverInfo", serverInfo);
-        
+
         return result;
     }
-    
+
     /**
      * Sends the notifications/initialized notification after successful initialization.
      */
@@ -223,13 +225,13 @@ public class NetBeansMCPHandler {
             LOGGER.log(Level.WARNING, "Failed to send initialized notification", e);
         }
     }
-    
+
     /**
      * Lists available tools (executable functions).
      */
     private JsonNode handleToolsList() {
         ArrayNode tools = responseBuilder.arrayNode();
-        
+
         // Core Claude Code tools - names/descriptions in code, schemas from JSON
         tools.add(createToolDefinition("openFile", "Opens a file in the editor", "OpenFileParams"));
         tools.add(createToolDefinition("getWorkspaceFolders", "Get list of workspace folders (open projects)", "getWorkspaceFolders"));
@@ -249,7 +251,7 @@ public class NetBeansMCPHandler {
         result.set("tools", tools);
         return result;
     }
-    
+
     /**
      * Handles tool call requests.
      * @param params Tool call parameters
@@ -259,7 +261,7 @@ public class NetBeansMCPHandler {
     private JsonNode handleToolsCall(JsonNode params, Integer requestId) {
         String toolName = params.get("name").asText();
         JsonNode arguments = params.get("arguments");
-        
+
         try {
             Object result;
 
@@ -331,7 +333,7 @@ public class NetBeansMCPHandler {
 
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error executing tool: " + toolName, e);
-            
+
             return responseBuilder.createToolResponse("Error: " + e.getMessage());
         }
     }
@@ -353,45 +355,45 @@ public class NetBeansMCPHandler {
             LOGGER.log(Level.SEVERE, "Error sending async tool response", e);
         }
     }
-    
+
     /**
      * Data class to hold project information.
      */
     private static class ProjectData {
         final String path;
         final String displayName;
-        
+
         ProjectData(String path, String displayName) {
             this.path = path;
             this.displayName = displayName;
         }
     }
-    
+
     /**
      * Retrieves project data from NetBeans Platform.
      */
     private List<ProjectData> getOpenProjectsData() {
         List<ProjectData> projectDataList = new ArrayList<>();
         Project[] openProjects = OpenProjects.getDefault().getOpenProjects();
-        
+
         for (Project project : openProjects) {
             String path = project.getProjectDirectory().getPath();
             String displayName = ProjectUtils.getInformation(project).getDisplayName();
             projectDataList.add(new ProjectData(path, displayName));
         }
-        
+
         return projectDataList;
     }
-    
+
     /**
      * Lists available resources.
      */
     private JsonNode handleResourcesList() {
         ArrayNode resources = responseBuilder.arrayNode();
-        
+
         // Get project data from NetBeans
         List<ProjectData> projectDataList = getOpenProjectsData();
-        
+
         // Build MCP response from the data
         for (ProjectData projectData : projectDataList) {
             ObjectNode resource = responseBuilder.objectNode();
@@ -401,61 +403,61 @@ public class NetBeansMCPHandler {
             resource.put("mimeType", "application/json");
             resources.add(resource);
         }
-        
+
         ObjectNode result = responseBuilder.objectNode();
         result.set("resources", resources);
         return result;
     }
-    
+
     /**
      * Reads a resource.
      */
     private JsonNode handleResourcesRead(JsonNode params) {
         String uri = params.get("uri").asText();
-        
+
         if (uri.startsWith("project://")) {
             String projectPath = uri.substring("project://".length());
             //XXX: This is probably doing the wrong thing
             return getProjectInfo(projectPath);
         }
-        
+
         throw new IllegalArgumentException("Unknown resource URI: " + uri);
     }
-    
+
     /**
      * Lists available prompts.
      */
     private JsonNode handlePromptsList() {
         ArrayNode prompts = responseBuilder.arrayNode();
-        
+
         ObjectNode codeReviewPrompt = responseBuilder.objectNode();
         codeReviewPrompt.put("name", "code_review");
         codeReviewPrompt.put("description", "Review code in NetBeans project");
         prompts.add(codeReviewPrompt);
-        
+
         ObjectNode result = responseBuilder.objectNode();
         result.set("prompts", prompts);
         return result;
     }
-    
+
     // Helper methods
-    
+
     private JsonNode getProjectInfo(String projectPath) {
         FileObject projectDir = FileUtil.toFileObject(new File(projectPath));
         if (projectDir == null) {
             throw new IllegalArgumentException("Project not found: " + projectPath);
         }
-        
+
         ObjectNode projectInfo = responseBuilder.objectNode();
         projectInfo.put("path", projectPath);
         projectInfo.put("name", projectDir.getName());
-        
+
         ArrayNode files = responseBuilder.arrayNode();
         // projectInfo.set("files", files);
-        
+
         return projectInfo;
     }
-    
+
     // -------------------------------------------------------------------------
     // PreToolUse HTTP hook
     // -------------------------------------------------------------------------
@@ -701,12 +703,12 @@ public class NetBeansMCPHandler {
         ObjectNode tool = responseBuilder.objectNode();
         tool.put("name", toolName);
         tool.put("description", description);
-        
+
         try {
             // Load parameter schema from JSON file
             String schemaPath = "/org/openbeans/claude/netbeans/tools/schemas/" + schemaFileName + ".json";
             InputStream inputStream = getClass().getResourceAsStream(schemaPath);
-            
+
             if (inputStream == null) {
                 // Fall back to empty schema if file not found
                 LOGGER.warning("Schema file not found: " + schemaPath);
@@ -719,11 +721,11 @@ public class NetBeansMCPHandler {
                 ObjectMapper mapper = new ObjectMapper();
                 JsonNode schema = mapper.readTree(inputStream);
                 inputStream.close();
-                
+
                 // Set the loaded schema as inputSchema
                 tool.set("inputSchema", schema);
             }
-            
+
         } catch (IOException e) {
             LOGGER.log(Level.WARNING, "Error loading parameter schema for: " + toolName, e);
             // Return minimal schema as fallback
@@ -733,10 +735,10 @@ public class NetBeansMCPHandler {
             inputSchema.set("required", responseBuilder.arrayNode());
             tool.set("inputSchema", inputSchema);
         }
-        
+
         return tool;
     }
-    
+
     /**
      * Called by {@link MCPSseServer} to give this handler a reference to the
      * SSE queue.  All server-initiated messages (responses, notifications)
@@ -749,7 +751,7 @@ public class NetBeansMCPHandler {
         startSelectionTracking();
         startDiffTabTracking();
     }
-    
+
     /**
      * Starts tracking selection changes in editors.
      */
@@ -766,18 +768,18 @@ public class NetBeansMCPHandler {
                 }
             }
         };
-        
+
         TopComponent.getRegistry().addPropertyChangeListener(topComponentListener);
-        
+
         // Track the currently active editor if any
         TopComponent activated = TopComponent.getRegistry().getActivated();
         if (activated != null) {
             trackEditorSelection(activated);
         }
-        
+
         LOGGER.log(Level.FINE, "Started selection tracking");
     }
-    
+
     /**
      * Stops tracking selection changes.
      */
@@ -787,14 +789,14 @@ public class NetBeansMCPHandler {
             TopComponent.getRegistry().removePropertyChangeListener(topComponentListener);
             topComponentListener = null;
         }
-        
+
         // Remove all selection listeners
         for (Map.Entry<JTextComponent, CaretListener> entry : selectionListeners.entrySet()) {
             entry.getKey().removeCaretListener(entry.getValue());
         }
         selectionListeners.clear();
         currentTextComponent = null;
-        
+
         LOGGER.log(Level.FINE, "Stopped selection tracking");
     }
 
@@ -862,7 +864,7 @@ public class NetBeansMCPHandler {
                     JTextComponent[] panes = editorCookie.getOpenedPanes();
                     if (panes != null && panes.length > 0) {
                         JTextComponent textComponent = panes[0];
-                        
+
                         // Only track if it's a different component
                         if (textComponent != currentTextComponent) {
                             // Remove listener from previous component
@@ -872,7 +874,7 @@ public class NetBeansMCPHandler {
                                     currentTextComponent.removeCaretListener(listener);
                                 }
                             }
-                            
+
                             // Add listener to new component
                             currentTextComponent = textComponent;
                             CaretListener listener = new CaretListener() {
@@ -881,10 +883,10 @@ public class NetBeansMCPHandler {
                                     sendSelectionChangeEvent(textComponent, nodes[0]);
                                 }
                             };
-                            
+
                             textComponent.addCaretListener(listener);
                             selectionListeners.put(textComponent, listener);
-                            
+
                             // Send initial selection event
                             sendSelectionChangeEvent(textComponent, nodes[0]);
                         }
@@ -895,7 +897,7 @@ public class NetBeansMCPHandler {
             LOGGER.log(Level.WARNING, "Error tracking editor selection", e);
         }
     }
-    
+
     /**
      * Sends a selection_changed event to Claude Code via SSE.
      */
@@ -904,60 +906,60 @@ public class NetBeansMCPHandler {
             if (sseQueue == null) {
                 return;
             }
-            
+
             // Get selection details
             String selectedText = textComponent.getSelectedText();
             int selectionStart = textComponent.getSelectionStart();
             int selectionEnd = textComponent.getSelectionEnd();
-            
+
             // Get document and file info
             Document doc = textComponent.getDocument();
             DataObject dataObject = node.getLookup().lookup(DataObject.class);
-            
+
             if (doc instanceof StyledDocument && dataObject != null) {
                 StyledDocument styledDoc = (StyledDocument) doc;
                 FileObject fileObject = dataObject.getPrimaryFile();
-                
+
                 if (fileObject != null) {
                     // Get file path
                     File file = FileUtil.toFile(fileObject);
                     String absolutePath = file.getAbsolutePath();
                     String fileUrl = "file://" + absolutePath;
-                    
+
                     // Calculate line and column positions (0-based for protocol)
                     int startLine = NbDocument.findLineNumber(styledDoc, selectionStart);
                     int startColumn = NbDocument.findLineColumn(styledDoc, selectionStart);
                     int endLine = NbDocument.findLineNumber(styledDoc, selectionEnd);
                     int endColumn = NbDocument.findLineColumn(styledDoc, selectionEnd);
-                    
+
                     // Create selection_changed notification
                     ObjectNode params = responseBuilder.objectNode();
-                    
+
                     // Add text (selected text or empty string)
                     params.put("text", selectedText != null ? selectedText : "");
-                    
+
                     // Add file paths
                     params.put("filePath", absolutePath);
                     params.put("fileUrl", fileUrl);
-                    
+
                     // Add selection object
                     ObjectNode selection = responseBuilder.objectNode();
-                    
+
                     ObjectNode start = responseBuilder.objectNode();
                     start.put("line", startLine);
                     start.put("character", startColumn);
                     selection.set("start", start);
-                    
+
                     ObjectNode end = responseBuilder.objectNode();
                     end.put("line", endLine);
                     end.put("character", endColumn);
                     selection.set("end", end);
-                    
+
                     // Set isEmpty based on whether there's selected text
                     selection.put("isEmpty", selectedText == null || selectedText.isEmpty());
-                    
+
                     params.set("selection", selection);
-                    
+
                     // Create and send the notification via SSE
                     ObjectNode notification = responseBuilder.createNotification("selection_changed", params);
                     sendViaSse(objectMapper.writeValueAsString(notification));

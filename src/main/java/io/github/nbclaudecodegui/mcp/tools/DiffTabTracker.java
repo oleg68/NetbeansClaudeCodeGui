@@ -1,9 +1,12 @@
-package org.openbeans.claude.netbeans.tools;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/tools/DiffTabTracker.java
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
+import org.openbeans.claude.netbeans.tools.AsyncHandler;
 import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
 
 /**

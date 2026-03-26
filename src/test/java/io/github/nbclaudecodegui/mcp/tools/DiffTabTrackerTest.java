@@ -1,9 +1,10 @@
-package org.openbeans.claude.netbeans.tools;
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.openbeans.claude.netbeans.tools.AsyncHandler;
 import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
 
 import static org.junit.jupiter.api.Assertions.*;

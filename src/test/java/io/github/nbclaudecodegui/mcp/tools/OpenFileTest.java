@@ -1,4 +1,4 @@
-package org.openbeans.claude.netbeans.tools;
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;

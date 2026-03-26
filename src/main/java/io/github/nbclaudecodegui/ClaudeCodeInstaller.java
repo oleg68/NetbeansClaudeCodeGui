@@ -1,5 +1,9 @@
-package org.openbeans.claude.netbeans;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/ClaudeCodeInstaller.java
+package io.github.nbclaudecodegui;
 
+import io.github.nbclaudecodegui.mcp.MCPSseServer;
+import io.github.nbclaudecodegui.mcp.NetBeansMCPHandler;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
@@ -14,6 +18,7 @@ import org.openide.modules.ModuleInstall;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.util.lookup.ServiceProvider;
+import org.openbeans.claude.netbeans.ClaudeCodeStatusService;
 
 /**
  * Manages the lifecycle of the Claude Code NetBeans plugin.
@@ -21,15 +26,15 @@ import org.openide.util.lookup.ServiceProvider;
  */
 @ServiceProvider(service = ClaudeCodeStatusService.class)
 public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChangeListener, ClaudeCodeStatusService {
-    
+
     private static final Logger LOGGER = Logger.getLogger(ClaudeCodeInstaller.class.getName());
     private static final RequestProcessor RP = new RequestProcessor("ClaudeCode", 1);
-    
+
     // Static so that the Lookup-created instance (separate from the ModuleInstall
     // instance managed by NetBeans) reads the same running server state.
     private static volatile MCPSseServer mcpServer;
     private NetBeansMCPHandler mcpHandler;
-    
+
     /**
      * Called when the module is first installed.
      */
@@ -45,28 +50,28 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
 
         // Start the MCP server
         startMCPServer();
-        
+
         // Listen for project changes to update lock file
          OpenProjects.getDefault().addPropertyChangeListener(this);
-        
+
         LOGGER.info("Claude Code NetBeans plugin started successfully");
     }
-    
+
     /**
      * Called when the module is being uninstalled.
      */
     @Override
     public void uninstalled() {
         LOGGER.info("Claude Code NetBeans plugin is shutting down...");
-        
+
          OpenProjects.getDefault().removePropertyChangeListener(this);
-        
+
         // Stop MCP server
         stopMCPServer();
-        
+
         LOGGER.info("Claude Code NetBeans plugin shut down complete");
     }
-    
+
     /**
      * Called when NetBeans is closing.
      */
@@ -74,7 +79,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
     public void close() {
         uninstalled();
     }
-    
+
     /**
      * Handles property changes, particularly open projects changes.
      */
@@ -82,7 +87,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
     public void propertyChange(PropertyChangeEvent evt) {
          // No-op: lock file no longer used
     }
-    
+
     /**
      * Initializes all plugin components.
      */
@@ -96,7 +101,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
             Exceptions.printStackTrace(e);
         }
     }
-    
+
     /**
      * Starts the MCP SSE server on the configured port.
      * Fails immediately if the port is busy.
@@ -139,9 +144,9 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
             LOGGER.warning("Could not clean ide dir: " + e.getMessage());
         }
     }
-    
+
     /**
-     * Stops the MCP WebSocket server.
+     * Stops the MCP SSE server.
      */
     private void stopMCPServer() {
         if (mcpServer != null && mcpServer.isRunning()) {
@@ -153,17 +158,17 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
             }
         }
     }
-    
+
     /**
      * Gets the current status of the Claude Code integration.
-     * 
+     *
      * @return status information
      */
     @Override
     public String getStatus() {
         StringBuilder status = new StringBuilder();
         status.append("<b>Claude Code NetBeans Integration</b><br>");
-        
+
         if (mcpServer != null) {
             if (mcpServer.isRunning()) {
                 status.append("🟢 MCP SSE Server: Running on port ").append(mcpServer.getPort()).append("<br>");
@@ -173,25 +178,25 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
         } else {
             status.append("⚪ MCP Server: Not initialized<br>");
         }
-        
+
         status.append("🔧 Process ID: ").append(ProcessHandle.current().pid());
-        
+
         return status.toString();
     }
-    
+
     /**
      * Checks if the MCP server is currently running.
-     * 
+     *
      * @return true if the server is running, false otherwise
      */
     @Override
     public boolean isServerRunning() {
         return mcpServer != null && mcpServer.isRunning();
     }
-    
+
     /**
      * Gets the port number the MCP server is running on.
-     * 
+     *
      * @return port number, or -1 if server is not running
      */
     @Override
@@ -201,7 +206,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
         }
         return -1;
     }
-    
+
     @Override
     public boolean isLockFileValid() {
         return false; // lock file no longer used

@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans.tools;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/tools/GetOpenEditors.java
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.util.Set;
 import java.util.logging.Level;
@@ -6,6 +8,7 @@ import java.util.logging.Logger;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
+import org.openbeans.claude.netbeans.tools.Tool;
 import org.openbeans.claude.netbeans.tools.params.GetOpenEditorsParams;
 import org.openbeans.claude.netbeans.tools.params.GetOpenEditorsResult;
 import org.openbeans.claude.netbeans.tools.params.Editor;
@@ -20,19 +23,19 @@ import org.openide.windows.TopComponent;
  * Tool to get list of currently open editor tabs.
  */
 public class GetOpenEditors implements Tool<GetOpenEditorsParams, GetOpenEditorsResult> {
-    
+
     private static final Logger LOGGER = Logger.getLogger(GetOpenEditors.class.getName());
-    
+
     @Override
     public String getName() {
         return "getOpenEditors";
     }
-    
+
     @Override
     public String getDescription() {
         return "Get list of currently open editor tabs";
     }
-    
+
     @Override
     public Class<GetOpenEditorsParams> getParameterClass() {
         return GetOpenEditorsParams.class;

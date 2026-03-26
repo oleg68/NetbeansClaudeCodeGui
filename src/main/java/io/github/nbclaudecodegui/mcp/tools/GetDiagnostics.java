@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans.tools;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/tools/GetDiagnostics.java
+package io.github.nbclaudecodegui.mcp.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
@@ -12,6 +14,7 @@ import java.util.logging.Logger;
 import org.netbeans.spi.editor.hints.ErrorDescription;
 import org.netbeans.spi.editor.hints.Severity;
 import org.openbeans.claude.netbeans.NbUtils;
+import org.openbeans.claude.netbeans.tools.Tool;
 import org.openbeans.claude.netbeans.tools.params.Diagnostic;
 import org.openbeans.claude.netbeans.tools.params.DiagnosticsResponse;
 import org.openbeans.claude.netbeans.tools.params.GetDiagnosticsParams;

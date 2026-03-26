@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans.tools;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/tools/PermissionPromptTool.java
+package io.github.nbclaudecodegui.mcp.tools;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,6 +14,9 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import io.github.nbclaudecodegui.ui.FileDiffTab;
+import org.openbeans.claude.netbeans.tools.AsyncHandler;
+import org.openbeans.claude.netbeans.tools.AsyncResponse;
+import org.openbeans.claude.netbeans.tools.Tool;
 import org.openbeans.claude.netbeans.tools.params.Content;
 
 /**

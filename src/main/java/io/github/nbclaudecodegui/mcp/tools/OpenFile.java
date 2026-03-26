@@ -1,4 +1,6 @@
-package org.openbeans.claude.netbeans.tools;
+// Originally forked from https://github.com/emilianbold/claude-code-netbeans
+// Original: src/main/java/org/openbeans/claude/netbeans/tools/OpenFile.java
+package io.github.nbclaudecodegui.mcp.tools;
 
 import java.io.File;
 import java.util.logging.Level;
@@ -6,6 +8,7 @@ import java.util.logging.Logger;
 import javax.swing.JEditorPane;
 import javax.swing.SwingUtilities;
 import org.openbeans.claude.netbeans.NbUtils;
+import org.openbeans.claude.netbeans.tools.Tool;
 import org.openbeans.claude.netbeans.tools.params.OpenFileParams;
 import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
@@ -16,19 +19,19 @@ import org.openide.loaders.DataObject;
  * Tool to open a file in the NetBeans editor.
  */
 public class OpenFile implements Tool<OpenFileParams, String> {
-    
+
     private static final Logger LOGGER = Logger.getLogger(OpenFile.class.getName());
-    
+
     @Override
     public String getName() {
         return "openFile";
     }
-    
+
     @Override
     public String getDescription() {
         return "Opens a file in the editor";
     }
-    
+
     @Override
     public Class<OpenFileParams> getParameterClass() {
         return OpenFileParams.class;
