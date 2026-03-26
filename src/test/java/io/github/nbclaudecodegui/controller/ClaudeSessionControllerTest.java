@@ -233,6 +233,65 @@ class ClaudeSessionControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // flushPendingPrompt — Y/n trust prompt must not be dismissed on next tick
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: synthetic Y/n menu was destroyed on the very next timer tick
+     * because detectChoiceMenu() returns empty for Y/n screens, which triggered
+     * model.clearChoiceMenu() before the user could interact with it.
+     */
+    @Test
+    void flushPendingPromptDoesNotDismissYnMenuWhileYnStillOnScreen() throws Exception {
+        List<String> ynScreen = Arrays.asList(
+                "Do you trust the files in this directory?",
+                "Only proceed if you trust the source. [Y/n]"
+        );
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        ClaudeSessionController c = new ClaudeSessionController(m, () -> ynScreen);
+
+        // First call: detects Y/n → creates synthetic menu
+        c.flushPendingPrompt();
+        assertNotNull(m.getActiveChoiceMenu(), "Y/n menu must be created on first flush");
+
+        // Second call (simulates next timer tick): Y/n still on screen → must NOT clear menu
+        c.flushPendingPrompt();
+        assertNotNull(m.getActiveChoiceMenu(),
+                "Y/n menu must survive subsequent flush while Y/n prompt is still on screen");
+    }
+
+    // -------------------------------------------------------------------------
+    // flushPendingPrompt — trust prompt detected from PTY buffer when screen empty
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: when the JediTerm widget has not yet been laid out (terminal size 0×0),
+     * screenLines.get() returns an empty list. The trust-directory prompt must still be
+     * detected from the rolling PTY line buffer.
+     */
+    @Test
+    void flushPendingPromptDetectsTrustPromptFromPtyBufferWhenScreenEmpty() {
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        // screenLines always returns empty — simulates uninitialised JediTerm widget
+        ClaudeSessionController c = new ClaudeSessionController(m, Collections::emptyList);
+
+        c.simulatePtyLine("─────────────────────────────────");
+        c.simulatePtyLine("Accessing workspace:");
+        c.simulatePtyLine("/home/user/my-project");
+        c.simulatePtyLine("Quick safety check: Is this a project you trust?");
+        c.simulatePtyLine("❯ 1. Yes, I trust this folder");
+        c.simulatePtyLine("2. No, exit");
+        c.simulatePtyLine("Enter to confirm · Esc to cancel");
+
+        c.flushPendingPrompt();
+
+        assertNotNull(m.getActiveChoiceMenu(),
+                "ChoiceMenuPanel must appear for trust prompt even when screen buffer is empty");
+        assertEquals(2, m.getActiveChoiceMenu().options().size(),
+                "Trust prompt must have exactly 2 options");
+    }
+
+    // -------------------------------------------------------------------------
     // No-op listener base class
     // -------------------------------------------------------------------------
 

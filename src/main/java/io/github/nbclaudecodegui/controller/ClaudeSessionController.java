@@ -85,11 +85,14 @@ public final class ClaudeSessionController {
     private javax.swing.Timer statusTimer;
 
     /**
-     * Fires {@link #flushPendingPrompt()} 400 ms after PTY output goes silent
-     * while menu options are being collected.
+     * Fires {@link #flushPendingPrompt()} 400 ms after PTY output goes silent.
+     * One-shot (non-repeating): fires once per {@link javax.swing.Timer#restart()}
+     * so that a subsequent full-screen redraw (ESC[2J) cannot accidentally dismiss
+     * a menu that was already shown.
      */
     private final javax.swing.Timer promptFlushTimer =
             new javax.swing.Timer(400, e -> flushPendingPrompt());
+    { promptFlushTimer.setRepeats(false); }
 
     /** {@code true} while a shift-tab thread is actively switching the CC edit mode. */
     private volatile boolean modeSwitchInProgress = false;
@@ -105,6 +108,24 @@ public final class ClaudeSessionController {
 
     /** Number of model-discovery attempts made since the last session start. */
     private int modelDiscoveryAttempts = 0;
+
+    /**
+     * Rolling buffer of the last {@link #PTY_LINE_BUFFER_SIZE} stripped PTY lines.
+     * Used as a fallback for prompt detection when the JediTerm screen buffer is
+     * still empty (e.g. widget not yet laid out, terminal size 0×0 at startup).
+     */
+    private final java.util.Deque<String> recentPtyLines = new java.util.ArrayDeque<>();
+    private static final int PTY_LINE_BUFFER_SIZE = 40;
+
+    /** Package-private for tests: injects a stripped PTY line into the rolling buffer. */
+    void simulatePtyLine(String line) {
+        synchronized (recentPtyLines) {
+            recentPtyLines.addLast(line);
+            if (recentPtyLines.size() > PTY_LINE_BUFFER_SIZE) {
+                recentPtyLines.removeFirst();
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -157,11 +178,22 @@ public final class ClaudeSessionController {
             if (ClaudeCodePreferences.isDebugMode()) {
                 LOG.info(tag + "[PTY line] " + line);
             }
+            synchronized (recentPtyLines) {
+                recentPtyLines.addLast(line);
+                if (recentPtyLines.size() > PTY_LINE_BUFFER_SIZE) {
+                    recentPtyLines.removeFirst();
+                }
+            }
             // While a choice menu is active, suppress timer-based re-detection
             if (model.getActiveChoiceMenu() != null) {
                 return;
             }
-            SwingUtilities.invokeLater(() -> promptFlushTimer.restart());
+            SwingUtilities.invokeLater(() -> {
+                promptFlushTimer.restart();
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info(tag + "[timer] restart, running=" + promptFlushTimer.isRunning());
+                }
+            });
         });
 
         widget.setTtyConnector(connector);
@@ -216,6 +248,7 @@ public final class ClaudeSessionController {
         modelComboPopulated = false;
         modelDiscoveryInProgress = false;
         modelDiscoveryAttempts = 0;
+        synchronized (recentPtyLines) { recentPtyLines.clear(); }
 
         model.setModelList(List.of(), -1);
         model.clearChoiceMenu();
@@ -598,11 +631,36 @@ public final class ClaudeSessionController {
      * the model choice menu is cleared (dismiss path).
      * If no menu is active and the screen shows one, the model is updated (show path).
      */
-    private void flushPendingPrompt() {
+    void flushPendingPrompt() {
+        if (ClaudeCodePreferences.isDebugMode()) {
+            LOG.info("[flushPendingPrompt] enter, modelDiscoveryInProgress=" + modelDiscoveryInProgress);
+        }
         if (modelDiscoveryInProgress) return;
 
         Optional<ChoiceMenuModel> req = Optional.empty();
         List<String> lines = screenLines.get();
+        boolean screenBlank = lines.isEmpty()
+                || lines.stream().allMatch(s -> s.trim().isEmpty());
+        if (ClaudeCodePreferences.isDebugMode()) {
+            long nonBlank = lines.stream().filter(s -> !s.trim().isEmpty()).count();
+            LOG.info("[screen prompt flush] screenLines.size()=" + lines.size()
+                    + " nonBlank=" + nonBlank + " screenBlank=" + screenBlank
+                    + (lines.size() > 0 && nonBlank == 0 && !lines.isEmpty()
+                       ? " firstLineLen=" + lines.get(0).length()
+                         + " firstLineChars=" + (lines.get(0).length() > 0
+                             ? String.format("0x%04x", (int) lines.get(0).charAt(0)) : "N/A")
+                       : ""));
+        }
+        if (screenBlank) {
+            // JediTerm screen buffer is empty or cleared (ESC[2J).
+            // Fall back to the rolling PTY line buffer for prompt detection.
+            synchronized (recentPtyLines) {
+                lines = new java.util.ArrayList<>(recentPtyLines);
+            }
+            if (ClaudeCodePreferences.isDebugMode() && !lines.isEmpty()) {
+                LOG.info("[screen prompt flush] screen blank, using PTY buffer (" + lines.size() + " lines)");
+            }
+        }
         if (!lines.isEmpty()) {
             req = screenContentDetector.detectChoiceMenu(lines);
         }
@@ -610,11 +668,33 @@ public final class ClaudeSessionController {
         if (model.getActiveChoiceMenu() != null) {
             // Menu shown — dismiss if Claude cleared it from screen
             if (req.isEmpty()) {
+                // Don't dismiss if a Y/n trust prompt is still on screen
+                if (!lines.isEmpty() && screenContentDetector.detectYesNoPrompt(lines)) {
+                    return;
+                }
                 if (ClaudeCodePreferences.isDebugMode()) {
                     LOG.info("[screen prompt] menu gone from screen, dismissing");
                 }
                 model.clearChoiceMenu();
             }
+            return;
+        }
+
+        // Y/n trust prompt detection (Bug 3: first-run directory-trust dialog)
+        if (req.isEmpty() && !lines.isEmpty()
+                && screenContentDetector.detectYesNoPrompt(lines)) {
+            // Build question from lines above the [Y/n] pattern
+            String question = buildYnQuestion(lines);
+            ChoiceMenuModel synthetic = new ChoiceMenuModel(
+                    question,
+                    List.of(
+                            new ChoiceMenuModel.Option("Yes", "y"),
+                            new ChoiceMenuModel.Option("No", "n")),
+                    0);
+            if (ClaudeCodePreferences.isDebugMode()) {
+                LOG.info("[screen prompt flush] Y/n prompt detected: \"" + question + "\"");
+            }
+            model.setActiveChoiceMenu(synthetic);
             return;
         }
 
@@ -624,6 +704,34 @@ public final class ClaudeSessionController {
             }
             model.setActiveChoiceMenu(r);
         });
+    }
+
+    /**
+     * Extracts the question text from lines above the Y/n prompt line.
+     * Returns the last non-blank, non-Y/n line before the prompt.
+     */
+    private static final java.util.regex.Pattern YN_LINE_PATTERN =
+            java.util.regex.Pattern.compile(
+                    "\\[Y/n\\]|\\[y/N\\]|\\[yes/no\\]|\\(y/n\\)",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    private static String buildYnQuestion(List<String> lines) {
+        // Find the Y/n line from the bottom
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            if (YN_LINE_PATTERN.matcher(lines.get(i)).find()) {
+                // The question is the Y/n line itself (it contains the prompt text)
+                String ynLine = lines.get(i).trim();
+                // Also include any preceding non-blank context line
+                for (int j = i - 1; j >= 0; j--) {
+                    String prev = lines.get(j).trim();
+                    if (!prev.isBlank()) {
+                        return prev + " " + ynLine;
+                    }
+                }
+                return ynLine;
+            }
+        }
+        return "";
     }
 
     // -------------------------------------------------------------------------

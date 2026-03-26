@@ -567,16 +567,21 @@ public class ClaudeSessionTab extends TopComponent
             public void componentResized(ComponentEvent e) {
                 int total = splitPane.getHeight();
                 if (total <= 0) return;
+                int bottom;
                 if (!savingEnabled[0]) {
-                    int bottom = savedBottomHeight > 0 ? savedBottomHeight
-                                                       : southStack.getPreferredSize().height;
-                    splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
+                    bottom = savedBottomHeight > 0 ? savedBottomHeight
+                                                   : southStack.getPreferredSize().height;
                     savingEnabled[0] = true;
                 } else {
-                    int bottom = NbPreferences.forModule(ClaudeSessionTab.class)
+                    bottom = NbPreferences.forModule(ClaudeSessionTab.class)
                             .getInt("bottomHeight", southStack.getPreferredSize().height);
-                    splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
                 }
+                int divLoc = total - splitPane.getDividerSize() - bottom;
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info(sessionTag + "[splitPane resize] total=" + total
+                            + " bottom=" + bottom + " divLoc=" + divLoc);
+                }
+                splitPane.setDividerLocation(divLoc);
             }
         });
         splitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {

@@ -1,0 +1,14 @@
+───────────────────────────────────────────────────────────────────────────────
+ Bash command
+
+   JAVA_HOME=/usr/lib/jvm/java-21-openjdk mvn dependency:get -Dartifact=io.lekton.platform.core:platform-core-parent:3.0.406:pom 2>&1 | tail
+    -10
+   Run shell command
+
+ Do you want to proceed?
+❯ 1. Yes
+  2. Yes, and don't ask again for: JAVA_HOME=/usr/lib/jvm/java-21-openjdk mvn dependency:get
+                                 -Dartifact=io.lekton.platform.core:platform-core-parent:3.0.406:pom
+  3. No
+
+ Esc to cancel · Tab to amend

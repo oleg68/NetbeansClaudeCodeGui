@@ -130,6 +130,9 @@ public final class PtyTtyConnector implements TtyConnector {
 
     @Override
     public void resize(Dimension termWinSize) {
+        if (ClaudeCodePreferences.isDebugMode()) {
+            LOG.info(tag + "[PTY resize] cols=" + termWinSize.width + " rows=" + termWinSize.height);
+        }
         if (process.isAlive()) {
             process.setWinSize(
                     new WinSize(termWinSize.width, termWinSize.height));

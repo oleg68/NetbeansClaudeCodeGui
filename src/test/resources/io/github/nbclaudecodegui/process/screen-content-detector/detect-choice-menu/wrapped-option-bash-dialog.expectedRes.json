@@ -1,0 +1,9 @@
+{
+  "text": "Do you want to proceed?",
+  "options": [
+    {"display": "Yes", "response": "1"},
+    {"display": "Yes, and don't ask again for: JAVA_HOME=/usr/lib/jvm/java-21-openjdk mvn dependency:get", "response": "2"},
+    {"display": "No", "response": "3"}
+  ],
+  "defaultOptionIndex": 0
+}

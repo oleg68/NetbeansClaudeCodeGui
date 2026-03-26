@@ -1,69 +1,10 @@
 # Bugs
 
-- [ ] Некорректное срабатывание ChoiceMenu при
-    ```
-      ---
-      Предлагаю ответить сначала на Вопрос 1 — он определяет всю архитектуру.
-
-    ❯ 1. B. 2. настраиваемо
-
-    ● Хорошо. Уточним вариант B по нескольким ключевым вопросам.
-
-      ---
-      Вопрос 3: Что происходит при создании нового профиля?
-
-      Три варианта инициализации CLAUDE_CONFIG_DIR:
-
-      A — пустой каталог
-      Claude Code при первом запуске сам создаёт нужные файлы (проведёт onboarding). Чистая изоляция, но пользователю придётся заново проходить setup.
-
-      B — копия ~/.claude
-      Новый профиль начинает с копии домашнего конфига. Настройки, model preferences переносятся. Минус: история разговоров тоже копируется (много мусора).
-
-      C — пользователь выбирает
-      При создании профиля: "Начать с нуля" / "Скопировать из ~/.claude" / "Импортировать из существующего профиля".
-
-      ---
-      Вопрос 4: Default профиль
-
-      A — неявный default
-      Если профиль не выбран → Claude запускается без CLAUDE_CONFIG_DIR (использует ~/.claude). "Default" — это просто отсутствие профиля.
-
-      B — явный default профиль
-      В списке профилей всегда есть неудаляемый "Default", который явно представляет ~/.claude. Пользователь видит его как полноправный профиль.
-
-      ---
-      Вопрос 5: Что происходит при удалении профиля?
-
-      A — только запись в NbPreferences, каталог не трогать
-      Пользователь сам управляет файлами на диске.
-
-      B — предложить удалить каталог
-      Диалог: "Также удалить каталог ~/.netbeans/.../claude-profiles/work/?" (с предупреждением об истории разговоров).
-
-    ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-    ❯
-    ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-      ⏸ plan mode on (shift+tab to cycle)                                                                                                                                      ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code
-    ```
-- [ ] Не сработало ChoiceMenu
-    ```
-    ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-     Bash command                                                                                                                                
-
-       JAVA_HOME=/usr/lib/jvm/java-21-openjdk mvn dependency:get -Dartifact=io.lekton.platform.core:platform-core-parent:3.0.406:pom 2>&1 | tail   
-        -10                                                                                                                                        
-       Run shell command                                                                                                                           
-
-     Do you want to proceed?                                                                                                                       
-     ❯ 1. Yes                                                                                                                                      
-      2. Yes, and don’t ask again for: JAVA_HOME=/usr/lib/jvm/java-21-openjdk mvn dependency:get                                                   
-                                     -Dartifact=io.lekton.platform.core:platform-core-parent:3.0.406:pom                                           
-       3. No
-
-     Esc to cancel · Tab to amend
-    ```
-- [ ] У gradle-проекта отсутствует "Claude Code" в настройках своййств проекта
+- [x] Некорректное срабатывание ChoiceMenu при echoed previous selection (v0.14.6: false-positive guard for single option with no Esc/cancel/amend hint)
+- [x] Не сработало ChoiceMenu для wrapped option lines (v0.14.6: allow up to 3 continuation lines in upward scan)
+- [x] При первом запуске в новой директории замерзает на запросе разрешения каталога в pty (v0.14.6: detectYesNoPrompt + synthetic ChoiceMenuModel with y/n responses)
+- [x] У gradle-проекта отсутствует "Claude Code" в настройках свойств проекта (v0.14.6: fixed layer.xml folder name org.netbeans.modules.gradle → org-netbeans-modules-gradle)
+- [x] Сессия зависает при trust-запросе: detectInputPromptReady ложно срабатывает на ❯ в numbered menu (v0.14.14: negative lookahead (?!\s*\d) в INPUT_PROMPT; PTY buffer fallback для пустого экрана)
 
 
 # Features

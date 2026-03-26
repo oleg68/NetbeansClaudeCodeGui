@@ -21,7 +21,7 @@ import org.openide.util.Lookup;
  * <ul>
  *   <li>{@code Projects/org-netbeans-modules-maven/Customizer} — Maven</li>
  *   <li>{@code Projects/org-netbeans-modules-java-j2seproject/Customizer} — Java SE</li>
- *   <li>{@code Projects/org.netbeans.modules.gradle/Customizer} — Gradle</li>
+ *   <li>{@code Projects/org-netbeans-modules-gradle/Customizer} — Gradle</li>
  * </ul>
  */
 public final class ClaudeProjectPropertiesPanelProvider

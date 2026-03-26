@@ -277,6 +277,19 @@ class ScreenContentDetectorTest {
         assertFalse(detector.detectInputPromptReady(List.of()));
     }
 
+    @org.junit.jupiter.api.Test
+    void detectInputPromptReady_notTriggeredByNumberedMenuCursor() {
+        // Trust prompt screen: ❯ followed by a number is a menu cursor, not the input prompt
+        List<String> lines = List.of(
+                "Do you trust the files in this directory?",
+                "❯ 1. Yes, I trust this folder",
+                "  2. No, exit",
+                "Enter to confirm · Esc to cancel"
+        );
+        assertFalse(detector.detectInputPromptReady(lines),
+                "❯ followed by a digit must NOT be detected as input prompt");
+    }
+
     // -------------------------------------------------------------------------
     // extractOption helper tests (kept inline — simple unit tests, no resource files needed)
     // -------------------------------------------------------------------------
@@ -307,5 +320,49 @@ class ScreenContentDetectorTest {
         ChoiceMenuModel.Option opt = ScreenContentDetector.extractOption("some text", 5);
         assertEquals("some text", opt.display());
         assertEquals("5", opt.response());
+    }
+
+    // -------------------------------------------------------------------------
+    // detectYesNoPrompt (Bug 3)
+    // -------------------------------------------------------------------------
+
+    @org.junit.jupiter.api.Test
+    void detectYesNoPromptTrueWhenYnAtBottom() {
+        List<String> lines = new ArrayList<>(List.of(
+                "Welcome to Claude Code!",
+                "Do you trust the files in this directory?",
+                "",
+                "  /home/user/myproject",
+                "",
+                "Claude Code may read files in this directory. [Y/n]"
+        ));
+        assertTrue(detector.detectYesNoPrompt(lines),
+                "Expected detectYesNoPrompt=true when [Y/n] present at bottom");
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectYesNoPromptTrueForYNVariants() {
+        assertTrue(detector.detectYesNoPrompt(List.of("Some text [y/N]")),
+                "[y/N] variant should match");
+        assertTrue(detector.detectYesNoPrompt(List.of("Some text [yes/no]")),
+                "[yes/no] variant should match");
+        assertTrue(detector.detectYesNoPrompt(List.of("Some text (y/n)")),
+                "(y/n) variant should match");
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectYesNoPromptFalseWhenNoYnPattern() {
+        List<String> lines = List.of(
+                "Normal output",
+                "\u276F Ask anything..."
+        );
+        assertFalse(detector.detectYesNoPrompt(lines),
+                "Expected detectYesNoPrompt=false for normal screen");
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectYesNoPromptFalseWhenNullOrEmpty() {
+        assertFalse(detector.detectYesNoPrompt(null));
+        assertFalse(detector.detectYesNoPrompt(List.of()));
     }
 }

@@ -39,7 +39,7 @@
                 </file>
             </folder>
         </folder>
-        <folder name="org.netbeans.modules.gradle">
+        <folder name="org-netbeans-modules-gradle">
             <folder name="Customizer">
                 <file name="ClaudeCodePanelProvider.instance">
                     <attr name="instanceCreate"

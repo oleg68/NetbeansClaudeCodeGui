@@ -96,20 +96,40 @@ public final class ScreenContentDetector {
         }
         if (lastOptionRow < 0) return Optional.empty();
 
-        // Walk upward to collect all contiguous option lines
+        // Walk upward to collect all contiguous option lines.
+        // Allow up to 3 consecutive "continuation" lines (non-option, non-blank)
+        // to handle wrapped option text that overflows to the next screen line.
         List<ChoiceMenuModel.Option> options = new ArrayList<>();
         int firstOptionRow = lastOptionRow;
+        int continuationCount = 0;
         for (int i = lastOptionRow; i >= 0; i--) {
             String trimmed = screenLines.get(i).trim();
             if (OPTION_LINE.matcher(trimmed).matches()) {
                 options.add(0, extractOption(trimmed, options.size() + 1));
                 firstOptionRow = i;
+                continuationCount = 0;
             } else if (!trimmed.isBlank()) {
-                break; // first non-option, non-blank line above block → stop
+                continuationCount++;
+                if (continuationCount > 3) break;
             }
         }
 
         if (options.isEmpty()) return Optional.empty();
+
+        // Bug 1 guard: a single option with no Esc/cancel/amend hint in the
+        // 3 lines below lastOptionRow is likely an echoed previous selection,
+        // not a real menu. Real menus always have ≥2 options OR show a hint.
+        if (options.size() == 1) {
+            boolean hasHint = false;
+            for (int i = lastOptionRow + 1; i < Math.min(lastOptionRow + 4, screenLines.size()); i++) {
+                String lower = screenLines.get(i).toLowerCase();
+                if (lower.contains("esc") || lower.contains("cancel") || lower.contains("amend")) {
+                    hasHint = true;
+                    break;
+                }
+            }
+            if (!hasHint) return Optional.empty();
+        }
 
         // Line immediately above the first option is the question
         String question = (firstOptionRow > 0)
@@ -193,7 +213,7 @@ public final class ScreenContentDetector {
      * require the glyph at the start, not an empty tail.
      */
     private static final Pattern INPUT_PROMPT =
-            Pattern.compile("^[\u276F>\u25B6]");
+            Pattern.compile("^[\u276F>\u25B6](?!\\s*\\d)");
 
     /**
      * Returns true when the CC input prompt ({@code ❯}) is visible in the bottom
@@ -238,6 +258,30 @@ public final class ScreenContentDetector {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Pattern matching a Y/n confirmation prompt (case-insensitive).
+     * Matches: [Y/n], [y/N], [yes/no], (y/n)
+     */
+    private static final Pattern YN_PROMPT =
+            Pattern.compile("\\[Y/n\\]|\\[y/N\\]|\\[yes/no\\]|\\(y/n\\)", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Returns {@code true} if the bottom non-blank lines of the screen contain
+     * a Y/n confirmation prompt (e.g. Claude's first-run directory-trust dialog).
+     *
+     * <p>Matches patterns: {@code [Y/n]}, {@code [y/N]}, {@code [yes/no]}, {@code (y/n)}.
+     *
+     * @param lines rendered screen lines
+     * @return {@code true} if a Y/n prompt is detected
+     */
+    public boolean detectYesNoPrompt(List<String> lines) {
+        if (lines == null || lines.isEmpty()) return false;
+        for (String line : bottomNonBlankLines(lines, 5)) {
+            if (YN_PROMPT.matcher(line).find()) return true;
+        }
+        return false;
     }
 
     /**
