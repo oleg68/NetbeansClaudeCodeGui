@@ -292,6 +292,89 @@ class ClaudeSessionControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // pollScreenState — stale menu cleared when spinner replaces it on screen
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: if a choice menu is shown and the user answers it directly in
+     * the terminal, Claude immediately starts the thinking spinner (ESC[15A ●).
+     * The spinner continuously restarts promptFlushTimer so flushPendingPrompt
+     * never fires.  The stale menu stays in the model, blocking the next menu
+     * (e.g. "exit plan mode" Yes/No) from being shown.
+     *
+     * Fix: pollScreenState must clear the menu when detectChoiceMenu returns
+     * empty and no Y/n prompt is on screen.
+     */
+    @Test
+    void pollScreenStateClearsStaleMenuWhenMenuGoneFromScreen() throws Exception {
+        // Screen showing a choice menu (bash dialog)
+        List<String> menuScreen = Arrays.asList(
+                " Bash command",
+                "   git commit -m \"...\"",
+                "   Run shell command",
+                " Do you want to proceed?",
+                " \u276f 1. Yes",
+                "   2. No",
+                " Esc to cancel \u00b7 Tab to amend"
+        );
+        AtomicReference<List<String>> screenRef = new AtomicReference<>(menuScreen);
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        ClaudeSessionController c = new ClaudeSessionController(m, screenRef::get);
+
+        // First poll: detects menu and sets it
+        c.pollScreenState();
+        assertNotNull(m.getActiveChoiceMenu(), "menu must be set on first poll");
+
+        // User answered in terminal; screen now shows only the spinner (no menu)
+        screenRef.set(Arrays.asList(
+                "\u25cf",   // spinner
+                "esc to interrupt"
+        ));
+
+        // Second poll: menu gone from screen — must clear it
+        c.pollScreenState();
+        assertNull(m.getActiveChoiceMenu(),
+                "pollScreenState must clear stale menu when it disappears from screen");
+    }
+
+    /**
+     * Regression guard: after stale menu is cleared, a NEW menu on screen must
+     * be picked up on the very next pollScreenState call.
+     */
+    @Test
+    void pollScreenStateSetsNewMenuAfterStaleMenuCleared() throws Exception {
+        List<String> menuScreen1 = Arrays.asList(
+                " Do you want to proceed?",
+                " \u276f 1. Yes",
+                "   2. No",
+                " Esc to cancel"
+        );
+        List<String> spinnerScreen = Arrays.asList("\u25cf", "esc to interrupt");
+        List<String> menuScreen2 = Arrays.asList(
+                " Claude wants to exit plan mode",
+                " \u276f 1. Yes",
+                "   2. No",
+                " Esc to cancel"
+        );
+        AtomicReference<List<String>> screenRef = new AtomicReference<>(menuScreen1);
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        ClaudeSessionController c = new ClaudeSessionController(m, screenRef::get);
+
+        c.pollScreenState();
+        assertNotNull(m.getActiveChoiceMenu(), "first menu must be set");
+
+        // Answered in terminal, spinner appears
+        screenRef.set(spinnerScreen);
+        c.pollScreenState();
+        assertNull(m.getActiveChoiceMenu(), "stale menu must be cleared");
+
+        // New menu appears
+        screenRef.set(menuScreen2);
+        c.pollScreenState();
+        assertNotNull(m.getActiveChoiceMenu(), "new menu must be detected after stale cleared");
+    }
+
+    // -------------------------------------------------------------------------
     // No-op listener base class
     // -------------------------------------------------------------------------
 

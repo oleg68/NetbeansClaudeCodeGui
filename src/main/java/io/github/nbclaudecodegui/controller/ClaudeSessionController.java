@@ -205,6 +205,7 @@ public final class ClaudeSessionController {
 
         modelDiscoveryAttempts = 0;
         modelComboPopulated = false;
+        model.clearChoiceMenu();
         model.setLifecycle(SessionLifecycle.STARTING);
         model.setWorkingDirectory(dir);
         model.loadPersistedHistory();
@@ -602,6 +603,28 @@ public final class ClaudeSessionController {
             detectAndApplyInitialEditMode(lines);
         }
 
+        // Detect choice menu on every poll as backup for when promptFlushTimer misses it
+        // (e.g. thinking spinner keeps PTY active and prevents the 400 ms silence).
+        // Also clear stale menu when it disappears from screen — flushPendingPrompt
+        // may never fire if the spinner continuously restarts promptFlushTimer.
+        if (!modelDiscoveryInProgress) {
+            Optional<ChoiceMenuModel> menuOpt = screenContentDetector.detectChoiceMenu(lines);
+            if (model.getActiveChoiceMenu() == null) {
+                menuOpt.ifPresent(m -> {
+                    if (ClaudeCodePreferences.isDebugMode()) {
+                        LOG.info("[pollScreenState] setting choice menu: \"" + m.text() + "\"");
+                    }
+                    model.setActiveChoiceMenu(m);
+                });
+            } else if (menuOpt.isEmpty() && !screenContentDetector.detectYesNoPrompt(lines)) {
+                // Menu was set but no longer on screen and no Y/n fallback — clear it.
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info("[pollScreenState] menu gone from screen, dismissing");
+                }
+                model.clearChoiceMenu();
+            }
+        }
+
         // Continuously sync CC screen mode → model (skip during switches and discovery)
         if (modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
             Optional<String> detected = screenContentDetector.detectEditMode(lines);
@@ -676,6 +699,10 @@ public final class ClaudeSessionController {
                     LOG.info("[screen prompt] menu gone from screen, dismissing");
                 }
                 model.clearChoiceMenu();
+            } else {
+                if (ClaudeCodePreferences.isDebugMode()) {
+                    LOG.info("[screen prompt] menu still on screen, keeping (req=" + req.get().text() + ")");
+                }
             }
             return;
         }
@@ -700,7 +727,7 @@ public final class ClaudeSessionController {
 
         req.ifPresent(r -> {
             if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info("[screen prompt flush] text=\"" + r.text() + "\" | options=" + r.options());
+                LOG.info("[screen prompt flush] setting choice menu: \"" + r.text() + "\" | options=" + r.options());
             }
             model.setActiveChoiceMenu(r);
         });

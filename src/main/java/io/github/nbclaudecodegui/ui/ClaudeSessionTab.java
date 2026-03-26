@@ -396,8 +396,7 @@ public class ClaudeSessionTab extends TopComponent
     public void onChoiceMenuChanged(ChoiceMenuModel menu) {
         if (menu != null) {
             if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info(sessionTag + "[screen prompt flush] text=\"" + menu.text()
-                        + "\" | options=" + menu.options());
+                LOG.info(sessionTag + "[onChoiceMenuChanged] showing menu: \"" + menu.text() + "\"");
             }
             promptPanel.setVisible(false);
             choiceMenuPanel.show(menu, answer -> {
