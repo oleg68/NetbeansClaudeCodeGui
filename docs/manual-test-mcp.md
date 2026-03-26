@@ -3,7 +3,7 @@
 ## Подготовка
 
 1. Собрать плагин: `mvn package -DskipTests`
-2. Установить NBM: Tools → Plugins → Downloaded → Add Plugins → выбрать `target/nb-claude-code-gui-0.10.0-SNAPSHOT.nbm`
+2. Установить NBM: Tools → Plugins → Downloaded → Add Plugins → выбрать `target/netbeans-claude-code-gui-0.10.0-SNAPSHOT.nbm`
 3. Перезапустить NetBeans
 4. Открыть любой Java-проект (нужен для тестов с файлами и проектами)
 

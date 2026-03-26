@@ -26,7 +26,7 @@ mvn nbm:nbm
 The installable plugin file is created at:
 
 ```
-target/nb-claude-code-gui-1.0-SNAPSHOT.nbm
+target/netbeans-claude-code-gui-1.0-SNAPSHOT.nbm
 ```
 
 ### Install into NetBeans
@@ -248,7 +248,7 @@ by Emilian Marius Bold, used under the **ISC License**:
 > PERFORMANCE OF THIS SOFTWARE.
 
 **Changes made:** updated target NetBeans version from RELEASE190 to RELEASE230;
-integrated into the `nb-claude-code-gui` plugin build alongside the PTY terminal component.
+integrated into the `netbeans-claude-code-gui` plugin build alongside the PTY terminal component.
 
 ---
 

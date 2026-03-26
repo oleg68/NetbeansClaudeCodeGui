@@ -5,10 +5,10 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.nbclaudecodegui</groupId>
-    <artifactId>nb-claude-code-gui</artifactId>
-    <version>0.14.16-SNAPSHOT</version>
+    <artifactId>netbeans-claude-code-gui</artifactId>
+    <version>0.14.17-SNAPSHOT</version>
     <packaging>nbm</packaging>
-    <name>Claude Code GUI</name>
+    <name>Netbeans Claude Code GUI</name>
     <description>NetBeans plugin that provides a GUI for Claude Code CLI — run claude code sessions directly inside the IDE.</description>
 
     <properties>
