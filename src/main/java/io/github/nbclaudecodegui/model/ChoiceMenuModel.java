@@ -1,6 +1,7 @@
 package io.github.nbclaudecodegui.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -12,12 +13,26 @@ import java.util.List;
  */
 public final class ChoiceMenuModel {
 
+    /**
+     * A single option in the menu.
+     *
+     * <p>{@code display} is the user-facing label; {@code response} is the string sent back
+     * to Claude (usually the item number). {@code description} is an optional subtitle shown
+     * below the label — present when Claude renders a description line under the option.
+     */
     public record Option(
             @JsonProperty("display") String display,
-            @JsonProperty("response") String response) {
+            @JsonProperty("response") String response,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @JsonProperty("description") String description) {
 
         @JsonCreator
         public Option {
+        }
+
+        /** Convenience constructor without description (backwards-compatible). */
+        public Option(String display, String response) {
+            this(display, response, null);
         }
     }
 

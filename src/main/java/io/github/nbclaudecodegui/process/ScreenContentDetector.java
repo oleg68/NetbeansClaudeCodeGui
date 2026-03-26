@@ -99,18 +99,59 @@ public final class ScreenContentDetector {
         // Walk upward to collect all contiguous option lines.
         // Allow up to 3 consecutive "continuation" lines (non-option, non-blank)
         // to handle wrapped option text that overflows to the next screen line.
+        // Stop as soon as we encounter option "1." — it is always the first item of the
+        // menu, so anything above it belongs to a previous context.
+        //
+        // optionRows[i] stores the screen-line index of each option (parallel to options list).
         List<ChoiceMenuModel.Option> options = new ArrayList<>();
+        List<Integer> optionRows = new ArrayList<>();
         int firstOptionRow = lastOptionRow;
         int continuationCount = 0;
         for (int i = lastOptionRow; i >= 0; i--) {
             String trimmed = screenLines.get(i).trim();
             if (OPTION_LINE.matcher(trimmed).matches()) {
-                options.add(0, extractOption(trimmed, options.size() + 1));
+                ChoiceMenuModel.Option opt = extractOption(trimmed, options.size() + 1);
+                options.add(0, opt);
+                optionRows.add(0, i);
                 firstOptionRow = i;
                 continuationCount = 0;
+                // Option "1" is always the first — stop collecting here
+                if ("1".equals(opt.response())) break;
             } else if (!trimmed.isBlank()) {
                 continuationCount++;
                 if (continuationCount > 3) break;
+            }
+        }
+
+        // Collect per-option description: the first candidate line immediately below each
+        // option line that looks like an intentional description (not a wrapped continuation
+        // of the option text, not a hint line, not a separator).
+        // A description line must:
+        //   - be non-blank and non-separator
+        //   - not be another option line
+        //   - not be a keyboard-hint line (contains "·" or starts with "Esc"/"Tab"/"Enter")
+        //   - have a shorter leading-whitespace indent than a deeply-wrapped continuation
+        //     (continuation wraps are typically indented to align with the option text start,
+        //      so they have large indent; description lines have moderate indent ≤ 8 spaces)
+        for (int oi = 0; oi < options.size(); oi++) {
+            int optRow = optionRows.get(oi);
+            int nextOptRow = (oi + 1 < optionRows.size()) ? optionRows.get(oi + 1) : lastOptionRow + 4;
+            for (int j = optRow + 1; j < Math.min(nextOptRow, screenLines.size()); j++) {
+                String raw = screenLines.get(j);
+                String line = raw.trim();
+                if (line.isBlank()) break;
+                if (OPTION_LINE.matcher(line).matches()) break;
+                // Skip keyboard-hint lines
+                if (isHintLine(line)) break;
+                // Skip separator lines
+                if (isSeparatorLine(line)) break;
+                // Description must be indented (at least 1 leading space) and not too deeply
+                // indented (> 8 spaces = wrapped continuation of the option text itself).
+                int indent = raw.length() - raw.stripLeading().length();
+                if (indent == 0 || indent > 8) break;
+                options.set(oi, new ChoiceMenuModel.Option(
+                        options.get(oi).display(), options.get(oi).response(), line));
+                break;
             }
         }
 
@@ -131,10 +172,15 @@ public final class ScreenContentDetector {
             if (!hasHint) return Optional.empty();
         }
 
-        // Line immediately above the first option is the question
-        String question = (firstOptionRow > 0)
-                ? screenLines.get(firstOptionRow - 1).trim()
-                : "";
+        // First non-blank line above the first option is the question
+        String question = "";
+        for (int i = firstOptionRow - 1; i >= 0; i--) {
+            String line = screenLines.get(i).trim();
+            if (!line.isBlank()) {
+                question = line;
+                break;
+            }
+        }
 
         // Guard: Claude Code Ink menus always show a cursor glyph (❯ / ▶ / >) on the
         // currently-selected option. Numbered lists in Claude's own output never have
@@ -339,5 +385,29 @@ public final class ScreenContentDetector {
             afterDot = afterDot.substring(0, parenPos).stripTrailing();
         }
         return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num));
+    }
+
+    /**
+     * Returns {@code true} if the (trimmed) line is a keyboard-hint line like
+     * {@code "Esc to cancel · Tab to amend · ctrl+e to explain"} or
+     * {@code "Enter to select · ↑/↓ to navigate · Esc to cancel"}.
+     * These lines follow the last menu option and must not be treated as descriptions.
+     */
+    private static boolean isHintLine(String trimmed) {
+        // Hint lines contain the middle-dot separator "·" used between keyboard shortcuts,
+        // or start with typical shortcut keywords.
+        if (trimmed.contains("\u00B7")) return true; // ·
+        String lower = trimmed.toLowerCase();
+        return lower.startsWith("esc ") || lower.startsWith("enter to") || lower.startsWith("tab to");
+    }
+
+    /**
+     * Returns {@code true} if the (trimmed) line consists entirely of box-drawing horizontal
+     * characters (e.g. {@code ────────────────────────────────────────}).
+     * Such lines separate sections in the terminal and must not be treated as descriptions.
+     */
+    private static boolean isSeparatorLine(String trimmed) {
+        if (trimmed.length() < 4) return false;
+        return trimmed.chars().allMatch(c -> c == '\u2500' || c == '\u2501' || c == '\u2014' || c == '-' || c == '=');
     }
 }

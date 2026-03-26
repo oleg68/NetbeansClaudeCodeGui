@@ -1,0 +1,10 @@
+Что делаем следующим?
+
+❯ 1. Исправить баг ChoiceMenu
+     Баг: choice menu не срабатывает при многострочном Bash-запросе (Do you want to proceed?).
+  2. Stage 15 — File attachments
+     Новая фича: прикрепление файлов к промпту (@/absolute/path).
+  3. Другое
+     Другая задача или вопрос.
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

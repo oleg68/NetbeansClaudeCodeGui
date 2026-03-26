@@ -145,6 +145,14 @@ public final class ChoiceMenuPanel extends JPanel {
                 group.add(rb);
                 radioButtons[i] = rb;
 
+                // Description subtitle under the radio button
+                if (opt.description() != null && !opt.description().isBlank()) {
+                    JLabel desc = new JLabel("<html><small>" + escapeHtml(opt.description()) + "</small></html>");
+                    desc.setForeground(Color.GRAY);
+                    desc.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    leftCol.add(desc);
+                }
+
                 if (isTypeInputOption(opt)) {
                     JTextField tf = new JTextField(20);
                     tf.setMaximumSize(new java.awt.Dimension(

@@ -1,0 +1,12 @@
+{
+  "text": "Что делаем следующим?",
+  "options": [
+    {"display": "Исправить баг ChoiceMenu", "response": "1", "description": "Баг: choice menu не срабатывает при многострочном Bash-запросе (Do you want to proceed?)."},
+    {"display": "Stage 15 — File attachments", "response": "2", "description": "Новая фича: прикрепление файлов к промпту (@/absolute/path)."},
+    {"display": "Stage 16 — FileDiff location config", "response": "3", "description": "Настройка: FileDiff в сессии или в отдельном окне."},
+    {"display": "Другое", "response": "4", "description": "Другая задача или вопрос."},
+    {"display": "Type something.", "response": "5"},
+    {"display": "Chat about this", "response": "6"}
+  ],
+  "defaultOptionIndex": 0
+}
