@@ -34,12 +34,18 @@ NetbeansClaudeCodePlugin/          ← repository root
     ├── java/io/github/nbclaudecodegui/
     │   ├── actions/
     │   │   ├── ClaudeCodeAction.java          # Toolbar action
-    │   │   └── OpenWithClaudeAction.java      # Context menu action
+    │   │   ├── OpenWithClaudeAction.java      # Context menu action
+    │   │   └── PromptFavoriteAction.java      # Dynamically registered Action per favorite for Keymap API
     │   ├── controller/
     │   │   └── ClaudeSessionController.java   # PTY process lifecycle, screen polling, model/edit-mode switching
     │   ├── model/
     │   │   ├── ClaudeSessionModel.java        # Session state container, listener dispatch on EDT
-    │   │   └── ChoiceMenuModel.java           # Interactive-prompt data
+    │   │   ├── ChoiceMenuModel.java           # Interactive-prompt data
+    │   │   ├── PromptHistoryStore.java        # Read/write/trim history in NbPreferences; per-project key
+    │   │   ├── PromptFavoritesStore.java      # Global + per-project favorites; JSON; supports ordering
+    │   │   ├── HistoryEntry.java              # Record: timestamp + prompt text
+    │   │   ├── FavoriteEntry.java             # Record: name, prompt, optional hotkey
+    │   │   └── PromptEntry.java               # Shared base for history/favorites entries
     │   ├── settings/
     │   │   ├── ClaudeCodeOptionsPanelController.java
     │   │   ├── ClaudeCodeOptionsPanel.java
@@ -53,35 +59,55 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   │   ├── CustomModel.java               # Record: id, alias, available
     │   │   └── CustomModelsDialog.java        # Dialog for managing custom models
     │   ├── ui/
-    │   │   ├── ClaudeSessionTopComponent.java  # One TC = one session; thin wrapper around ClaudePromptPanel
+    │   │   ├── ClaudeSessionTab.java           # One TC = one session; thin wrapper around ClaudePromptPanel
     │   │   ├── ClaudePromptPanel.java          # Session UI: terminal + top bar + input + status bar + model discovery
     │   │   ├── ChoiceMenuPanel.java            # Interactive choice UI (ChoiceMenuModel → buttons)
     │   │   ├── PromptResponsePanel.java        # Interactive questions (Yes/No, radio, free-form)
     │   │   ├── FileDiffPermissionPanel.java    # [✓ Accept][✗ Reject][reason][Cancel]
     │   │   ├── FileDiffTab.java                # Diff TopComponent + PermissionPanel; shared by hook and MCP
-    │   │   └── MarkdownRenderer.java           # Markdown → HTML
+    │   │   ├── MarkdownRenderer.java           # Markdown → HTML
+    │   │   ├── HistoryDialog.java              # Popup: history list with Send/Favorite/Delete
+    │   │   ├── FavoritesDialog.java            # Popup: favorites list with Send/Move/Rename/Delete/Reorder
+    │   │   ├── FavoritesPanel.java             # Reusable panel used inside FavoritesDialog
+    │   │   ├── AssignShortcutDialog.java       # Dialog to assign keyboard shortcut to a favorite
+    │   │   ├── ShortcutMatcher.java            # Utility: match key events to registered shortcuts
+    │   │   └── ClaudeSessionSelectorPanel.java # Session selector panel
     │   └── process/
     │       ├── ClaudeProcess.java              # PTY lifecycle + settings.local.json merge/cleanup
     │       ├── PtyTtyConnector.java            # PTY ↔ JediTerm bridge
     │       └── StreamJsonParser.java           # NDJSON parser
-    ├── java/org/openbeans/claude/netbeans/
+    ├── java/io/github/nbclaudecodegui/mcp/
     │   ├── MCPSseServer.java                   # Jetty: /sse /messages /hook
     │   ├── NetBeansMCPHandler.java             # JSON-RPC dispatcher + PreToolUse hook handler
-    │   ├── ClaudeCodeInstaller.java            # Module lifecycle: starts MCPSseServer
-    │   ├── ClaudeCodeStatusService.java        # Interface: isServerRunning(), getServerPort()
+    │   ├── MCPResponseBuilder.java             # Helper for building MCP JSON-RPC responses
     │   └── tools/
     │       ├── DiffTabTracker.java             # Registry of pending diff tabs
     │       ├── PermissionPromptTool.java       # MCP tool: shows FileDiffTab, async response
     │       ├── OpenDiff.java
     │       ├── OpenFile.java
-    │       ├── GetWorkspaceFolders.java
     │       ├── GetOpenEditors.java
     │       ├── GetCurrentSelection.java
-    │       ├── GetDiagnostics.java
+    │       └── GetDiagnostics.java
+    ├── java/io/github/nbclaudecodegui/
+    │   ├── ClaudeCodeInstaller.java            # Module lifecycle: starts MCPSseServer
+    │   └── ...
+    ├── java/org/openbeans/claude/netbeans/    ← remaining legacy classes
+    │   ├── ClaudeCodeStatusService.java        # Interface: isServerRunning(), getServerPort()
+    │   ├── ClaudeCodeStatusLineElement.java
+    │   ├── EditorUtils.java
+    │   ├── NbUtils.java
+    │   ├── ClaudeCodeAction.java               # (legacy, now also in io.github.nbclaudecodegui.actions)
+    │   └── tools/
+    │       ├── AsyncHandler.java
+    │       ├── AsyncResponse.java
     │       ├── CheckDocumentDirty.java
-    │       ├── SaveDocument.java
+    │       ├── CloseAllDiffTabs.java
     │       ├── CloseTab.java
-    │       └── CloseAllDiffTabs.java
+    │       ├── GetCurrentSelection.java
+    │       ├── GetWorkspaceFolders.java
+    │       ├── SaveDocument.java
+    │       ├── Tool.java
+    │       └── params/
     └── resources/io/github/nbclaudecodegui/
         ├── layer.xml
         ├── Bundle.properties
@@ -184,7 +210,7 @@ claude   (no flags, working directory = project root)
 
 | File | Action |
 |------|--------|
-| `ui/ClaudeSessionTopComponent.java` | **created** — one TC = one session |
+| `ui/ClaudeSessionTab.java` | **created** — one TC = one session |
 | `ui/ClaudeSessionPanel.java` | added `detachTerminal`, `reattachTerminal`, `hasLiveProcess`, `autoStart` |
 | `ui/ClaudeCodeTopComponent.java` | **removed** |
 | `ui/TabHeader.java` | **removed** |
@@ -331,13 +357,13 @@ claude   (no flags, working directory = project root)
 | `settings/ClaudeProjectProperties.java` | **created** — per-project profile assignment keyed by project path |
 | `settings/ClaudeProjectPropertiesPanel.java` | **created** — panel shown in Project Properties dialog |
 | `settings/ClaudeProjectPropertiesPanelProvider.java` | **created** — `CompositeCategoryProvider` for Maven / Java SE / Gradle |
-| `settings/CustomModel.java` | **created** — record for model entries (`id`, `alias`, `available`) |
-| `settings/CustomModelsDialog.java` | **created** — dialog for managing custom models list |
+| `settings/ModelAlias.java` | **created** — record for model alias entries (`id`, `alias`, `available`) |
+| `settings/ModelAliasesDialog.java` | **created** — dialog for managing model aliases list |
 | `settings/ClaudeCodeOptionsPanel.java` | **modified** — restructured into `JTabbedPane`: "General" + "Profiles" tabs |
 | `settings/ClaudeCodePreferences.java` | **modified** — added `profilesDir` preference |
 | `process/ClaudeProcess.java` | **modified** — `start(workingDir, profile)` + static `buildEnv(profile, profilesDir)` |
 | `ui/ClaudePromptPanel.java` | **modified** — `profileCombo` between Browse and Open; passes profile to `start()` |
-| `ui/ClaudeSessionTopComponent.java` | **modified** — profile name serialised in `writeExternal`/`readExternal` |
+| `ui/ClaudeSessionTab.java` | **modified** — profile name serialised in `writeExternal`/`readExternal` |
 | `actions/OpenWithClaudeAction.java` | **modified** — resolves profile from `ClaudeProjectProperties`; passes to `openForDirectory()` |
 
 #### UI layout — Profiles tab
@@ -372,7 +398,7 @@ Extra environment variables
 
 ---
 
-### Stage 14 — Prompt history & favorites (planned)
+### Stage 14 — Prompt history & favorites ✅ (v0.14.5-SNAPSHOT)
 
 **Goal:** persistent per-project prompt history with ability to promote entries to global or per-project favorites; optional hotkey on each favorite.
 
@@ -380,20 +406,27 @@ Extra environment variables
 
 | File | Role |
 |------|------|
-| `history/PromptHistoryStore.java` | Read / write / trim history in `NbPreferences` as JSON array with timestamps; per-project key |
-| `favorites/PromptFavoritesStore.java` | Global (`~/.netbeans/…`) + per-project favorites; JSON; supports ordering |
-| `ui/PromptListPanel.java` | Tabbed panel "History \| Favorites"; shared across both stores; columns: time, preview |
-| `actions/PromptFavoriteAction.java` | Dynamically registered `Action` per favorite for NetBeans Keymap API |
+| `model/PromptHistoryStore.java` | Read/write/trim history in NbPreferences as JSON array with timestamps; per-project key |
+| `model/PromptFavoritesStore.java` | Global + per-project favorites; JSON; supports ordering |
+| `model/HistoryEntry.java` | Record: timestamp + prompt text |
+| `model/FavoriteEntry.java` | Record: name, prompt, optional hotkey |
+| `model/PromptEntry.java` | Shared base for history/favorites entries |
+| `ui/HistoryDialog.java` | Popup dialog: history list with Send/Favorite/Delete actions |
+| `ui/FavoritesDialog.java` | Popup dialog: favorites list with Send/Move/Rename/Delete/Reorder |
+| `ui/FavoritesPanel.java` | Reusable panel used inside FavoritesDialog |
+| `ui/PromptListPanel.java` | Tabbed panel "History \| Favorites" |
+| `ui/AssignShortcutDialog.java` | Dialog to assign a keyboard shortcut to a favorite |
+| `ui/ShortcutMatcher.java` | Utility: match key events to registered shortcuts |
+| `actions/PromptFavoriteAction.java` | Dynamically registered Action per favorite for NetBeans Keymap API |
 
 **History features:**
 - Store in `NbPreferences` as JSON array with timestamps; max depth (default 200) + TTL configurable in Settings
 - Ctrl+Up / Ctrl+Down in `inputArea` — navigate persistent history
 - Popup list: time + prompt preview; actions: **Send to input area**, **Add to favorites**, **Delete**
-- Force-clear: "Delete entries older than…" (dialog with date picker)
 
 **Favorites features:**
-- Two levels: global (file in `~/.netbeans/`) and per-project (`NbPreferences`)
-- Actions: **Send**, **Move to global / per-project**, **Rename**, **Delete**, **Reorder** (↑↓ + drag & drop)
+- Two levels: global and per-project
+- Actions: **Send**, **Move** (global ↔ per-project), **Rename**, **Delete**, **Reorder** (↑↓)
 - Assign hotkey to a specific favorite (NetBeans Keymap API)
 
 **Settings keys added:**
@@ -532,6 +565,8 @@ Settings are stored via `NbPreferences.forModule(ClaudeCodePreferences.class)`:
 | `autoStart` | boolean | `false` | 12 |
 | `commandHistory` | String | `""` (JSON array) | 12 |
 | `profilesDir` | String | `~/.netbeans/claude-profiles` | 13 |
+| `historyMaxDepth` | int | `200` | 14 |
+| `historyTtlDays` | int | `0` | 14 |
 
 ---
 

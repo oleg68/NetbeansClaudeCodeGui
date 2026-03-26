@@ -2,7 +2,7 @@
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
-Current version: **0.13.12-SNAPSHOT**
+Current version: **0.14.20-SNAPSHOT**
 
 ---
 
@@ -26,7 +26,7 @@ mvn nbm:nbm
 The installable plugin file is created at:
 
 ```
-target/netbeans-claude-code-gui-1.0-SNAPSHOT.nbm
+target/netbeans-claude-code-gui-0.14.20-SNAPSHOT.nbm
 ```
 
 ### Install into NetBeans
@@ -121,13 +121,14 @@ onClaudeIdle()                  → READY
 
 | Package | Responsibility |
 |---------|---------------|
-| `model/` | `ClaudeSessionModel` — session state + listener dispatch; `SessionLifecycle` — state enum; `ChoiceMenuModel` — interactive-prompt data |
+| `model/` | `ClaudeSessionModel` — session state + listener dispatch; `SessionLifecycle` — state enum; `ChoiceMenuModel` — interactive-prompt data; `PromptHistoryStore`, `PromptFavoritesStore`, `HistoryEntry`, `FavoriteEntry` — persistent prompt history and favorites |
 | `controller/` | `ClaudeSessionController` — PTY lifecycle, screen polling, model switching, `parseModelDiscovery` |
 | `process/` | `ClaudeProcess` — PTY lifecycle + `settings.local.json` generation; `PtyTtyConnector` — PTY↔JediTerm bridge; `StreamJsonParser` — lightweight NDJSON parser |
-| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff TopComponent with permission bar; `MarkdownRenderer` — markdown→HTML |
+| `ui/` | `ClaudeSessionTab` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff TopComponent with permission bar; `MarkdownRenderer` — markdown→HTML |
 | `settings/` | `ClaudeCodePreferences` (default MCP port 28991); `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options (General + Profiles tabs); `ClaudeProfile`, `ClaudeProfileStore` — named profiles with isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy settings, and extra env vars; `ClaudeProjectProperties` — per-project profile assignment |
 | `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project context menu |
-| `org.openbeans.claude.netbeans` | `MCPSseServer` — Jetty HTTP server (`/sse`, `/messages`, `/hook`); `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook handler; reads edit mode via `ClaudeSessionModel.EDIT_MODE_REGISTRY`; `tools/` — `PermissionPromptTool`, `DiffTabTracker`, `OpenDiff`, and other IDE tools |
+| `io.github.nbclaudecodegui.mcp` | `MCPSseServer` — Jetty HTTP server (`/sse`, `/messages`, `/hook`); `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook handler; reads edit mode via `ClaudeSessionModel.EDIT_MODE_REGISTRY`; `tools/` — `PermissionPromptTool`, `DiffTabTracker`, `OpenDiff`, and other IDE tools |
+| `org.openbeans.claude.netbeans` | Legacy classes: `ClaudeCodeStatusService`, `ClaudeCodeStatusLineElement`, `EditorUtils`, `NbUtils`; `tools/` — `AsyncHandler`, `AsyncResponse`, `GetWorkspaceFolders`, `CheckDocumentDirty`, `SaveDocument`, `CloseTab`, `CloseAllDiffTabs`, and supporting types |
 
 ---
 
@@ -178,6 +179,16 @@ Multiple **named profiles** can be configured in Tools → Options → Claude Co
 
 Profiles can be assigned per-project via **right-click → Properties → Claude Code**, or selected per-session in the control bar combo before clicking **Open**.
 
+### Prompt history & favorites
+
+The input bar maintains a persistent prompt history per project:
+- **Ctrl+Up / Ctrl+Down** — navigate history entries in the input field
+- **History** button (or Ctrl+H) — open the history popup: select an entry to load into the input bar, star it as a favorite, or delete it
+
+**Favorites** can be global or per-project:
+- **Favorites** button — open the favorites panel: Send, Move (global ↔ per-project), Rename, Reorder (↑↓), Delete
+- Assign a keyboard shortcut to any favorite via **right-click → Assign shortcut…**
+
 ### Closing sessions
 
 Closing a session window while a PTY process is running shows a confirmation dialog. Confirmed close stops the process. PTY processes are children of the IDE JVM — they receive SIGHUP automatically if the IDE exits unexpectedly.
@@ -190,11 +201,20 @@ Closing a session window while a PTY process is running shows a confirmation dia
 src/
   main/
     java/io/github/nbclaudecodegui/
-      actions/          ClaudeCodeAction, OpenWithClaudeAction
+      actions/          ClaudeCodeAction, OpenWithClaudeAction, PromptFavoriteAction
+      controller/       ClaudeSessionController
+      model/            ClaudeSessionModel, ChoiceMenuModel, PromptHistoryStore,
+                        PromptFavoritesStore, HistoryEntry, FavoriteEntry, PromptEntry
+      mcp/              MCPSseServer, NetBeansMCPHandler, MCPResponseBuilder, tools/…
       process/          ClaudeProcess, PtyTtyConnector, StreamJsonParser
-      settings/         ClaudeCodePreferences, ClaudeCodeOptionsPanel(Controller)
-      ui/               ClaudeSessionTopComponent, ClaudePromptPanel,
-                        PromptResponsePanel, MarkdownRenderer
+      settings/         ClaudeCodePreferences, ClaudeCodeOptionsPanel(Controller),
+                        ClaudeProfile, ClaudeProfileStore, ModelAlias, ModelAliasesDialog
+      ui/               ClaudeSessionTab, ClaudePromptPanel, PromptResponsePanel,
+                        MarkdownRenderer, HistoryDialog, FavoritesDialog, FavoritesPanel,
+                        AssignShortcutDialog, ShortcutMatcher, ClaudeSessionSelectorPanel
+    java/org/openbeans/claude/netbeans/
+                        ClaudeCodeStatusService, ClaudeCodeStatusLineElement,
+                        EditorUtils, NbUtils, tools/…
     resources/io/github/nbclaudecodegui/
       layer.xml         NetBeans layer registration
       Bundle.properties Localisation strings
@@ -223,7 +243,8 @@ src/
 | 11 | Unified diff viewer with Accept/Reject/Cancel (`FileDiffTab`, `PermissionPanel`) | ✅ |
 | 12 | Model picker, edit-mode selector, split pane input, status bar | ✅ |
 | 13 | Named profiles: isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy, extra env vars; per-project assignment | ✅ |
-| 14 | Prompt history | planned |
+| 14 | Prompt history & favorites: persistent history (Ctrl+Up/Down), popup list, global/per-project favorites, hotkey assignment | ✅ |
+| 15 | File attachments in prompt (`@path` chips, Attach button, DnD) | planned |
 
 ---
 
