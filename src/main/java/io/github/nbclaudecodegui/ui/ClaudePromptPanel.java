@@ -291,6 +291,14 @@ public final class ClaudePromptPanel extends JPanel {
                     doSend();
                 }
             }
+
+            @Override
+            public void keyTyped(KeyEvent e) {
+                ShortcutMatcher sm = getOrCreateShortcutMatcher();
+                if (sm != null && sm.shouldSuppressKeyTyped()) {
+                    e.consume();
+                }
+            }
         });
     }
 

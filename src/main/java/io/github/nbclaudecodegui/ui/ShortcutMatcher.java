@@ -33,7 +33,22 @@ public final class ShortcutMatcher {
     /** Raw KeyEvents accumulated while in capturing mode, for replay. */
     private final List<KeyEvent> rawEvents   = new ArrayList<>();
 
-    private boolean capturing = false;
+    private boolean capturing   = false;
+    private boolean justMatched = false;
+
+    /** Returns {@code true} while a shortcut sequence is being accumulated. */
+    public boolean isCapturing() { return capturing; }
+
+    /**
+     * Returns {@code true} if the caller should consume the next KEY_TYPED event —
+     * either because a sequence is still being accumulated, or because a match just
+     * fired (one-shot: the flag is cleared after the first call that returns true).
+     */
+    public boolean shouldSuppressKeyTyped() {
+        if (capturing) return true;
+        if (justMatched) { justMatched = false; return true; }
+        return false;
+    }
 
     /**
      * @param inputArea the text area to insert text into
@@ -93,6 +108,7 @@ public final class ShortcutMatcher {
         FavoriteEntry match = findMatch(sequence, all);
         if (match != null) {
             reset();
+            justMatched = true;
             String text = match.getText();
             inputArea.setText(text);
             inputArea.setCaretPosition(inputArea.getDocument().getLength());
