@@ -57,6 +57,11 @@ public class MCPSseServer {
      */
     private final BlockingQueue<String> sseQueue = new LinkedBlockingQueue<>(1000);
 
+    /**
+     * Creates a new MCPSseServer backed by the given MCP handler.
+     *
+     * @param mcpHandler the handler that processes incoming MCP requests
+     */
     public MCPSseServer(NetBeansMCPHandler mcpHandler) {
         this.mcpHandler = mcpHandler;
     }
@@ -118,10 +123,18 @@ public class MCPSseServer {
         }
     }
 
-    /** @return the port this server listens on */
+    /**
+     * Returns the port this server listens on.
+     *
+     * @return the port number
+     */
     public int getPort() { return port; }
 
-    /** @return {@code true} while the Jetty server is running */
+    /**
+     * Returns {@code true} while the Jetty server is running.
+     *
+     * @return {@code true} if the server is currently started
+     */
     public boolean isRunning() { return server != null && server.isStarted(); }
 
     // -------------------------------------------------------------------------

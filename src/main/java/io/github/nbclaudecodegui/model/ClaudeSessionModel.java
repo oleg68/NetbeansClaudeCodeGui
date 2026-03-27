@@ -142,6 +142,9 @@ public final class ClaudeSessionModel {
 
     private final List<ClaudeSessionModelListener> listeners = new CopyOnWriteArrayList<>();
 
+    /** Creates a new, empty session model in the {@link SessionLifecycle#STARTING} state. */
+    public ClaudeSessionModel() {}
+
     // -------------------------------------------------------------------------
     // Listener management
     // -------------------------------------------------------------------------
@@ -169,31 +172,67 @@ public final class ClaudeSessionModel {
     // Getters
     // -------------------------------------------------------------------------
 
-    /** @return current lifecycle state */
+    /**
+     * Returns the current lifecycle state.
+     *
+     * @return current lifecycle state
+     */
     public SessionLifecycle getLifecycle() { return lifecycle; }
 
-    /** @return working directory, or {@code null} if not yet set */
+    /**
+     * Returns the working directory.
+     *
+     * @return working directory, or {@code null} if not yet set
+     */
     public File getWorkingDirectory() { return workingDirectory; }
 
-    /** @return current edit mode string, or {@code null} if not yet set */
+    /**
+     * Returns the current edit mode string.
+     *
+     * @return edit mode, or {@code null} if not yet set
+     */
     public String getEditMode() { return editMode; }
 
-    /** @return selected profile name, or {@code null} for Default */
+    /**
+     * Returns the selected profile name.
+     *
+     * @return selected profile name, or {@code null} for Default
+     */
     public String getSelectedProfileName() { return selectedProfileName; }
 
-    /** @return detected model name, or {@code null} */
+    /**
+     * Returns the detected model name.
+     *
+     * @return detected model name, or {@code null}
+     */
     public String getDetectedModelName() { return detectedModelName; }
 
-    /** @return snapshot of available model names (never {@code null}) */
+    /**
+     * Returns a snapshot of available model names.
+     *
+     * @return available model names (never {@code null})
+     */
     public List<String> getAvailableModels() { return List.copyOf(availableModels); }
 
-    /** @return selected model index, or {@code -1} */
+    /**
+     * Returns the selected model index.
+     *
+     * @return selected model index, or {@code -1}
+     */
     public int getSelectedModelIndex() { return selectedModelIndex; }
 
-    /** @return active choice menu, or {@code null} when idle */
+    /**
+     * Returns the active choice menu.
+     *
+     * @return active choice menu, or {@code null} when idle
+     */
     public ChoiceMenuModel getActiveChoiceMenu() { return activeChoiceMenu; }
 
-    /** @return snapshot of in-session prompt history */
+    /**
+     * Returns a snapshot of in-session prompt history.
+     *
+     * @return prompt history snapshot
+     */
     public List<String> getPromptHistory() { return List.copyOf(promptHistory); }
 
     // -------------------------------------------------------------------------

@@ -15,7 +15,10 @@ import org.openide.loaders.DataObject;
  * Tool to check if a document has unsaved changes.
  */
 public class CheckDocumentDirty implements Tool<CheckDocumentDirtyParams, CheckDocumentDirtyResult> {
-    
+
+    /** Creates a {@code CheckDocumentDirty} tool instance. */
+    public CheckDocumentDirty() {}
+
     private static final Logger LOGGER = Logger.getLogger(CheckDocumentDirty.class.getName());
     
     @Override

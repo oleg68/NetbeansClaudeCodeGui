@@ -59,6 +59,9 @@ public final class ClaudeProcess {
     /** Key the plugin registers under {@code mcpServers}. */
     static final String OUR_MCP_KEY = "netbeans";
 
+    /** Creates a new, idle {@code ClaudeProcess} instance. */
+    public ClaudeProcess() {}
+
     private volatile PtyProcess ptyProcess;
 
     /** Working directory of the current session; {@code null} when stopped. */

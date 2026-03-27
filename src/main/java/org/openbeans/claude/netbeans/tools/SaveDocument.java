@@ -12,7 +12,13 @@ import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 
+/**
+ * Tool that saves an open document to disk via the NetBeans EditorCookie API.
+ */
 public class SaveDocument implements Tool<SaveDocumentParams, SaveDocumentResult> {
+
+    /** Creates a new instance of this tool. */
+    public SaveDocument() {}
 
     @Override
     public String getName() {

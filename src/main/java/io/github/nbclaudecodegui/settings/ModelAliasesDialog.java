@@ -40,11 +40,16 @@ public final class ModelAliasesDialog extends JDialog {
 
     private static final String[] ALIASES = {"", "sonnet", "opus", "haiku"};
 
+    /** The base URL of the Other API endpoint, used when fetching available models. */
     private final String baseUrl;
+    /** The API key used when fetching available models. */
     private final String apiKey;
 
+    /** Table model for the model alias rows. */
     private DefaultTableModel tableModel;
+    /** Table displaying model aliases. */
     private JTable table;
+    /** Label showing the fetch status or errors. */
     private JLabel statusLabel;
 
     /** Non-null after the user clicks OK; null if cancelled. */
@@ -55,6 +60,8 @@ public final class ModelAliasesDialog extends JDialog {
     // -------------------------------------------------------------------------
 
     /**
+     * Creates a new model aliases dialog.
+     *
      * @param parent  parent component for centering
      * @param baseUrl base URL of the Other API endpoint
      * @param apiKey  API key used in the Authorization header
@@ -78,6 +85,8 @@ public final class ModelAliasesDialog extends JDialog {
 
     /**
      * Returns the model alias list accepted by the user, or {@code null} if cancelled.
+     *
+     * @return accepted model alias list, or {@code null} if the dialog was cancelled
      */
     public List<ModelAlias> getModels() {
         return result;

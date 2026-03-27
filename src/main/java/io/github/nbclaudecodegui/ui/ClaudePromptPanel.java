@@ -51,18 +51,30 @@ import javax.swing.SwingUtilities;
  */
 public final class ClaudePromptPanel extends JPanel {
 
-    private static final String ICON_SEND      = "\u25b6";  // ▶
-    private static final String ICON_CANCEL    = "\u2716";  // ✖
-    private static final String ICON_FAVORITES = "\u2605";  // ★
-    private static final String ICON_HISTORY   = "\u2630";  // ☰
+    /** Unicode send icon (▶). */
+    private static final String ICON_SEND      = "\u25b6";
+    /** Unicode cancel icon (✖). */
+    private static final String ICON_CANCEL    = "\u2716";
+    /** Unicode favorites icon (★). */
+    private static final String ICON_FAVORITES = "\u2605";
+    /** Unicode history icon (☰). */
+    private static final String ICON_HISTORY   = "\u2630";
+    /** The prompt input text area with @-path highlighting. */
     private final AtPathHighlighter.AtHighlightTextArea inputArea;
+    /** Button that sends the current prompt. */
     private final JButton   sendButton;
+    /** Button that cancels the running prompt (Ctrl+C). */
     private final JButton   cancelButton;
 
+    /** Callback invoked with the prompt text when the user sends. */
     private final Consumer<String>       onSend;
+    /** Callback invoked when the user cancels. */
     private final Runnable               onCancel;
+    /** Callback invoked when Shift+Tab is pressed. */
     private final Runnable               onShiftTab;
+    /** Supplies the in-session prompt history for navigation. */
     private final Supplier<List<String>> promptHistorySupplier;
+    /** Supplies the current working directory path. */
     private final Supplier<String>       workingDirSupplier;
 
     /** Current position in the history list; {@code -1} = newest (empty field). */
@@ -71,9 +83,13 @@ public final class ClaudePromptPanel extends JPanel {
     /** Shortcut matcher; lazily initialised once a working directory is available. */
     private ShortcutMatcher shortcutMatcher;
 
+    /** Handles file/image drop and paste into the input area. */
+    /** Handles file/image drop and paste into the input area. */
     private final FileDropHandler     dropHandler;
+    /** Highlights {@code @path} tokens in the input area. */
     @SuppressWarnings("FieldCanBeLocal")
     private final AtPathHighlighter   pathHighlighter;
+    /** Shows path completion suggestions when {@code @} is typed. */
     @SuppressWarnings("FieldCanBeLocal")
     private final AtCompletionPopup   completionPopup;
 

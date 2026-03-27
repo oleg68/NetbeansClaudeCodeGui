@@ -517,7 +517,11 @@ public class ClaudeSessionTab extends TopComponent
         controller.triggerPromptScan();
     }
 
-    /** Returns the current edit mode string. */
+    /**
+     * Returns the current edit mode string.
+     *
+     * @return edit mode string, or {@code null} if not set
+     */
     public String getEditMode() {
         return model.getEditMode();
     }

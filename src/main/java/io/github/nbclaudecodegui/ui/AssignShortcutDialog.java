@@ -25,16 +25,30 @@ import javax.swing.JTextField;
  */
 public final class AssignShortcutDialog extends JDialog {
 
+    /** The favorites store used for conflict detection. */
     private final PromptFavoritesStore store;
+    /** The favorite entry being edited. */
     private final FavoriteEntry        target;
 
+    /** Field displaying the current shortcut sequence being recorded. */
     private final JTextField displayField;
+    /** Label shown when a conflict is detected. */
     private final JLabel     conflictLabel;
+    /** OK button, enabled only when no conflict exists. */
     private final JButton    okButton;
 
+    /** Accumulated key combo strings (e.g. ["Ctrl+K", "Ctrl+F"]). */
     private final List<String> combos = new ArrayList<>();
+    /** Whether key-press capturing is currently active. */
     private boolean            capturing = false;
 
+    /**
+     * Creates the dialog.
+     *
+     * @param owner  parent window (for modality)
+     * @param store  favorites store used for conflict detection
+     * @param target the favorite entry being edited
+     */
     public AssignShortcutDialog(Window owner, PromptFavoritesStore store, FavoriteEntry target) {
         super(owner, "Assign Shortcut", ModalityType.APPLICATION_MODAL);
         this.store  = store;

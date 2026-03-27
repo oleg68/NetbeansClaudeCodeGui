@@ -13,17 +13,28 @@ package io.github.nbclaudecodegui.settings;
  */
 public record ModelAlias(String id, Boolean available, String alias) {
 
+    /** Validates and normalizes the record components. */
     public ModelAlias {
         if (id == null) throw new IllegalArgumentException("id must not be null");
         if (alias == null) alias = "";
     }
 
-    /** Returns a copy with the given availability. */
+    /**
+     * Returns a copy with the given availability.
+     *
+     * @param available {@code null} = unknown, {@code true} = reachable, {@code false} = not reachable
+     * @return new {@code ModelAlias} with updated availability
+     */
     public ModelAlias withAvailable(Boolean available) {
         return new ModelAlias(id, available, alias);
     }
 
-    /** Returns a copy with the given alias. */
+    /**
+     * Returns a copy with the given alias.
+     *
+     * @param alias the alias to assign (e.g. {@code "sonnet"}, {@code "opus"}, or {@code ""})
+     * @return new {@code ModelAlias} with updated alias
+     */
     public ModelAlias withAlias(String alias) {
         return new ModelAlias(id, available, alias);
     }
@@ -31,6 +42,7 @@ public record ModelAlias(String id, Boolean available, String alias) {
     /**
      * Validates alias uniqueness across a list of model aliases.
      *
+     * @param models the list of model aliases to validate
      * @return {@code null} if valid, or an error message naming the duplicate alias
      */
     public static String validateAliasUniqueness(java.util.List<ModelAlias> models) {

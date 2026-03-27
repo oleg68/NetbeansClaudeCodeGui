@@ -31,14 +31,26 @@ public final class HistoryDialog extends JDialog {
     private static final DateTimeFormatter FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
 
+    /** Last dialog size; preserved across open/close cycles. */
     private static Dimension lastSize = new Dimension(620, 400);
 
+    /** The prompt history store for the current working directory. */
     private final PromptHistoryStore   historyStore;
+    /** The favorites store for the current working directory. */
     private final PromptFavoritesStore favStore;
+    /** Callback invoked when the user selects an entry to send. */
     private final Consumer<String>     onSend;
 
+    /** The inner panel containing the history list and action buttons. */
     private final HistoryPanel panel;
 
+    /**
+     * Creates a new prompt history dialog.
+     *
+     * @param owner      the parent window
+     * @param workingDir the project working directory (used to scope history and favorites)
+     * @param onSend     callback invoked when the user selects a history entry to send
+     */
     public HistoryDialog(Window owner, Path workingDir, Consumer<String> onSend) {
         super(owner, "Prompt History", ModalityType.APPLICATION_MODAL);
         this.historyStore = PromptHistoryStore.getInstance(workingDir);

@@ -14,7 +14,10 @@ import org.openbeans.claude.netbeans.tools.params.Folder;
  * Tool to get list of workspace folders (open projects).
  */
 public class GetWorkspaceFolders implements Tool<GetWorkspaceFoldersParams, GetWorkspaceFoldersResult> {
-    
+
+    /** Creates a new instance of this tool. */
+    public GetWorkspaceFolders() {}
+
     private static final Logger LOGGER = Logger.getLogger(GetWorkspaceFolders.class.getName());
     
     @Override

@@ -22,13 +22,24 @@ import javax.swing.table.AbstractTableModel;
  */
 public final class FavoritesDialog extends JDialog {
 
+    /** Last dialog size; preserved across open/close cycles. */
     private static Dimension lastSize = new Dimension(680, 420);
 
+    /** The favorites store for the current working directory. */
     private final PromptFavoritesStore store;
+    /** Callback invoked when the user selects a favorite to send. */
     private final Consumer<String>     onSend;
 
+    /** The inner panel containing the project and global favorite tabs. */
     private final DialogPanel panel;
 
+    /**
+     * Creates a new favorites dialog.
+     *
+     * @param owner      the parent window
+     * @param workingDir the project working directory (used to scope favorites)
+     * @param onSend     callback invoked when the user selects a favorite to send
+     */
     public FavoritesDialog(Window owner, Path workingDir, Consumer<String> onSend) {
         super(owner, "Favorites", ModalityType.APPLICATION_MODAL);
         this.store  = PromptFavoritesStore.getInstance(workingDir);

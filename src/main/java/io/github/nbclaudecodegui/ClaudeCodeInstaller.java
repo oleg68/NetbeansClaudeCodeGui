@@ -35,6 +35,9 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
     private static volatile MCPSseServer mcpServer;
     private NetBeansMCPHandler mcpHandler;
 
+    /** Default constructor; called by the NetBeans module system. */
+    public ClaudeCodeInstaller() {}
+
     /**
      * Called when the module is first installed.
      */

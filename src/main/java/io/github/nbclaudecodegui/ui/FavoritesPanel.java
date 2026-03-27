@@ -30,11 +30,17 @@ import javax.swing.table.AbstractTableModel;
  */
 public abstract class FavoritesPanel extends PromptListPanel {
 
+    /** The favorites store used to persist and retrieve entries. */
     protected final PromptFavoritesStore store;
 
     /** Currently displayed (possibly filtered) entries. Updated on every refresh. */
     protected List<FavoriteEntry> currentEntries = new ArrayList<>();
 
+    /**
+     * Creates a panel backed by the given favorites store.
+     *
+     * @param store the store used to load and persist favorites
+     */
     protected FavoritesPanel(PromptFavoritesStore store) {
         this.store = store;
         // init() must be called here – after this.store is assigned – so that
@@ -50,12 +56,17 @@ public abstract class FavoritesPanel extends PromptListPanel {
     /**
      * Returns the full (unfiltered) entry list for this view.
      * Called by {@link #buildTableModel} on every refresh.
+     *
+     * @return full list of favorite entries for this view
      */
     protected abstract List<FavoriteEntry> loadEntries();
 
     /**
      * Builds the concrete {@link AbstractTableModel} for the given entry list.
      * Called by {@link #buildTableModel} after filtering.
+     *
+     * @param entries the (possibly filtered) list of entries to display
+     * @return table model populated with the given entries
      */
     protected abstract AbstractTableModel buildModel(List<FavoriteEntry> entries);
 
@@ -119,6 +130,8 @@ public abstract class FavoritesPanel extends PromptListPanel {
      * Moves the single selected PROJECT-scoped entry up ({@code delta = -1}) or
      * down ({@code delta = +1}) within the project ordering.
      * No-op if the selected entry is GLOBAL or if the move is out of bounds.
+     *
+     * @param delta {@code -1} to move up, {@code +1} to move down
      */
     protected void doMoveProject(int delta) {
         int row = singleSelectedRow();
@@ -148,6 +161,8 @@ public abstract class FavoritesPanel extends PromptListPanel {
     /**
      * Moves the single selected entry up ({@code delta = -1}) or down ({@code delta = +1})
      * within the global ordering.
+     *
+     * @param delta {@code -1} to move up, {@code +1} to move down
      */
     protected void doMoveGlobal(int delta) {
         int row = singleSelectedRow();
@@ -172,6 +187,8 @@ public abstract class FavoritesPanel extends PromptListPanel {
      *
      * <p>Priority: the first checked row; otherwise the table's selected row.
      * Returns {@code -1} if more than one row is checked (ambiguous selection).
+     *
+     * @return selected row index, or {@code -1} if ambiguous or none
      */
     protected int singleSelectedRow() {
         List<Integer> checked = checkedRows();
@@ -180,7 +197,13 @@ public abstract class FavoritesPanel extends PromptListPanel {
         return -1;
     }
 
-    /** Truncates {@code s} to {@code max} characters, appending "…" if needed. */
+    /**
+     * Truncates {@code s} to {@code max} characters, appending "…" if needed.
+     *
+     * @param s   the string to truncate
+     * @param max maximum number of characters allowed
+     * @return the original string if short enough, otherwise a truncated string ending with "…"
+     */
     public static String truncate(String s, int max) {
         return s.length() <= max ? s : s.substring(0, max) + "\u2026";
     }

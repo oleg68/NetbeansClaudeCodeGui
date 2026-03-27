@@ -57,6 +57,8 @@ public final class FileDropHandler extends TransferHandler {
     private final List<File> tempFiles = new ArrayList<>();
 
     /**
+     * Creates a new {@code FileDropHandler}.
+     *
      * @param workingDirSupplier supplier for the current working directory path
      * @param originalHandler    the text area's original TransferHandler (for Cut/Copy delegation)
      */

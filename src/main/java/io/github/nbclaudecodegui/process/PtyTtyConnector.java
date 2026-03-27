@@ -64,6 +64,11 @@ public final class PtyTtyConnector implements TtyConnector {
         this.lineListener = listener;
     }
 
+    /**
+     * Sets a session tag used as a log prefix for debugging.
+     *
+     * @param tag the tag string, or {@code null} to clear
+     */
     public void setSessionTag(String tag) {
         this.tag = tag == null ? "" : tag;
     }

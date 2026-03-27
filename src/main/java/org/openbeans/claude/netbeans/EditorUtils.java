@@ -15,7 +15,10 @@ import org.openide.windows.TopComponent;
  * Utility methods for working with NetBeans editors.
  */
 public class EditorUtils {
-    
+
+    /** Private constructor — this class is a static utility and should not be instantiated. */
+    private EditorUtils() {}
+
     private static final Logger LOGGER = Logger.getLogger(EditorUtils.class.getName());
     
     /**

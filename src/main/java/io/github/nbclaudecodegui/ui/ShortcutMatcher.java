@@ -36,13 +36,19 @@ public final class ShortcutMatcher {
     private boolean capturing   = false;
     private boolean justMatched = false;
 
-    /** Returns {@code true} while a shortcut sequence is being accumulated. */
+    /**
+     * Returns {@code true} while a shortcut sequence is being accumulated.
+     *
+     * @return {@code true} if capturing mode is active
+     */
     public boolean isCapturing() { return capturing; }
 
     /**
      * Returns {@code true} if the caller should consume the next KEY_TYPED event —
      * either because a sequence is still being accumulated, or because a match just
      * fired (one-shot: the flag is cleared after the first call that returns true).
+     *
+     * @return {@code true} if the next KEY_TYPED event should be suppressed
      */
     public boolean shouldSuppressKeyTyped() {
         if (capturing) return true;
@@ -51,6 +57,8 @@ public final class ShortcutMatcher {
     }
 
     /**
+     * Creates a new {@code ShortcutMatcher}.
+     *
      * @param inputArea the text area to insert text into
      * @param store     the favorites store to read shortcuts from
      * @param onInsert  called with the matched text (after insert in inputArea);
@@ -63,7 +71,10 @@ public final class ShortcutMatcher {
     }
 
     /**
-     * Convenience factory — no external callback.
+     * Convenience constructor with no external callback.
+     *
+     * @param inputArea the text area to insert text into
+     * @param store     the favorites store to read shortcuts from
      */
     public ShortcutMatcher(JTextArea inputArea, PromptFavoritesStore store) {
         this(inputArea, store, null);

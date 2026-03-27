@@ -25,6 +25,9 @@ import java.awt.event.ActionListener;
 @Messages("CTL_ClaudeCodeAction=Claude Code Status")
 public final class ClaudeCodeAction implements ActionListener {
 
+    /** Default constructor; called by the NetBeans action registration framework. */
+    public ClaudeCodeAction() {}
+
     @Override
     public void actionPerformed(ActionEvent e) {
         try {

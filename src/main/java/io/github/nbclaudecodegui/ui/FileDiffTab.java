@@ -33,6 +33,10 @@ public final class FileDiffTab {
     /**
      * Returns {@code true} if {@code filePath} is located inside {@code dirPath}
      * (or equals it).
+     *
+     * @param filePath path of the file to check
+     * @param dirPath  path of the directory to check against
+     * @return {@code true} if the file is inside the directory or equals it
      */
     public static boolean isFileUnderDirectory(String filePath, String dirPath) {
         if (filePath == null || dirPath == null) return false;
@@ -199,6 +203,8 @@ public final class FileDiffTab {
     /**
      * Sends Ctrl+C (0x03) to the Claude PTY session associated with {@code filePath}.
      * Must be called on the EDT.
+     *
+     * @param filePath absolute path of the file whose session should be interrupted
      */
     public static void cancelCurrentPromptForFile(String filePath) {
         java.io.File file = new java.io.File(filePath);

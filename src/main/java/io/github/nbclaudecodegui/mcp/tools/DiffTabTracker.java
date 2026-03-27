@@ -15,6 +15,9 @@ import org.openbeans.claude.netbeans.tools.params.OpenDiffResult;
  */
 public class DiffTabTracker {
 
+    /** Private constructor — this class is a static utility and should not be instantiated. */
+    private DiffTabTracker() {}
+
     private static final Logger LOGGER = Logger.getLogger(DiffTabTracker.class.getName());
 
     private static final ConcurrentHashMap<String, AsyncHandler> pendingDiffs = new ConcurrentHashMap<>();
@@ -122,6 +125,9 @@ public class DiffTabTracker {
 
     /**
      * Returns {@code true} if a hook future is pending for the given tab name.
+     *
+     * @param tabName the tab name to check
+     * @return {@code true} if a pending hook future exists for the tab
      */
     public static boolean isHookTracked(String tabName) {
         return pendingHookFutures.containsKey(tabName);

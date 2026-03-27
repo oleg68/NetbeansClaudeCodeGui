@@ -34,6 +34,9 @@ import javax.swing.SwingUtilities;
  */
 public class OpenDiff implements Tool<OpenDiffParams, AsyncResponse<OpenDiffResult>> {
 
+    /** Creates a new instance of this tool. */
+    public OpenDiff() {}
+
     private static final Logger LOGGER = Logger.getLogger(OpenDiff.class.getName());
 
     @Override

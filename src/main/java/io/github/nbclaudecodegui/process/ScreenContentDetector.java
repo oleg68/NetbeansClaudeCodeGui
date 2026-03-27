@@ -22,10 +22,18 @@ import java.util.regex.Pattern;
  */
 public final class ScreenContentDetector {
 
+    /** Creates a new detector with default state. */
+    public ScreenContentDetector() {}
+
     private static final Logger LOG = Logger.getLogger(ScreenContentDetector.class.getName());
 
     private String tag = "";
 
+    /**
+     * Sets a session tag used as a log prefix for debugging.
+     *
+     * @param tag the tag string, or {@code null} to clear
+     */
     public void setSessionTag(String tag) {
         this.tag = tag == null ? "" : tag;
     }
@@ -67,7 +75,12 @@ public final class ScreenContentDetector {
     // -------------------------------------------------------------------------
 
     /** Represents Claude's current activity state. */
-    public enum SessionState { READY, WORKING }
+    public enum SessionState {
+        /** Claude is idle and ready for a new prompt. */
+        READY,
+        /** Claude is currently processing a request. */
+        WORKING
+    }
 
     // -------------------------------------------------------------------------
     // Public API

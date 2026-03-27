@@ -23,7 +23,9 @@ import javax.swing.JPanel;
  */
 public final class ClaudeProjectPropertiesPanel extends JPanel {
 
+    /** The project root directory. */
     private final File projectDir;
+    /** Combo box for selecting the Claude profile to use for this project. */
     private final JComboBox<String> profileCombo;
 
     /**

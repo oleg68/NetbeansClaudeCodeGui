@@ -43,6 +43,9 @@ import org.openide.windows.TopComponent;
  */
 public class GetDiagnostics implements Tool<GetDiagnosticsParams, String> {
 
+    /** Creates a new instance of this tool. */
+    public GetDiagnostics() {}
+
     private static final Logger LOGGER = Logger.getLogger(GetDiagnostics.class.getName());
 
     @Override
@@ -60,7 +63,12 @@ public class GetDiagnostics implements Tool<GetDiagnosticsParams, String> {
         return GetDiagnosticsParams.class;
     }
 
-    /** Overridable: converts a file path to a FileObject (bypassed in tests). */
+    /**
+     * Overridable: converts a file path to a FileObject (bypassed in tests).
+     *
+     * @param filePath absolute path to the file
+     * @return corresponding {@link FileObject}, or {@code null} if not found
+     */
     protected FileObject toFileObject(String filePath) {
         return FileUtil.toFileObject(new File(filePath));
     }
@@ -69,6 +77,9 @@ public class GetDiagnostics implements Tool<GetDiagnosticsParams, String> {
      * Overridable: returns ErrorDescriptions for a FileObject via
      * AnnotationHolder (bypassed in tests).
      * Uses reflection to access the package-private AnnotationHolder class.
+     *
+     * @param fo the file to query
+     * @return list of error descriptions, never {@code null}
      */
     @SuppressWarnings("unchecked")
     protected List<ErrorDescription> getErrorDescriptions(FileObject fo) {
@@ -182,6 +193,9 @@ public class GetDiagnostics implements Tool<GetDiagnosticsParams, String> {
 
     /**
      * Extracts diagnostics for a file via getErrorDescriptions(FileObject).
+     *
+     * @param filePath absolute path of the file to inspect
+     * @return list of {@link Diagnostic} entries, never {@code null}
      */
     protected List<Diagnostic> extractDiagnosticsFromFile(String filePath) {
         List<Diagnostic> diagnostics = new ArrayList<>();

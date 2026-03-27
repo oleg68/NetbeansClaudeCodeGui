@@ -35,6 +35,9 @@ import org.openbeans.claude.netbeans.tools.params.Content;
  */
 public class PermissionPromptTool implements Tool<PermissionPromptTool.Params, AsyncResponse<List<Content>>> {
 
+    /** Creates a new instance of this tool. */
+    public PermissionPromptTool() {}
+
     private static final Logger LOGGER = Logger.getLogger(PermissionPromptTool.class.getName());
 
     // -----------------------------------------------------------------------
@@ -46,6 +49,9 @@ public class PermissionPromptTool implements Tool<PermissionPromptTool.Params, A
      */
     public static final class Params {
 
+        /** Default constructor for Jackson deserialization. */
+        public Params() {}
+
         /** Name of the Claude tool requesting permission (e.g. {@code Edit}). */
         @JsonProperty("tool_name")
         private String toolName;
@@ -54,10 +60,18 @@ public class PermissionPromptTool implements Tool<PermissionPromptTool.Params, A
         @JsonProperty("tool_input")
         private JsonNode toolInput;
 
-        /** Returns the name of the tool requesting permission. */
+        /**
+         * Returns the name of the tool requesting permission.
+         *
+         * @return tool name
+         */
         public String getToolName() { return toolName; }
 
-        /** Returns the tool's input arguments as a JSON node. */
+        /**
+         * Returns the tool's input arguments as a JSON node.
+         *
+         * @return tool input as a JSON node
+         */
         public JsonNode getToolInput() { return toolInput; }
     }
 

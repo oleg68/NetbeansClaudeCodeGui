@@ -15,6 +15,9 @@ import org.openide.windows.TopComponent;
  */
 public class CloseTab implements Tool<CloseTabParams, CloseTabResult> {
 
+    /** Creates a {@code CloseTab} tool instance. */
+    public CloseTab() {}
+
     private static final Logger LOGGER = Logger.getLogger(CloseTab.class.getName());
 
     @Override

@@ -29,7 +29,9 @@ import javax.swing.KeyStroke;
  */
 public final class FileDiffPermissionPanel extends JPanel {
 
+    /** The Accept button. */
     private final JButton acceptBtn;
+    /** Label shown when a warning message is active. */
     private final JLabel warningLabel;
 
     /** Placeholder text shown in the decline reason field when it is empty. */
@@ -170,6 +172,8 @@ public final class FileDiffPermissionPanel extends JPanel {
     /**
      * Shows a warning message above the button row.
      * Pass {@code null} or an empty string to hide the warning.
+     *
+     * @param message the warning text to display, or {@code null}/{@code ""} to hide it
      */
     public void showWarning(String message) {
         if (message == null || message.isBlank()) {

@@ -31,8 +31,10 @@ public final class ChoiceMenuPanel extends JPanel {
 
     private static final Logger LOG = Logger.getLogger(ChoiceMenuPanel.class.getName());
 
+    /** Callback invoked with the selected option string when the user makes a choice. */
     private Consumer<String> callback;
 
+    /** Creates an initially-hidden choice menu panel. */
     public ChoiceMenuPanel() {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createCompoundBorder(

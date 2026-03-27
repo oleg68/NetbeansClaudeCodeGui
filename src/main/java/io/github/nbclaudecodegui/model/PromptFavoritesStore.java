@@ -111,7 +111,11 @@ public final class PromptFavoritesStore {
     // Project favorites
     // -------------------------------------------------------------------------
 
-    /** Returns per-project favorites in stored order. */
+    /**
+     * Returns per-project favorites in stored order.
+     *
+     * @return immutable list of project-scoped favorites
+     */
     public List<FavoriteEntry> getProject() {
         ProjectData pd = loadProject();
         Map<String, Integer> posMap = new HashMap<>();
@@ -122,7 +126,11 @@ public final class PromptFavoritesStore {
         return List.copyOf(list);
     }
 
-    /** Appends a new project favorite. */
+    /**
+     * Appends a new project favorite.
+     *
+     * @param entry the entry to add (scope is forced to PROJECT)
+     */
     public void addProject(FavoriteEntry entry) {
         if (entry == null) return;
         entry.setScope(FavoriteEntry.Scope.PROJECT);
@@ -213,12 +221,20 @@ public final class PromptFavoritesStore {
     // Global favorites
     // -------------------------------------------------------------------------
 
-    /** Returns all global favorites in stored order. */
+    /**
+     * Returns all global favorites in stored order.
+     *
+     * @return immutable list of global favorites
+     */
     public List<FavoriteEntry> getGlobal() {
         return List.copyOf(loadGlobal());
     }
 
-    /** Appends a new global favorite. */
+    /**
+     * Appends a new global favorite.
+     *
+     * @param entry the entry to add (scope is forced to GLOBAL)
+     */
     public void addGlobal(FavoriteEntry entry) {
         if (entry == null) return;
         entry.setScope(FavoriteEntry.Scope.GLOBAL);
@@ -239,7 +255,11 @@ public final class PromptFavoritesStore {
         saveGlobal(list);
     }
 
-    /** Replaces the global list with the provided order. */
+    /**
+     * Replaces the global list with the provided order.
+     *
+     * @param reordered the full global list in the desired display order
+     */
     public void reorderGlobal(List<FavoriteEntry> reordered) {
         saveGlobal(new ArrayList<>(reordered));
     }

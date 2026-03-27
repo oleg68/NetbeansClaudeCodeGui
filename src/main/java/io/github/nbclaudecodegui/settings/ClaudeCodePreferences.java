@@ -24,12 +24,14 @@ public final class ClaudeCodePreferences {
     public static final String KEY_NEWLINE_KEY = "newlineKey";
 
     /** Allowed key-combo values. */
-    public static final String ENTER        = "ENTER";
-    public static final String SHIFT_ENTER  = "SHIFT_ENTER";
-    public static final String CTRL_ENTER   = "CTRL_ENTER";
-    public static final String ALT_ENTER    = "ALT_ENTER";
+    /** Enter key. */ public static final String ENTER        = "ENTER";
+    /** Shift+Enter key. */ public static final String SHIFT_ENTER  = "SHIFT_ENTER";
+    /** Ctrl+Enter key. */ public static final String CTRL_ENTER   = "CTRL_ENTER";
+    /** Alt+Enter key. */ public static final String ALT_ENTER    = "ALT_ENTER";
 
+    /** Default key combo for sending the prompt (Ctrl+Enter). */
     public static final String DEFAULT_SEND_KEY    = CTRL_ENTER;
+    /** Default key combo for inserting a newline (Enter). */
     public static final String DEFAULT_NEWLINE_KEY = ENTER;
 
     private static final Logger LOG =
@@ -213,6 +215,8 @@ public final class ClaudeCodePreferences {
 
     /**
      * Returns the configured MCP server port.
+     *
+     * @return configured port, or {@link #DEFAULT_MCP_PORT} if not set
      */
     public static int getMcpPort() {
         return NbPreferences.forModule(ClaudeCodePreferences.class)
@@ -221,6 +225,8 @@ public final class ClaudeCodePreferences {
 
     /**
      * Persists the MCP server port.
+     *
+     * @param port port number to save
      */
     public static void setMcpPort(int port) {
         NbPreferences.forModule(ClaudeCodePreferences.class)

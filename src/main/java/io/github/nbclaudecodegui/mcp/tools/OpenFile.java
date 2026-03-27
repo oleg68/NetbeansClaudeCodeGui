@@ -20,6 +20,9 @@ import org.openide.loaders.DataObject;
  */
 public class OpenFile implements Tool<OpenFileParams, String> {
 
+    /** Creates a new instance of this tool. */
+    public OpenFile() {}
+
     private static final Logger LOGGER = Logger.getLogger(OpenFile.class.getName());
 
     @Override
@@ -41,6 +44,10 @@ public class OpenFile implements Tool<OpenFileParams, String> {
      * Opens the file and returns its EditorCookie.
      * Extracted as a protected method so tests can bypass file-system and
      * security calls without mocking static APIs.
+     *
+     * @param filePath absolute path of the file to open
+     * @return the {@link EditorCookie} for the opened file
+     * @throws Exception if the file cannot be opened or is outside an open project
      */
     protected EditorCookie doOpenFile(String filePath) throws Exception {
         if (!NbUtils.isPathWithinOpenProjects(filePath)) {
@@ -66,6 +73,9 @@ public class OpenFile implements Tool<OpenFileParams, String> {
      * Navigates to the first occurrence of {@code pattern} using the pane from
      * the given {@code EditorCookie} — avoids the focus-race bug where
      * EditorRegistry.lastFocusedComponent() would return the Claude terminal.
+     *
+     * @param ec      the editor cookie whose opened panes to use
+     * @param pattern the text pattern to navigate to (first occurrence)
      */
     protected void navigateTo(EditorCookie ec, String pattern) {
         SwingUtilities.invokeLater(() -> {

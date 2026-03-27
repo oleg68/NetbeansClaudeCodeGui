@@ -99,10 +99,18 @@ public final class AtPathHighlighter {
      */
     public static final class AtHighlightTextArea extends JTextArea {
 
+        /** Current highlighted @-token ranges as {@code [start, end]} pairs. */
         private List<int[]> ranges = new ArrayList<>();
 
+        /** Creates an empty text area. */
         public AtHighlightTextArea() { super(); }
 
+        /**
+         * Creates a text area with the given dimensions.
+         *
+         * @param rows number of visible rows
+         * @param cols number of visible columns
+         */
         public AtHighlightTextArea(int rows, int cols) { super(rows, cols); }
 
         /** Called by {@link AtPathHighlighter#rehighlight()} with updated ranges. */

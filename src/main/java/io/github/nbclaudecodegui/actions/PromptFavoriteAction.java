@@ -13,7 +13,9 @@ import javax.swing.AbstractAction;
  */
 public final class PromptFavoriteAction extends AbstractAction {
 
+    /** The favorite entry this action represents. */
     private final FavoriteEntry     entry;
+    /** Callback that receives the prompt text when the action is performed. */
     private final Consumer<String>  onSend;
 
     /**
@@ -28,7 +30,11 @@ public final class PromptFavoriteAction extends AbstractAction {
         this.onSend = onSend;
     }
 
-    /** @return the associated favorite entry */
+    /**
+     * Returns the associated favorite entry.
+     *
+     * @return the favorite entry this action represents
+     */
     public FavoriteEntry getEntry() {
         return entry;
     }

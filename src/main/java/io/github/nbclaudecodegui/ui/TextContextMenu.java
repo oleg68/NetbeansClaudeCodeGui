@@ -34,6 +34,9 @@ public final class TextContextMenu {
      * Creates a JPopupMenu with Cut, Copy, Paste, Select All, [separator], Clear.
      * Does NOT attach it — call {@link #attach(JTextComponent, JPopupMenu)} afterwards
      * if you need to add more items first.
+     *
+     * @param tc the text component whose actions the menu items delegate to
+     * @return the configured popup menu
      */
     public static JPopupMenu create(JTextComponent tc) {
         JPopupMenu menu = new JPopupMenu();
@@ -69,6 +72,9 @@ public final class TextContextMenu {
     /**
      * Attaches a pre-built menu to a text component via mousePressed + mouseReleased
      * popup triggers (handles both Windows and macOS conventions).
+     *
+     * @param tc   the text component to attach the menu to
+     * @param menu the popup menu to show on right-click
      */
     public static void attach(JTextComponent tc, JPopupMenu menu) {
         tc.addMouseListener(new MouseAdapter() {
@@ -81,7 +87,11 @@ public final class TextContextMenu {
         });
     }
 
-    /** Convenience: create and attach in one call when no extra items are needed. */
+    /**
+     * Convenience: create and attach in one call when no extra items are needed.
+     *
+     * @param tc the text component to attach a default context menu to
+     */
     public static void attach(JTextComponent tc) {
         attach(tc, create(tc));
     }

@@ -16,7 +16,14 @@ import org.openide.nodes.Node;
 import org.openide.text.NbDocument;
 import org.openide.windows.TopComponent;
 
+/**
+ * Utility methods for interacting with the NetBeans IDE APIs.
+ */
 public class NbUtils {
+
+    /** Private constructor — this class is a static utility and should not be instantiated. */
+    private NbUtils() {}
+
     private static final Logger LOGGER = Logger.getLogger(NbUtils.class.getName());
 
     /**
@@ -25,14 +32,31 @@ public class NbUtils {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class SelectionData {
 
+        /** The selected text (empty string if no selection). */
         public final String text;
+        /** Absolute path of the file containing the selection, or {@code null}. */
         public final String filePath;
+        /** 1-based line number of the selection start. */
         public final int startLine;
+        /** 0-based column of the selection start. */
         public final int startColumn;
+        /** 1-based line number of the selection end. */
         public final int endLine;
+        /** 0-based column of the selection end. */
         public final int endColumn;
+        /** {@code true} if no text is selected. */
         public final boolean isEmpty;
 
+        /**
+         * Creates a new selection data snapshot.
+         *
+         * @param selectedText the selected text, or {@code null} for no selection
+         * @param filePath     absolute file path, or {@code null}
+         * @param startLine    1-based start line
+         * @param startColumn  0-based start column
+         * @param endLine      1-based end line
+         * @param endColumn    0-based end column
+         */
         public SelectionData(String selectedText, String filePath,
                 int startLine, int startColumn,
                 int endLine, int endColumn) {
@@ -86,10 +110,13 @@ public class NbUtils {
     }
 
     /**
+     * Returns the current text selection from the active editor using the legacy API.
+     *
      * @deprecated Use {@link #getCurrentSelectionData(JTextComponent)} together with
      * {@code EditorRegistry.lastFocusedComponent()} instead. This overload relies on
      * {@code TopComponent.getRegistry().getActivated()}, which returns the wrong TC
      * (e.g. a Claude terminal) when focus has moved away from the editor.
+     * @return selection data, or {@code null} if no editor is active
      */
     @Deprecated
     public static SelectionData getCurrentSelectionData() {

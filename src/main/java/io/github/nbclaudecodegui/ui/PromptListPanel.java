@@ -30,11 +30,16 @@ import javax.swing.table.AbstractTableModel;
  */
 public abstract class PromptListPanel extends JPanel {
 
+    /** The search text field used to filter the list. */
     protected final JTextField searchField  = new JTextField(20);
+    /** The button that triggers the search filter. */
     protected final JButton    searchButton = new JButton("Search");
+    /** The table displaying the prompt entries. */
     protected final JTable     table;
+    /** The panel containing action buttons below the table. */
     protected final JPanel     buttonPanel  = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
 
+    /** Creates a new panel and initializes the UI components. */
     protected PromptListPanel() {
         setLayout(new BorderLayout(0, 4));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -74,17 +79,30 @@ public abstract class PromptListPanel extends JPanel {
     // Template methods for subclasses
     // -------------------------------------------------------------------------
 
-    /** Builds the table model for the given filter string. */
+    /**
+     * Builds the table model for the given filter string.
+     *
+     * @param filter the current search filter (lower-cased, trimmed)
+     * @return the table model to display
+     */
     protected abstract AbstractTableModel buildTableModel(String filter);
 
-    /** Called after table model is set — configure column widths, renderers, etc. */
+    /**
+     * Called after the table model is set — configure column widths, renderers, etc.
+     *
+     * @param t the table whose columns should be configured
+     */
     protected void configureColumns(JTable t) {}
 
     // -------------------------------------------------------------------------
     // Public helpers
     // -------------------------------------------------------------------------
 
-    /** Adds a button to the button panel. */
+    /**
+     * Adds a button to the button panel.
+     *
+     * @param btn the button to add
+     */
     protected void addButton(JButton btn) {
         buttonPanel.add(btn);
     }
@@ -96,7 +114,11 @@ public abstract class PromptListPanel extends JPanel {
         configureColumns(table);
     }
 
-    /** Returns the row indices that are checked (checkbox column = 0). */
+    /**
+     * Returns the row indices that are checked (checkbox column = 0).
+     *
+     * @return list of checked row indices
+     */
     protected List<Integer> checkedRows() {
         List<Integer> result = new ArrayList<>();
         for (int i = 0; i < table.getRowCount(); i++) {

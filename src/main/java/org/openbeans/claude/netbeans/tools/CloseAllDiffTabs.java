@@ -9,7 +9,13 @@ import org.openbeans.claude.netbeans.tools.params.CloseAllDiffTabsResult;
 import org.openbeans.claude.netbeans.tools.params.Content;
 import org.openide.windows.TopComponent;
 
+/**
+ * MCP tool that closes all open diff-viewer tabs in the IDE.
+ */
 public class CloseAllDiffTabs implements Tool<CloseAllDiffTabsParams, CloseAllDiffTabsResult> {
+
+    /** Creates a {@code CloseAllDiffTabs} tool instance. */
+    public CloseAllDiffTabs() {}
 
     private static final Logger LOGGER = Logger.getLogger(CloseAllDiffTabs.class.getName());
 

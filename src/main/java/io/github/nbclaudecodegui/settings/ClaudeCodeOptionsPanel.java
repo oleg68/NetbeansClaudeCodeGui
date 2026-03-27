@@ -50,10 +50,15 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         "Enter", "Shift+Enter", "Ctrl+Enter", "Alt+Enter"
     };
 
+    /** Field for the claude executable path. */
     private JTextField executablePathField;
+    /** Spinner for the MCP server port. */
     private JSpinner mcpPortSpinner;
+    /** Spinner for the maximum number of history entries. */
     private JSpinner historyMaxDepthSpinner;
+    /** Spinner for the history time-to-live in days. */
     private JSpinner historyTtlDaysSpinner;
+    /** Checkbox to enable debug logging. */
     private javax.swing.JCheckBox debugCheckBox;
 
     /** send-key radio buttons: value → button */
@@ -61,7 +66,9 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     /** newline-key radio buttons: value → button */
     private final Map<String, JRadioButton> newlineRadios = new LinkedHashMap<>();
 
+    /** Button group for the send-key radios. */
     private final ButtonGroup sendGroup    = new ButtonGroup();
+    /** Button group for the newline-key radios. */
     private final ButtonGroup newlineGroup = new ButtonGroup();
 
     /** Profiles tab panel. */

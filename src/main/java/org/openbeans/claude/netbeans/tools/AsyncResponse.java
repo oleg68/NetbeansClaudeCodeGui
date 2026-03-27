@@ -4,6 +4,8 @@ package org.openbeans.claude.netbeans.tools;
  * Marker interface for tools that respond asynchronously.
  * Tools returning this type will not send an immediate response.
  * The handler will be called later when the async operation completes.
+ *
+ * @param <O> the result type produced when the async operation completes
  */
 public interface AsyncResponse<O> {
     /**

@@ -15,6 +15,11 @@ public class MCPResponseBuilder {
 
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates a builder using the given Jackson {@link ObjectMapper}.
+     *
+     * @param objectMapper the mapper used for JSON serialization
+     */
     public MCPResponseBuilder(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
@@ -40,6 +45,14 @@ public class MCPResponseBuilder {
         return result;
     }
 
+    /**
+     * Creates an MCP tool response from an arbitrary object.
+     * If the object is a {@link String}, delegates to {@link #createToolResponse(String)}.
+     * Otherwise serializes it to JSON and wraps it in a content block.
+     *
+     * @param data the response data object
+     * @return a {@link JsonNode} with the properly formatted MCP response
+     */
     public JsonNode createToolResponse(Object data) {
         if (data instanceof String) {
             return createToolResponse((String) data);

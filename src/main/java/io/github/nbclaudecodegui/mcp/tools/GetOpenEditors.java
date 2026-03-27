@@ -24,6 +24,9 @@ import org.openide.windows.TopComponent;
  */
 public class GetOpenEditors implements Tool<GetOpenEditorsParams, GetOpenEditorsResult> {
 
+    /** Creates a new instance of this tool. */
+    public GetOpenEditors() {}
+
     private static final Logger LOGGER = Logger.getLogger(GetOpenEditors.class.getName());
 
     @Override
@@ -41,6 +44,11 @@ public class GetOpenEditors implements Tool<GetOpenEditorsParams, GetOpenEditors
         return GetOpenEditorsParams.class;
     }
 
+    /**
+     * Returns the set of currently opened {@link TopComponent}s; overridable in tests.
+     *
+     * @return set of opened top components
+     */
     protected Set<TopComponent> getOpenedTopComponents() {
         return TopComponent.getRegistry().getOpened();
     }

@@ -3,6 +3,8 @@ package org.openbeans.claude.netbeans.tools;
 /**
  * Handler for sending asynchronous tool responses.
  * Provided to async tools so they can send responses later.
+ *
+ * @param <O> the result type produced by the async tool
  */
 public interface AsyncHandler<O> {
     /**

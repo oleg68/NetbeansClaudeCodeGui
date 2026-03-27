@@ -23,6 +23,9 @@ public final class ClaudeCodeOptionsPanelController extends OptionsPanelControll
     private final PropertyChangeSupport pcs = new PropertyChangeSupport(this);
     private boolean changed;
 
+    /** Creates the controller; called by the NetBeans Options framework via {@code layer.xml}. */
+    public ClaudeCodeOptionsPanelController() {}
+
     @Override
     public void update() {
         getPanel().load();

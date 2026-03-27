@@ -98,6 +98,7 @@ public class NetBeansMCPHandler {
     private final PermissionPromptTool permissionPromptTool;
     private final SaveDocument saveDocument;
 
+    /** Creates a new handler and initializes all MCP tool instances. */
     public NetBeansMCPHandler() {
         this.responseBuilder = new MCPResponseBuilder(objectMapper);
         this.checkDocumentDirtyTool = new CheckDocumentDirty();
@@ -619,6 +620,8 @@ public class NetBeansMCPHandler {
     /**
      * Called when Claude finishes its turn (Stop hook).
      * Finds the matching session by cwd and signals it that Claude is idle.
+     *
+     * @param payload the raw JSON payload from the Stop hook
      */
     public void handleStop(String payload) {
         String cwd = extractCwdFromPayload(payload);
@@ -635,6 +638,8 @@ public class NetBeansMCPHandler {
     /**
      * Called before Claude shows a native PTY permission dialog (PermissionRequest hook).
      * Triggers a screen scan so the PromptResponsePanel appears promptly.
+     *
+     * @param payload the raw JSON payload from the PermissionRequest hook
      */
     public void handlePermissionRequest(String payload) {
         String cwd = extractCwdFromPayload(payload);

@@ -18,6 +18,7 @@ public class ClaudeCodeStatusLineElement implements StatusLineElementProvider {
     private JLabel statusLabel;
     private ClaudeCodeStatusService statusService;
     
+    /** Creates the status line element; called by the NetBeans service provider framework. */
     public ClaudeCodeStatusLineElement() {
         statusService = Lookup.getDefault().lookup(ClaudeCodeStatusService.class);
         initializeStatusLabel();

@@ -72,38 +72,65 @@ public final class ClaudeProfilesPanel extends JPanel {
     // Top-level fields
     // -------------------------------------------------------------------------
 
+    /** Field showing the directory where profiles are stored. */
     private JTextField profilesDirField;
+    /** Combo box for selecting the active profile. */
     private JComboBox<String> profileCombo;
+    /** Button to create a new profile. */
     private JButton newButton;
+    /** Button to copy the current profile. */
     private JButton copyButton;
+    /** Button to rename the current profile. */
     private JButton renameButton;
+    /** Button to delete the current profile. */
     private JButton deleteButton;
+    /** Field showing the configuration directory for the selected profile. */
     private JTextField configDirField;
 
     // Connection type
+    /** Radio button for system-managed (Claude account) connection. */
     private JRadioButton rbManaged;
+    /** Radio button for subscription (OAuth token) connection. */
     private JRadioButton rbSubscription;
+    /** Radio button for Anthropic API key connection. */
     private JRadioButton rbClaudeApi;
+    /** Radio button for other (custom base URL) API connection. */
     private JRadioButton rbOtherApi;
+    /** Password field for the OAuth token. */
     private JPasswordField tokenField;
+    /** Password field for the Anthropic API key. */
     private JPasswordField apiKeyField;
+    /** Text field for the custom base URL. */
     private JTextField baseUrlField;
+    /** Button to open the model aliases dialog. */
     private JButton modelAliasesBtn;
+    /** Button to toggle visibility of the token field. */
     private JButton tokenShowBtn;
+    /** Button to toggle visibility of the API key field. */
     private JButton apiKeyShowBtn;
 
     // Proxy
+    /** Radio button for system-managed proxy. */
     private JRadioButton rbProxySystem;
+    /** Radio button for no proxy. */
     private JRadioButton rbProxyNone;
+    /** Radio button for custom proxy settings. */
     private JRadioButton rbProxyCustom;
+    /** Card panel that switches between proxy configuration cards. */
     private JPanel proxyCardPanel;
+    /** Layout manager for the proxy card panel. */
     private CardLayout proxyCardLayout;
+    /** Text field for the HTTP proxy value. */
     private JTextField httpProxyField;
+    /** Text field for the HTTPS proxy value. */
     private JTextField httpsProxyField;
+    /** Text field for the NO_PROXY value. */
     private JTextField noProxyField;
 
     // Extra env vars
+    /** Table model for extra environment variables. */
     private DefaultTableModel extraEnvModel;
+    /** Table for editing extra environment variables. */
     private JTable extraEnvTable;
 
     // -------------------------------------------------------------------------

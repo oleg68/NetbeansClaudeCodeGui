@@ -331,49 +331,130 @@ public final class ClaudeProfile {
     // Getters / setters  (used by Jackson and the UI)
     // -------------------------------------------------------------------------
 
-    /** @return profile id (blank for Default) */
+    /**
+     * Returns the profile id.
+     *
+     * @return profile id (blank for Default)
+     */
     public String getId()   { return id != null ? id : ""; }
-    /** @param id profile id */
+
+    /**
+     * Sets the profile id.
+     *
+     * @param id profile id
+     */
     public void setId(String id) { this.id = id != null ? id : ""; }
 
-    /** @return display name */
+    /**
+     * Returns the display name.
+     *
+     * @return display name
+     */
     public String getName() { return name != null ? name : ""; }
-    /** @param name display name */
+
+    /**
+     * Sets the display name.
+     *
+     * @param name display name
+     */
     public void setName(String name) { this.name = name != null ? name : ""; }
 
-    /** @return OAuth token for Subscription mode */
+    /**
+     * Returns the OAuth token for Subscription mode.
+     *
+     * @return OAuth token
+     */
     public String getToken()   { return blankToEmpty(token); }
-    /** @param token OAuth token */
+
+    /**
+     * Sets the OAuth token.
+     *
+     * @param token OAuth token
+     */
     public void setToken(String token) { this.token = token; }
 
-    /** @return Anthropic API key */
+    /**
+     * Returns the Anthropic API key.
+     *
+     * @return API key
+     */
     public String getApiKey()  { return blankToEmpty(apiKey); }
-    /** @param apiKey API key */
+
+    /**
+     * Sets the Anthropic API key.
+     *
+     * @param apiKey API key
+     */
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
 
-    /** @return custom base URL for Other API mode */
+    /**
+     * Returns the custom base URL for Other API mode.
+     *
+     * @return custom base URL
+     */
     public String getBaseUrl() { return blankToEmpty(baseUrl); }
-    /** @param baseUrl custom base URL */
+
+    /**
+     * Sets the custom base URL.
+     *
+     * @param baseUrl custom base URL
+     */
     public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
 
-    /** @return current proxy mode */
+    /**
+     * Returns the current proxy mode.
+     *
+     * @return proxy mode
+     */
     public ProxyMode getProxyMode() { return proxyMode != null ? proxyMode : ProxyMode.SYSTEM_MANAGED; }
-    /** @param proxyMode proxy mode */
+
+    /**
+     * Sets the proxy mode.
+     *
+     * @param proxyMode proxy mode
+     */
     public void setProxyMode(ProxyMode proxyMode) { this.proxyMode = proxyMode; }
 
-    /** @return HTTP proxy value (CUSTOM mode) */
+    /**
+     * Returns the HTTP proxy value (CUSTOM mode).
+     *
+     * @return HTTP proxy
+     */
     public String getHttpProxy()  { return blankToEmpty(httpProxy); }
-    /** @param httpProxy HTTP proxy */
+
+    /**
+     * Sets the HTTP proxy value.
+     *
+     * @param httpProxy HTTP proxy
+     */
     public void setHttpProxy(String httpProxy) { this.httpProxy = httpProxy; }
 
-    /** @return HTTPS proxy value (CUSTOM mode) */
+    /**
+     * Returns the HTTPS proxy value (CUSTOM mode).
+     *
+     * @return HTTPS proxy
+     */
     public String getHttpsProxy() { return blankToEmpty(httpsProxy); }
-    /** @param httpsProxy HTTPS proxy */
+
+    /**
+     * Sets the HTTPS proxy value.
+     *
+     * @param httpsProxy HTTPS proxy
+     */
     public void setHttpsProxy(String httpsProxy) { this.httpsProxy = httpsProxy; }
 
-    /** @return NO_PROXY value (CUSTOM mode) */
+    /**
+     * Returns the NO_PROXY value (CUSTOM mode).
+     *
+     * @return NO_PROXY value
+     */
     public String getNoProxy()    { return blankToEmpty(noProxy); }
-    /** @param noProxy NO_PROXY value */
+
+    /**
+     * Sets the NO_PROXY value.
+     *
+     * @param noProxy NO_PROXY value
+     */
     public void setNoProxy(String noProxy) { this.noProxy = noProxy; }
 
     /**
