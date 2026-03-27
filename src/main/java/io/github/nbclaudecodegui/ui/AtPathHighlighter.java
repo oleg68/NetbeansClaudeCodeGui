@@ -4,7 +4,6 @@ import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Rectangle;
-import java.awt.Shape;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -13,116 +12,137 @@ import javax.swing.JTextArea;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Highlighter;
-import javax.swing.text.JTextComponent;
-import javax.swing.text.LayeredHighlighter;
-import javax.swing.text.Position;
-import javax.swing.text.View;
 
 /**
- * Highlights {@code @path} tokens in a {@link JTextArea} with a violet foreground.
+ * Highlights {@code @path} tokens in an {@link AtHighlightTextArea} with a blue foreground.
  *
- * <p>Attaches a {@link DocumentListener} to the text area's document.
- * On every document change, all previous highlights are cleared and
- * new highlights are applied to every {@code @\S+} token found in the text.
+ * <p>Uses a custom {@link JTextArea} subclass that overrides {@code paintComponent()}
+ * to redraw token text after the default rendering, ensuring the colour always
+ * appears on top of the default black glyphs and the selection highlight.
  *
- * <p>Install with {@link #install(JTextArea)}.
+ * <p>Install with {@link #install(AtHighlightTextArea)}.
  */
 public final class AtPathHighlighter {
 
     /** Matches @-tokens: @ followed by one or more non-whitespace characters. */
     private static final Pattern AT_TOKEN = Pattern.compile("@\\S+");
 
-    private static final Color HIGHLIGHT_COLOR = new Color(0x99, 0x33, 0xCC);
+    static final Color AT_TOKEN_COLOR = new Color(0x4A, 0x9E, 0xCD);
 
-    private final JTextArea area;
-    private final Highlighter.HighlightPainter painter;
-    /** Tags returned by {@code Highlighter.addHighlight} — kept to remove later. */
-    private final List<Object> highlights = new ArrayList<>();
+    private final AtHighlightTextArea area;
+    /** Current token ranges [start, end) — kept for {@link #highlightCount()}. */
+    private final List<int[]> ranges = new ArrayList<>();
 
-    private AtPathHighlighter(JTextArea area) {
+    private AtPathHighlighter(AtHighlightTextArea area) {
         this.area = area;
-        this.painter = new ForegroundPainter(HIGHLIGHT_COLOR);
     }
 
-    private static final class ForegroundPainter extends LayeredHighlighter.LayerPainter {
-        private final Color color;
-        ForegroundPainter(Color c) { this.color = c; }
-
-        @Override
-        public Shape paintLayer(Graphics g, int p0, int p1, Shape bounds,
-                                JTextComponent c, View view) {
-            try {
-                Shape s = view.modelToView(p0, Position.Bias.Forward,
-                                           p1, Position.Bias.Backward, bounds);
-                Rectangle r = s instanceof Rectangle rect ? rect : s.getBounds();
-                g.setColor(c.getBackground());
-                g.fillRect(r.x, r.y, r.width, r.height);
-                g.setColor(color);
-                g.setFont(c.getFont());
-                FontMetrics fm = g.getFontMetrics(c.getFont());
-                String text = c.getDocument().getText(p0, p1 - p0);
-                g.drawString(text, r.x, r.y + fm.getAscent());
-                return r;
-            } catch (BadLocationException ex) {
-                return bounds;
-            }
-        }
-
-        @Override
-        public void paint(Graphics g, int p0, int p1, Shape b, JTextComponent c) {}
-    }
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
     /**
-     * Creates and installs an {@code AtPathHighlighter} on the given text area.
+     * Installs an {@code AtPathHighlighter} on the given text area.
      *
-     * @param area the text area to highlight
+     * @param area the {@link AtHighlightTextArea} to highlight
      * @return the installed highlighter (kept for testing)
      */
-    public static AtPathHighlighter install(JTextArea area) {
+    public static AtPathHighlighter install(AtHighlightTextArea area) {
         AtPathHighlighter h = new AtPathHighlighter(area);
         area.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e)  { h.rehighlight(); }
             @Override public void removeUpdate(DocumentEvent e)  { h.rehighlight(); }
             @Override public void changedUpdate(DocumentEvent e) { h.rehighlight(); }
         });
+        // Repaint on selection changes so selected vs unselected portions update correctly.
+        area.addCaretListener(e -> area.repaint());
         return h;
     }
 
     /**
-     * Re-applies highlights to all {@code @\S+} tokens in the current document text.
+     * Re-computes token ranges from the current document text and triggers a repaint.
      * Called automatically by the document listener; also available for direct call.
      */
     public void rehighlight() {
-        Highlighter hl = area.getHighlighter();
-        // Remove previous @-path highlights
-        for (Object tag : highlights) {
-            hl.removeHighlight(tag);
-        }
-        highlights.clear();
-
+        ranges.clear();
         String text;
         try {
             text = area.getDocument().getText(0, area.getDocument().getLength());
         } catch (BadLocationException ex) {
+            area.setRanges(ranges);
+            area.repaint();
             return;
         }
-
         Matcher m = AT_TOKEN.matcher(text);
         while (m.find()) {
-            try {
-                Object tag = hl.addHighlight(m.start(), m.end(), painter);
-                highlights.add(tag);
-            } catch (BadLocationException ex) {
-                // Skip this token
-            }
+            ranges.add(new int[]{m.start(), m.end()});
         }
+        area.setRanges(new ArrayList<>(ranges));
+        area.repaint();
     }
 
     /**
-     * Returns the number of currently active highlights. Package-private for testing.
+     * Returns the number of currently active token ranges. Package-private for testing.
      */
     int highlightCount() {
-        return highlights.size();
+        return ranges.size();
+    }
+
+    // -------------------------------------------------------------------------
+    // AtHighlightTextArea — custom JTextArea subclass
+    // -------------------------------------------------------------------------
+
+    /**
+     * A {@link JTextArea} that redraws {@code @path} token ranges in
+     * {@link AtPathHighlighter#AT_TOKEN_COLOR} after the default rendering,
+     * so token text is always visible on top of both normal and selected text.
+     */
+    public static final class AtHighlightTextArea extends JTextArea {
+
+        private List<int[]> ranges = new ArrayList<>();
+
+        public AtHighlightTextArea() { super(); }
+
+        public AtHighlightTextArea(int rows, int cols) { super(rows, cols); }
+
+        /** Called by {@link AtPathHighlighter#rehighlight()} with updated ranges. */
+        void setRanges(List<int[]> r) {
+            this.ranges = r;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (ranges.isEmpty()) return;
+            FontMetrics fm = g.getFontMetrics(getFont());
+            int selStart = getSelectionStart();
+            int selEnd   = getSelectionEnd();
+            for (int[] range : ranges) {
+                // Split token into three parts relative to the current selection:
+                //   before selection — erase background, draw in AT_TOKEN_COLOR
+                //   inside selection — keep selection background, draw in AT_TOKEN_COLOR
+                //   after  selection — erase background, draw in AT_TOKEN_COLOR
+                paintPart(g, fm, range[0],                     Math.min(range[1], selStart), false);
+                paintPart(g, fm, Math.max(range[0], selStart), Math.min(range[1], selEnd),   true);
+                paintPart(g, fm, Math.max(range[0], selEnd),   range[1],                     false);
+            }
+        }
+
+        private void paintPart(Graphics g, FontMetrics fm, int start, int end, boolean selected) {
+            if (start >= end) return;
+            try {
+                Rectangle r0 = modelToView(start);
+                Rectangle r1 = modelToView(end);
+                if (r0 == null || r1 == null) return;
+                int x = r0.x, y = r0.y, w = r1.x - r0.x, h = r0.height;
+                if (!selected) {
+                    g.setColor(getBackground());
+                    g.fillRect(x, y, w, h);
+                }
+                g.setColor(AT_TOKEN_COLOR);
+                g.setFont(getFont());
+                g.drawString(getDocument().getText(start, end - start), x, y + fm.getAscent());
+            } catch (BadLocationException ex) { /* skip */ }
+        }
     }
 }

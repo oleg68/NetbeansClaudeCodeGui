@@ -1,6 +1,5 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.model.AttachedFilesModel;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
@@ -30,18 +29,14 @@ class FileDropHandlerTest {
     @TempDir
     File workDir;
 
-    private AttachedFilesModel model;
-    private AttachedFilesPanel chipsPanel;
-    private FileDropHandler    handler;
-    private JTextArea          area;
+    private FileDropHandler handler;
+    private JTextArea       area;
 
     @BeforeEach
     void setUp() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            model      = new AttachedFilesModel();
-            chipsPanel = new AttachedFilesPanel(model, () -> {});
-            handler    = new FileDropHandler(model, chipsPanel, () -> workDir.getAbsolutePath());
-            area       = new JTextArea();
+            handler = new FileDropHandler(() -> workDir.getAbsolutePath(), null);
+            area    = new JTextArea();
         });
     }
 
@@ -88,39 +83,30 @@ class FileDropHandlerTest {
     }
 
     // -------------------------------------------------------------------------
-    // Tests: file inside workingDir → relative path inserted into textarea
+    // Tests: file inside workingDir → @relative/path inserted into textarea
     // -------------------------------------------------------------------------
 
     @Test
-    void dropFileInsideWorkDirInsertsRelativePath() throws Exception {
+    void dropFileInsideWorkDirInsertsAtRelativePath() throws Exception {
         File inside = new File(workDir, "src/Foo.java");
         inside.getParentFile().mkdirs();
         inside.createNewFile();
 
         SwingUtilities.invokeAndWait(() -> {
             java.awt.datatransfer.Transferable t = fileListTransferable(List.of(inside));
-            // Directly exercise the import logic via reflection-friendly approach:
-            // We call importFromClipboardViaTransferable by temporarily setting clipboard
-            // Actually, we need to test the internal doImport. We can call the TransferHandler
-            // importData via a test support object or test the side-effect via area content.
-            // Use a minimal approach: call via a test subclass that exposes doImport.
             boolean result = callDoImport(handler, t, area);
             assertTrue(result, "Should return true for a file list");
         });
 
         SwingUtilities.invokeAndWait(() -> {
-            // Area should contain the relative path
             String text = area.getText();
-            assertTrue(text.contains("src/Foo.java") || text.contains("src" + File.separator + "Foo.java"),
-                    "Relative path must appear in textarea, got: " + text);
+            assertTrue(text.contains("@src/Foo.java") || text.contains("@src" + File.separator + "Foo.java"),
+                    "@-relative path must appear in textarea, got: " + text);
         });
-
-        // Model should have no chips (file was inside workDir)
-        assertEquals(0, model.getFiles().size(), "Inside-workDir file must NOT be in attachment model");
     }
 
     @Test
-    void dropFileOutsideWorkDirAddsChip() throws Exception {
+    void dropFileOutsideWorkDirInsertsAtAbsolutePath() throws Exception {
         File outside = File.createTempFile("outside", ".txt");
         outside.deleteOnExit();
 
@@ -130,13 +116,15 @@ class FileDropHandlerTest {
             assertTrue(result);
         });
 
-        assertEquals(1, model.getFiles().size(), "Outside-workDir file must be in attachment model");
-        assertEquals(outside.getAbsolutePath(),
-                model.getFiles().get(0).getAbsolutePath());
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("@" + outside.getAbsolutePath()),
+                    "Outside-workDir file must be inserted as @/absolute/path, got: " + text);
+        });
     }
 
     @Test
-    void dropTwoInsideFilesInsertsBothSpaceSeparated() throws Exception {
+    void dropTwoInsideFilesInsertsBothPaths() throws Exception {
         File a = new File(workDir, "a.txt"); a.createNewFile();
         File b = new File(workDir, "b.txt"); b.createNewFile();
 
@@ -150,13 +138,11 @@ class FileDropHandlerTest {
             assertTrue(text.contains("a.txt"), "First file must appear in textarea");
             assertTrue(text.contains("b.txt"), "Second file must appear in textarea");
         });
-
-        assertEquals(0, model.getFiles().size(), "Both files inside workDir → no chips");
     }
 
     @Test
-    void dropInsideAndOutsideFilesInsertsAndChips() throws Exception {
-        File inside = new File(workDir, "inner.txt"); inside.createNewFile();
+    void dropInsideAndOutsideFilesInsertsBothPaths() throws Exception {
+        File inside  = new File(workDir, "inner.txt"); inside.createNewFile();
         File outside = File.createTempFile("outer", ".txt"); outside.deleteOnExit();
 
         SwingUtilities.invokeAndWait(() -> {
@@ -165,17 +151,19 @@ class FileDropHandlerTest {
         });
 
         SwingUtilities.invokeAndWait(() -> {
-            assertTrue(area.getText().contains("inner.txt"), "Inner file must be in textarea");
+            String text = area.getText();
+            assertTrue(text.contains("inner.txt"), "Inner file must be in textarea");
+            assertTrue(text.contains("@" + outside.getAbsolutePath()),
+                    "Outer file must be inserted as @/absolute/path, got: " + text);
         });
-        assertEquals(1, model.getFiles().size(), "Outer file must be in chip model");
     }
 
     // -------------------------------------------------------------------------
-    // Tests: image → temp chip
+    // Tests: image → @/tmp/....png inserted into textarea
     // -------------------------------------------------------------------------
 
     @Test
-    void pasteImageAddsTempChip() throws Exception {
+    void pasteImageInsertsAtTempPath() throws Exception {
         BufferedImage img = new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB);
 
         SwingUtilities.invokeAndWait(() -> {
@@ -184,10 +172,33 @@ class FileDropHandlerTest {
             assertTrue(result, "Image import must return true");
         });
 
-        assertEquals(1, model.getFiles().size(), "Image must be added as a chip");
-        File tmp = model.getFiles().get(0);
-        assertTrue(tmp.exists(), "Temp file must exist");
-        assertTrue(tmp.getName().endsWith(".png"), "Temp file must be PNG");
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("@") && text.contains(".png"),
+                    "Image must be inserted as @/tmp/...png in textarea, got: " + text);
+        });
+    }
+
+    @Test
+    void pasteImageCleanupDeletesTempFile() throws Exception {
+        BufferedImage img = new BufferedImage(4, 4, BufferedImage.TYPE_INT_ARGB);
+
+        // Extract the temp file path from textarea after import
+        final String[] insertedPath = new String[1];
+        SwingUtilities.invokeAndWait(() -> {
+            java.awt.datatransfer.Transferable t = imageTransferable(img);
+            callDoImport(handler, t, area);
+        });
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText().trim();
+            // text looks like "@/tmp/claude-attach-xxx.png"
+            insertedPath[0] = text.startsWith("@") ? text.substring(1).trim() : text;
+        });
+
+        File tmp = new File(insertedPath[0]);
+        assertTrue(tmp.exists(), "Temp file must exist before cleanup");
+        handler.cleanup();
+        assertFalse(tmp.exists(), "Temp file must be deleted after cleanup");
     }
 
     // -------------------------------------------------------------------------
@@ -208,15 +219,11 @@ class FileDropHandlerTest {
             assertTrue(area.getText().contains(plainText),
                     "Plain text must appear in textarea, got: " + area.getText());
         });
-
-        assertEquals(0, model.getFiles().size(), "Plain text paste must not add any chips");
     }
 
     @Test
     void canImportAcceptsStringFlavor() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            // Build a mock TransferSupport — not straightforward, so test canImport
-            // indirectly: stringFlavor-only transferable goes through doImport successfully
             java.awt.datatransfer.Transferable t = stringTransferable("test");
             boolean result = callDoImport(handler, t, area);
             assertTrue(result, "doImport must accept stringFlavor");
@@ -278,35 +285,55 @@ class FileDropHandlerTest {
             assertTrue(text.contains("com.example.pkg"),
                     "FQN must be inserted into textarea, got: " + text);
         });
-        assertEquals(0, model.getFiles().size(), "Package inside workDir must NOT be added as chip");
     }
 
     @Test
-    void importNodesPackageDirOutsideWorkDirAddsChip() throws Exception {
-        // Create a package dir in a separate temp location (outside workDir)
+    void importNodesSourceRootFolderItselfInsertsRelativePath() throws Exception {
+        // Drop src/main/java itself (the source root, not a subpackage).
+        // Previously this produced an empty pkg string and inserted nothing.
+        File srcRoot = new File(workDir, "src/main/java");
+        srcRoot.mkdirs();
+        Node node = nodeForDir(srcRoot);
+
+        SwingUtilities.invokeAndWait(() -> {
+            boolean result = callImportNodes(handler, new Node[]{node}, area);
+            assertTrue(result, "importNodes must return true for source-root folder itself");
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("src/main/java") || text.contains("src" + File.separator + "main"),
+                    "Relative path of source root must be inserted, got: " + text);
+        });
+    }
+
+    @Test
+    void importNodesPackageDirOutsideWorkDirInsertsAtAbsolutePath() throws Exception {
         File outsideDir = File.createTempFile("outside-pkg-", "");
         outsideDir.delete();
         outsideDir = new File(outsideDir.getParentFile(), outsideDir.getName());
         outsideDir.mkdirs();
         outsideDir.deleteOnExit();
-        // Put it under a source root structure outside workDir
         File pkgDir = new File(outsideDir, "src/main/java/com/other/pkg");
         pkgDir.mkdirs();
         Node node = nodeForDir(pkgDir);
 
+        final File finalPkgDir = pkgDir;
         final Node finalNode = node;
         SwingUtilities.invokeAndWait(() -> {
             boolean result = callImportNodes(handler, new Node[]{finalNode}, area);
             assertTrue(result, "importNodes must return true for dir outside workDir");
         });
 
-        assertEquals(1, model.getFiles().size(), "Dir outside workDir must be added as chip");
-        assertEquals("", area.getText().trim(), "No text must be inserted for outside-workDir dir");
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("@") && text.contains(finalPkgDir.getAbsolutePath()),
+                    "Outside-workDir dir must be inserted as @/absolute/path, got: " + text);
+        });
     }
 
     @Test
     void importNodesProjectDirInsideWorkDirInsertsRelativePath() throws Exception {
-        // A directory inside workDir but NOT under src/main/java etc.
         File subdir = new File(workDir, "docs/api");
         subdir.mkdirs();
         Node node = nodeForDir(subdir);
@@ -321,7 +348,6 @@ class FileDropHandlerTest {
             assertTrue(text.contains("docs/api") || text.contains("docs" + File.separator + "api"),
                     "Relative path must be inserted for non-source-root dir, got: " + text);
         });
-        assertEquals(0, model.getFiles().size(), "Dir inside workDir must NOT be added as chip");
     }
 
     @Test
@@ -373,11 +399,10 @@ class FileDropHandlerTest {
             assertTrue(text.contains("src/main/java/Foo.java") || text.contains("Foo.java"),
                     "Relative path must be inserted for file node inside workDir, got: " + text);
         });
-        assertEquals(0, model.getFiles().size(), "File inside workDir must NOT be added as chip");
     }
 
     @Test
-    void importNodesFileNodeOutsideWorkDirAddsChip() throws Exception {
+    void importNodesFileNodeOutsideWorkDirInsertsAtAbsolutePath() throws Exception {
         File outsideFile = File.createTempFile("outside-node-", ".java");
         outsideFile.deleteOnExit();
         Node node = nodeForFile(outsideFile);
@@ -387,13 +412,15 @@ class FileDropHandlerTest {
             assertTrue(result, "importNodes must return true for file node outside workDir");
         });
 
-        assertEquals(1, model.getFiles().size(), "File node outside workDir must be added as chip");
-        assertEquals("", area.getText().trim(), "No text must be inserted for outside-workDir file node");
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("@" + outsideFile.getAbsolutePath()),
+                    "File node outside workDir must be inserted as @/absolute/path, got: " + text);
+        });
     }
 
     @Test
     void importNodesProjectNodeInsideWorkDirInsertsRelativePath() throws Exception {
-        // Simulate a project node: node with Project in Lookup whose projectDirectory is a subdir of workDir
         File subProjectDir = new File(workDir, "subproject");
         subProjectDir.mkdirs();
         LocalFileSystem lfs = new LocalFileSystem();
@@ -415,7 +442,6 @@ class FileDropHandlerTest {
             assertTrue(text.contains("subproject"),
                     "Relative path of project dir must be inserted, got: " + text);
         });
-        assertEquals(0, model.getFiles().size(), "Project dir inside workDir must NOT be added as chip");
     }
 
     // -------------------------------------------------------------------------
@@ -424,7 +450,6 @@ class FileDropHandlerTest {
 
     @Test
     void testProjectRootFileListInsertsAtDotSlash() throws Exception {
-        // Drop the workDir itself via file list
         SwingUtilities.invokeAndWait(() -> {
             java.awt.datatransfer.Transferable t = fileListTransferable(List.of(workDir));
             boolean result = callDoImport(handler, t, area);
@@ -436,12 +461,10 @@ class FileDropHandlerTest {
             assertTrue(text.contains("@./"),
                     "workDir root must insert @./ into textarea, got: " + text);
         });
-        assertEquals(0, model.getFiles().size(), "workDir root must NOT be added as chip");
     }
 
     @Test
     void testProjectRootNodeInsertsAtDotSlash() throws Exception {
-        // importNodes with a folder node whose path == workDir
         Node node = nodeForDir(workDir);
 
         SwingUtilities.invokeAndWait(() -> {
@@ -454,7 +477,66 @@ class FileDropHandlerTest {
             assertTrue(text.contains("@./"),
                     "workDir root node must insert @./ into textarea, got: " + text);
         });
-        assertEquals(0, model.getFiles().size(), "workDir root node must NOT be added as chip");
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests: trailing space and caret position after insertion
+    // -------------------------------------------------------------------------
+
+    @Test
+    void dropFileInsertsTrailingSpace() throws Exception {
+        File inside = new File(workDir, "Readme.md");
+        inside.createNewFile();
+
+        SwingUtilities.invokeAndWait(() -> {
+            java.awt.datatransfer.Transferable t = fileListTransferable(List.of(inside));
+            callDoImport(handler, t, area);
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.endsWith(" "),
+                    "Inserted path must be followed by a trailing space, got: '" + text + "'");
+        });
+    }
+
+    @Test
+    void dropFileCaretPositionedAfterTrailingSpace() throws Exception {
+        File inside = new File(workDir, "build.xml");
+        inside.createNewFile();
+
+        SwingUtilities.invokeAndWait(() -> {
+            java.awt.datatransfer.Transferable t = fileListTransferable(List.of(inside));
+            callDoImport(handler, t, area);
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            int caretPos = area.getCaretPosition();
+            int textLen  = area.getText().length();
+            assertEquals(textLen, caretPos,
+                    "Caret must be at the end of text (after trailing space), got caret=" + caretPos + " textLen=" + textLen);
+        });
+    }
+
+    @Test
+    void dropFileWhenAreaHasTextPrependsSeparatorAndTrailingSpace() throws Exception {
+        File inside = new File(workDir, "pom.xml");
+        inside.createNewFile();
+
+        SwingUtilities.invokeAndWait(() -> {
+            area.setText("fix");
+            area.setCaretPosition(area.getText().length());
+            java.awt.datatransfer.Transferable t = fileListTransferable(List.of(inside));
+            callDoImport(handler, t, area);
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.startsWith("fix "),
+                    "Space must be prepended when area already has text, got: '" + text + "'");
+            assertTrue(text.endsWith(" "),
+                    "Trailing space must be present, got: '" + text + "'");
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -509,7 +591,6 @@ class FileDropHandlerTest {
         SwingUtilities.invokeAndWait(() ->
             assertTrue(area.getText().contains("com.example.pkg"),
                     "FQN must be inserted, got: " + area.getText()));
-        assertEquals(0, model.getFiles().size());
     }
 
     // -------------------------------------------------------------------------
@@ -518,7 +599,6 @@ class FileDropHandlerTest {
 
     @Test
     void testCanImportNodeFlavor() throws Exception {
-        // Build a transferable that advertises the NetBeans node DnD MIME type
         java.awt.datatransfer.DataFlavor nodeDndFlavor = new java.awt.datatransfer.DataFlavor(
                 "application/x-java-openide-nodednd;class=org.openide.nodes.Node;mask=2",
                 "NetBeans Node DnD", Thread.currentThread().getContextClassLoader());
@@ -538,11 +618,10 @@ class FileDropHandlerTest {
             }
         };
 
-        // Call canImport via reflection (it's a public method, but TransferSupport is hard to construct)
-        // Instead call the package-private helper that checks the transferable flavor directly
+        // If getTransferData throws, we cannot extract any node → cannot determine resolvability → reject
         SwingUtilities.invokeAndWait(() -> {
             boolean result = callCanImportTransferable(handler, t);
-            assertTrue(result, "canImport must return true when transferable supports NodeTransfer.nodeFlavor");
+            assertFalse(result, "canImport must return false when node data cannot be retrieved");
         });
     }
 
@@ -571,22 +650,201 @@ class FileDropHandlerTest {
     }
 
     // -------------------------------------------------------------------------
-    // Helper — call the package-internal doImport via the public TransferHandler
-    // API. We replicate the logic by using a dummy TransferSupport backed by
-    // a Transferable that we build ourselves.
-    //
-    // Since TransferSupport cannot be constructed directly outside its package
-    // for the importData path, we test via a minimal sub-approach:
-    // We expose a package-private method in FileDropHandler that accepts a
-    // Transferable directly. For this test we call it via a reflective accessor.
+    // Tests: LocalFileSystem-rooted node (Files panel scenario)
     // -------------------------------------------------------------------------
 
     /**
-     * Calls the package-private {@code doImport(Transferable, JTextArea)} via
-     * a helper that uses reflection so we can test it without adding public API.
-     *
-     * <p>Falls back to using importFromClipboard if reflection fails, to avoid
-     * polluting clipboard in CI; in that case the test is skipped gracefully.
+     * Regression test: Files panel DnD nodes are backed by a LocalFileSystem rooted
+     * at the directory itself, which means {@code FileUtil.toFile(fo)} may return null
+     * for the root FileObject. The fallback via {@code fo.toURL().toURI()} must recover.
+     */
+    @Test
+    void importNodesLocalFileSystemRootedNodeInsertsRelativePath() throws Exception {
+        // Simulate the Files panel scenario: a directory is mounted as a LocalFileSystem root.
+        File srcDir = new File(workDir, "src/main/java");
+        srcDir.mkdirs();
+
+        // Mount the deep directory itself as the LocalFileSystem root (Files-panel style).
+        LocalFileSystem lfs = new LocalFileSystem();
+        lfs.setRootDirectory(srcDir);
+        FileObject fo = lfs.getRoot();
+        assertNotNull(fo, "LocalFileSystem root must be non-null");
+
+        Node node = new AbstractNode(Children.LEAF, Lookups.singleton(fo));
+
+        SwingUtilities.invokeAndWait(() -> {
+            boolean result = callImportNodes(handler, new Node[]{node}, area);
+            assertTrue(result, "importNodes must return true for LocalFileSystem-rooted node");
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertFalse(text.isBlank(),
+                    "Inserted text must not be empty for LocalFileSystem-rooted node, got: '" + text + "'");
+            // Must contain some recognizable path component
+            assertTrue(text.contains("src") || text.contains("java"),
+                    "Path must reference the directory, got: '" + text + "'");
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests: Files-window DnD — fo.getPath() fallback
+    // -------------------------------------------------------------------------
+
+    /**
+     * Stub FileObject whose getFileSystem() throws FileStateInvalidException, which causes
+     * both FileUtil.toFile() and the toURL().toURI() fallback to fail (return null / throw),
+     * but whose getPath() returns a caller-supplied absolute OS path — simulating a
+     * Files-window DnD node.
+     */
+    private static org.openide.filesystems.FileObject stubFoWithPath(String absolutePath, boolean isFolder) {
+        return new org.openide.filesystems.FileObject() {
+            @Override public String getPath() { return absolutePath; }
+            @Override public boolean isFolder() { return isFolder; }
+            @Override public boolean isData() { return !isFolder; }
+            @Override public boolean isValid() { return true; }
+            @Override public boolean isRoot() { return false; }
+            @Override public boolean isReadOnly() { return true; }
+            @Override public String getName() { return new File(absolutePath).getName(); }
+            @Override public String getExt() { return ""; }
+            @Override public void rename(org.openide.filesystems.FileLock lock, String name, String ext) {}
+            // Throwing here causes FileUtil.toFile() to return null (it catches the exception)
+            @Override public org.openide.filesystems.FileSystem getFileSystem()
+                    throws org.openide.filesystems.FileStateInvalidException {
+                throw new org.openide.filesystems.FileStateInvalidException("stub: no FS");
+            }
+            @Override public org.openide.filesystems.FileObject getParent() { return null; }
+            @Override public org.openide.filesystems.FileObject[] getChildren() { return new org.openide.filesystems.FileObject[0]; }
+            @Override public java.util.Enumeration<? extends org.openide.filesystems.FileObject> getChildren(boolean rec) { return java.util.Collections.emptyEnumeration(); }
+            @Override public java.util.Date lastModified() { return new java.util.Date(); }
+            @Override public org.openide.filesystems.FileObject getFileObject(String name, String ext) { return null; }
+            @Override public org.openide.filesystems.FileObject createFolder(String name) { return null; }
+            @Override public org.openide.filesystems.FileObject createData(String name, String ext) { return null; }
+            @Override public org.openide.filesystems.FileLock lock() { return org.openide.filesystems.FileLock.NONE; }
+            @Override public void setImportant(boolean b) {}
+            @Override public void delete(org.openide.filesystems.FileLock lock) {}
+            @Override public Object getAttribute(String attrName) { return null; }
+            @Override public void setAttribute(String attrName, Object val) {}
+            @Override public java.util.Enumeration<String> getAttributes() { return java.util.Collections.emptyEnumeration(); }
+            @Override public void addFileChangeListener(org.openide.filesystems.FileChangeListener fcl) {}
+            @Override public void removeFileChangeListener(org.openide.filesystems.FileChangeListener fcl) {}
+            @Override public long getSize() { return 0; }
+            @Override public java.io.InputStream getInputStream() throws java.io.FileNotFoundException { throw new java.io.FileNotFoundException("stub"); }
+            @Override public java.io.OutputStream getOutputStream(org.openide.filesystems.FileLock lock) throws java.io.IOException { throw new java.io.IOException("stub"); }
+        };
+    }
+
+    @Test
+    void importNodesFilesWindowNodeOutsideWorkDirInsertsAtAbsolutePath() throws Exception {
+        // Simulate a Files-window node: toURL() is broken, but getPath() returns an absolute path.
+        File outsideDir = File.createTempFile("files-window-", "");
+        outsideDir.delete();
+        outsideDir.mkdirs();
+        outsideDir.deleteOnExit();
+
+        org.openide.filesystems.FileObject fo = stubFoWithPath(outsideDir.getAbsolutePath(), true);
+        Node node = new AbstractNode(Children.LEAF, Lookups.singleton(fo));
+        final File expectedDir = outsideDir;
+
+        SwingUtilities.invokeAndWait(() -> {
+            boolean result = callImportNodes(handler, new Node[]{node}, area);
+            assertTrue(result, "importNodes must return true for Files-window node outside workDir");
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("@" + expectedDir.getAbsolutePath()),
+                    "Files-window node outside workDir must insert @/absolute/path, got: " + text);
+        });
+    }
+
+    @Test
+    void importNodesFilesWindowNodeInsideWorkDirInsertsRelativePath() throws Exception {
+        // Simulate a Files-window node inside workDir: toURL() is broken, getPath() is absolute.
+        File insideDir = new File(workDir, "src/api");
+        insideDir.mkdirs();
+
+        org.openide.filesystems.FileObject fo = stubFoWithPath(insideDir.getAbsolutePath(), true);
+        Node node = new AbstractNode(Children.LEAF, Lookups.singleton(fo));
+
+        SwingUtilities.invokeAndWait(() -> {
+            boolean result = callImportNodes(handler, new Node[]{node}, area);
+            assertTrue(result, "importNodes must return true for Files-window node inside workDir");
+        });
+
+        SwingUtilities.invokeAndWait(() -> {
+            String text = area.getText();
+            assertTrue(text.contains("src/api") || text.contains("src" + File.separator + "api"),
+                    "Files-window node inside workDir must insert relative path, got: " + text);
+            assertFalse(text.contains("@/") || text.contains("@" + File.separator),
+                    "Inside-workDir node must not use absolute @-path, got: " + text);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests: Cut/Copy — export delegation to original TransferHandler
+    // -------------------------------------------------------------------------
+
+    @Test
+    void getSourceActionsWithNullOriginalHandlerReturnsNone() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            // null originalHandler — should fall back to super (NONE = 0)
+            int actions = handler.getSourceActions(area);
+            assertEquals(0, actions,
+                    "getSourceActions with null original must return NONE (0), got: " + actions);
+        });
+    }
+
+    @Test
+    void getSourceActionsWithOriginalHandlerDelegatesToOriginal() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            JTextArea textArea = new JTextArea("hello");
+            javax.swing.TransferHandler original = textArea.getTransferHandler();
+            FileDropHandler h = new FileDropHandler(() -> workDir.getAbsolutePath(), original);
+            textArea.setTransferHandler(h);
+            int actions = h.getSourceActions(textArea);
+            assertTrue(actions > 0,
+                    "getSourceActions must delegate to original JTextArea handler, got: " + actions);
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests: blank-node DnD rejected by canImport (Files-window phantom nodes)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Builds a Transferable that carries an {@code application/x-java-openide-nodednd} flavor
+     * whose data is the supplied node (simulates NetBeans node DnD).
+     */
+    private static java.awt.datatransfer.Transferable nodeDndTransferable(Node node) {
+        java.awt.datatransfer.DataFlavor flavor;
+        try {
+            flavor = new java.awt.datatransfer.DataFlavor(
+                    "application/x-java-openide-nodednd;mask=1;class=org.openide.nodes.Node",
+                    "NetBeans Node DnD", Thread.currentThread().getContextClassLoader());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        final java.awt.datatransfer.DataFlavor f = flavor;
+        return new java.awt.datatransfer.Transferable() {
+            @Override public java.awt.datatransfer.DataFlavor[] getTransferDataFlavors() { return new java.awt.datatransfer.DataFlavor[]{f}; }
+            @Override public boolean isDataFlavorSupported(java.awt.datatransfer.DataFlavor fl) { return f.equals(fl); }
+            @Override public Object getTransferData(java.awt.datatransfer.DataFlavor fl) { return node; }
+        };
+    }
+
+    @Test
+    void canImportBlankAbstractNodeReturnsFalse() throws Exception {
+        // Blank AbstractNode — as produced by Files-window DnD: no FileObject/DataObject/Project in lookup
+        Node blank = new AbstractNode(Children.LEAF);
+        java.awt.datatransfer.Transferable t = nodeDndTransferable(blank);
+        SwingUtilities.invokeAndWait(() ->
+            assertFalse(callCanImportTransferable(handler, t),
+                    "canImport must return false for blank AbstractNode (Files-window phantom)"));
+    }
+
+    /**
+     * Calls the package-private {@code doImport(Transferable, JTextArea)} via reflection.
      */
     private static boolean callDoImport(FileDropHandler handler,
                                         java.awt.datatransfer.Transferable t,

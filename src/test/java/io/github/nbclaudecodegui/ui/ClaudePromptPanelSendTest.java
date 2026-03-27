@@ -1,6 +1,5 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.model.AttachedFilesModel;
 import java.io.File;
 import java.util.Collections;
 import java.util.List;
@@ -16,12 +15,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for the {@code doSend()} behaviour of {@link ClaudePromptPanel}.
  *
- * <p>Verifies that:
- * <ul>
- *   <li>Attached file chips are prepended as {@code @/abs/path\n} lines.</li>
- *   <li>When no chips are attached, plain text is sent unchanged.</li>
- *   <li>When chips are present but text is empty, chip paths are sent.</li>
- * </ul>
+ * <p>Since Stage 16, file paths are inserted directly into the textarea text
+ * as {@code @path} tokens; there is no separate attachment model.
+ * {@code doSend()} sends {@code inputArea.getText()} as-is.
  */
 class ClaudePromptPanelSendTest {
 
@@ -32,10 +28,8 @@ class ClaudePromptPanelSendTest {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /** Captures the value passed to onSend. */
     private AtomicReference<String> sentText;
     private ClaudePromptPanel       panel;
-    private AttachedFilesModel      model;
 
     private void buildPanel(String workingDir) throws Exception {
         sentText = new AtomicReference<>();
@@ -47,15 +41,6 @@ class ClaudePromptPanelSendTest {
         SwingUtilities.invokeAndWait(() -> {
             panel = new ClaudePromptPanel(send, noop, noop, hist, wd);
         });
-
-        // Extract the AttachedFilesModel from the panel via reflection
-        try {
-            java.lang.reflect.Field f = ClaudePromptPanel.class.getDeclaredField("attachedModel");
-            f.setAccessible(true);
-            model = (AttachedFilesModel) f.get(panel);
-        } catch (Exception ex) {
-            throw new RuntimeException("Cannot access attachedModel field", ex);
-        }
     }
 
     /** Calls the private {@code doSend()} via reflection. */
@@ -79,30 +64,35 @@ class ClaudePromptPanelSendTest {
         SwingUtilities.invokeAndWait(() -> area.setText(text));
     }
 
+    private String getInputText() throws Exception {
+        java.lang.reflect.Field f = ClaudePromptPanel.class.getDeclaredField("inputArea");
+        f.setAccessible(true);
+        javax.swing.JTextArea area = (javax.swing.JTextArea) f.get(panel);
+        final String[] result = new String[1];
+        SwingUtilities.invokeAndWait(() -> result[0] = area.getText());
+        return result[0];
+    }
+
     // -------------------------------------------------------------------------
     // Tests
     // -------------------------------------------------------------------------
 
     @Test
-    void twoAttachedFilesAndTextProducesCorrectPrompt() throws Exception {
+    void atPathsInTextAreaAreSentAsIs() throws Exception {
         buildPanel(tempDir.getAbsolutePath());
 
         File f1 = new File(tempDir, "path1.txt"); f1.createNewFile();
         File f2 = new File(tempDir, "path2.txt"); f2.createNewFile();
-        model.addFile(f1);
-        model.addFile(f2);
-        setInputText("do the thing");
+        // @paths are already in the textarea (inserted by FileDropHandler)
+        setInputText("@" + f1.getAbsolutePath() + "\n@" + f2.getAbsolutePath() + "\ndo the thing");
 
         callDoSend();
 
         String sent = sentText.get();
         assertNotNull(sent, "onSend must have been called");
-        assertTrue(sent.contains("@" + f1.getAbsolutePath() + "\n"),
-                "Sent text must contain @path1\n");
-        assertTrue(sent.contains("@" + f2.getAbsolutePath() + "\n"),
-                "Sent text must contain @path2\n");
-        assertTrue(sent.endsWith("do the thing"),
-                "User text must be at the end");
+        assertTrue(sent.contains("@" + f1.getAbsolutePath()), "Sent text must contain @path1");
+        assertTrue(sent.contains("@" + f2.getAbsolutePath()), "Sent text must contain @path2");
+        assertTrue(sent.contains("do the thing"), "User text must be present");
     }
 
     @Test
@@ -119,19 +109,18 @@ class ClaudePromptPanelSendTest {
     }
 
     @Test
-    void filesOnlyNoTextSendsFilePaths() throws Exception {
+    void textWithAtPathSentDirectly() throws Exception {
         buildPanel(tempDir.getAbsolutePath());
 
         File f = new File(tempDir, "only.txt"); f.createNewFile();
-        model.addFile(f);
-        setInputText(""); // empty text
+        setInputText("@" + f.getAbsolutePath() + "\n");
 
         callDoSend();
 
         String sent = sentText.get();
-        assertNotNull(sent, "onSend must be called even with no text if files are attached");
-        assertTrue(sent.startsWith("@" + f.getAbsolutePath() + "\n"),
-                "Sent text must start with @path\n when no user text");
+        assertNotNull(sent, "onSend must be called when text is non-empty");
+        assertTrue(sent.contains("@" + f.getAbsolutePath()),
+                "Sent text must contain the @path");
     }
 
     @Test
@@ -157,26 +146,88 @@ class ClaudePromptPanelSendTest {
         return false;
     }
 
+    // -------------------------------------------------------------------------
+    // Tests: file chooser insertion — trailing space and caret position
+    // -------------------------------------------------------------------------
+
+    /** Calls the package-private {@code insertTokenAtCaret(String)} via reflection. */
+    private void callInsertTokenAtCaret(String token) throws Exception {
+        java.lang.reflect.Method m = ClaudePromptPanel.class.getDeclaredMethod("insertTokenAtCaret", String.class);
+        m.setAccessible(true);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                m.invoke(panel, token);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+    }
+
+    /** Returns the current caret position of the inputArea. */
+    private int getCaretPosition() throws Exception {
+        java.lang.reflect.Field f = ClaudePromptPanel.class.getDeclaredField("inputArea");
+        f.setAccessible(true);
+        javax.swing.JTextArea area = (javax.swing.JTextArea) f.get(panel);
+        final int[] result = new int[1];
+        SwingUtilities.invokeAndWait(() -> result[0] = area.getCaretPosition());
+        return result[0];
+    }
+
     @Test
-    void emptyTextAndNoFilesDoesNotFire() throws Exception {
+    void insertTokenAtCaretAddsTrailingSpace() throws Exception {
+        buildPanel(tempDir.getAbsolutePath());
+        setInputText("");
+        callInsertTokenAtCaret("@src/Foo.java");
+        String text = getInputText();
+        assertTrue(text.endsWith(" "),
+                "insertTokenAtCaret must add trailing space, got: '" + text + "'");
+    }
+
+    @Test
+    void insertTokenAtCaretSetsCaretAfterTrailingSpace() throws Exception {
+        buildPanel(tempDir.getAbsolutePath());
+        setInputText("");
+        callInsertTokenAtCaret("@src/Foo.java");
+        int caret = getCaretPosition();
+        int len   = getInputText().length();
+        assertEquals(len, caret,
+                "Caret must be at end of text after insertion, got caret=" + caret + " len=" + len);
+    }
+
+    @Test
+    void insertTokenAtCaretPrependsSpaceWhenAreaHasText() throws Exception {
+        buildPanel(tempDir.getAbsolutePath());
+        setInputText("please fix");
+        // move caret to end
+        java.lang.reflect.Field f = ClaudePromptPanel.class.getDeclaredField("inputArea");
+        f.setAccessible(true);
+        javax.swing.JTextArea area = (javax.swing.JTextArea) f.get(panel);
+        SwingUtilities.invokeAndWait(() -> area.setCaretPosition(area.getText().length()));
+        callInsertTokenAtCaret("@pom.xml");
+        String text = getInputText();
+        assertTrue(text.startsWith("please fix "),
+                "Space must be prepended when existing text has no trailing space, got: '" + text + "'");
+        assertTrue(text.endsWith(" "),
+                "Trailing space must be present, got: '" + text + "'");
+    }
+
+    @Test
+    void emptyTextDoesNotFire() throws Exception {
         buildPanel(tempDir.getAbsolutePath());
         setInputText("");
 
         callDoSend();
 
-        assertNull(sentText.get(), "onSend must NOT be called when both text and files are empty");
+        assertNull(sentText.get(), "onSend must NOT be called when text is empty");
     }
 
     @Test
-    void afterSendFilesAreCleared() throws Exception {
+    void afterSendInputAreaIsCleared() throws Exception {
         buildPanel(tempDir.getAbsolutePath());
-
-        File f = new File(tempDir, "clear.txt"); f.createNewFile();
-        model.addFile(f);
-        setInputText("test");
+        setInputText("@/some/path\ntest");
 
         callDoSend();
 
-        assertTrue(model.isEmpty(), "Attached files must be cleared after send");
+        assertEquals("", getInputText(), "Input area must be cleared after send");
     }
 }

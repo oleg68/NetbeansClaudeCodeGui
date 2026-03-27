@@ -1,24 +1,28 @@
 package io.github.nbclaudecodegui.ui;
 
-import java.lang.reflect.Field;
+import java.io.File;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.List;
 import javax.swing.DefaultListModel;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.List;
 
 /**
  * Unit tests for {@link AtCompletionPopup} — one-level directory navigation.
  *
- * <p>Tests the filtering logic by directly injecting {@code allPaths} and
- * calling {@code updatePopup()} via reflection.
+ * <p>Tests use a real {@code @TempDir} so that on-demand {@code listFiles()} in
+ * {@code updatePopup()} can discover actual filesystem entries.
  */
 class AtCompletionPopupTest {
+
+    @TempDir
+    File workDir;
 
     private JTextArea area;
     private AtCompletionPopup popup;
@@ -28,7 +32,7 @@ class AtCompletionPopupTest {
     void setUp() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             area  = new JTextArea();
-            popup = AtCompletionPopup.install(area, () -> "/fake/workdir");
+            popup = AtCompletionPopup.install(area, () -> workDir.getAbsolutePath());
         });
         listModel = getListModel(popup);
     }
@@ -39,15 +43,9 @@ class AtCompletionPopupTest {
 
     @SuppressWarnings("unchecked")
     private static DefaultListModel<String> getListModel(AtCompletionPopup p) throws Exception {
-        Field f = AtCompletionPopup.class.getDeclaredField("listModel");
+        java.lang.reflect.Field f = AtCompletionPopup.class.getDeclaredField("listModel");
         f.setAccessible(true);
         return (DefaultListModel<String>) f.get(p);
-    }
-
-    private static void injectPaths(AtCompletionPopup p, List<String> paths) throws Exception {
-        Field f = AtCompletionPopup.class.getDeclaredField("allPaths");
-        f.setAccessible(true);
-        f.set(p, Collections.unmodifiableList(paths));
     }
 
     private void callUpdatePopup() throws Exception {
@@ -80,61 +78,66 @@ class AtCompletionPopupTest {
 
     @Test
     void atRootShowsTopLevelDirsAndFiles() throws Exception {
-        injectPaths(popup, List.of(
-                "src/main/Foo.java",
-                "src/test/Bar.java",
-                "pom.xml",
-                "README.md"
-        ));
+        // Create a couple of files and directories in workDir
+        new File(workDir, "src").mkdirs();
+        new File(workDir, "pom.xml").createNewFile();
+        new File(workDir, "README.md").createNewFile();
 
         SwingUtilities.invokeAndWait(() -> area.setText("@"));
 
         callUpdatePopup();
 
         List<String> items = listItems();
-        // Must contain ".." even at root
         assertTrue(items.contains(".."), "'..' must be shown even at root level");
-        // Dirs with trailing /
         assertTrue(items.contains("src/"), "top-level dir 'src/' must appear");
-        // Files
         assertTrue(items.contains("pom.xml"), "top-level file must appear");
         assertTrue(items.contains("README.md"), "top-level file must appear");
-        // Must NOT show nested paths directly
-        assertFalse(items.contains("src/main/Foo.java"), "nested path must NOT be shown at root level");
-        assertFalse(items.contains("src/test/Bar.java"), "nested path must NOT be shown at root level");
-        // 'src/' must appear only once
-        assertEquals(1, items.stream().filter("src/"::equals).count(), "'src/' must appear exactly once");
     }
 
     @Test
     void atSubdirShowsOnlyImmediateChildren() throws Exception {
-        injectPaths(popup, List.of(
-                "src/main/java/Foo.java",
-                "src/main/resources/app.xml",
-                "src/test/java/FooTest.java",
-                "pom.xml"
-        ));
+        // Create src/main/java/ and src/main/resources/ — this is the key regression test
+        new File(workDir, "src/main/java").mkdirs();
+        new File(workDir, "src/main/resources").mkdirs();
+        new File(workDir, "src/test/java").mkdirs();
 
-        SwingUtilities.invokeAndWait(() -> area.setText("@src/"));
+        SwingUtilities.invokeAndWait(() -> area.setText("@src/main/"));
 
         callUpdatePopup();
 
         List<String> items = listItems();
         assertTrue(items.contains(".."), "'..' must be present when inside subdir");
-        assertTrue(items.contains("main/"), "'main/' dir must appear");
-        assertTrue(items.contains("test/"), "'test/' dir must appear");
-        assertFalse(items.contains("main/java/"), "nested dir must not be shown");
-        assertFalse(items.contains("pom.xml"), "top-level file outside currentDir must not appear");
+        assertTrue(items.contains("java/"), "'java/' dir must appear");
+        assertTrue(items.contains("resources/"), "'resources/' dir must appear");
+        assertFalse(items.stream().anyMatch(s -> s.contains("java/") && !s.equals("java/")),
+                "nested paths must not be shown");
+    }
+
+    @Test
+    void srcMainJavaAndResourcesAreVisible() throws Exception {
+        // Regression: pre-scan with MAX_DEPTH=5 missed these because there were
+        // no files (only dirs) up to that depth in a typical project layout.
+        new File(workDir, "src/main/java/com/example").mkdirs();
+        new File(workDir, "src/main/resources/META-INF").mkdirs();
+        new File(workDir, "src/main/nbm/manifest.mf").getParentFile().mkdirs();
+        new File(workDir, "src/main/nbm/manifest.mf").createNewFile();
+
+        // At @src/main/ both java/ and resources/ must be visible
+        SwingUtilities.invokeAndWait(() -> area.setText("@src/main/"));
+
+        callUpdatePopup();
+
+        List<String> items = listItems();
+        assertTrue(items.contains("java/"), "'java/' must appear under src/main/");
+        assertTrue(items.contains("resources/"), "'resources/' must appear under src/main/");
+        assertTrue(items.contains("nbm/"), "'nbm/' must appear under src/main/");
     }
 
     @Test
     void filterNarrowsResults() throws Exception {
-        injectPaths(popup, List.of(
-                "src/main/Foo.java",
-                "src/main/Bar.java",
-                "src/test/FooTest.java",
-                "build/classes/Foo.class"
-        ));
+        new File(workDir, "src/main").mkdirs();
+        new File(workDir, "src/main/Foo.java").createNewFile();
+        new File(workDir, "src/main/Bar.java").createNewFile();
 
         SwingUtilities.invokeAndWait(() -> area.setText("@src/main/F"));
 
@@ -181,10 +184,8 @@ class AtCompletionPopupTest {
 
     @Test
     void noMatchHidesPopup() throws Exception {
-        injectPaths(popup, List.of(
-                "src/main/Foo.java",
-                "pom.xml"
-        ));
+        new File(workDir, "src").mkdirs();
+        new File(workDir, "pom.xml").createNewFile();
 
         SwingUtilities.invokeAndWait(() -> area.setText("@zzznomatch"));
 
@@ -195,11 +196,8 @@ class AtCompletionPopupTest {
 
     @Test
     void directoriesListedBeforeFiles() throws Exception {
-        injectPaths(popup, List.of(
-                "src/main/Foo.java",
-                "src/test/FooTest.java",
-                "pom.xml"
-        ));
+        new File(workDir, "src").mkdirs();
+        new File(workDir, "pom.xml").createNewFile();
 
         SwingUtilities.invokeAndWait(() -> area.setText("@"));
 
@@ -210,10 +208,9 @@ class AtCompletionPopupTest {
         int srcIdx    = items.indexOf("src/");
         int pomIdx    = items.indexOf("pom.xml");
 
-        assertTrue(dotDotIdx >= 0,  "'..' must be present");
-        assertTrue(srcIdx    >= 0,  "'src/' must be present");
-        assertTrue(pomIdx    >= 0,  "'pom.xml' must be present");
-        // ".." first, then dirs, then files
+        assertTrue(dotDotIdx >= 0, "'..' must be present");
+        assertTrue(srcIdx    >= 0, "'src/' must be present");
+        assertTrue(pomIdx    >= 0, "'pom.xml' must be present");
         assertTrue(dotDotIdx < srcIdx, "'..' must come before 'src/'");
         assertTrue(srcIdx    < pomIdx, "directories must come before files");
     }

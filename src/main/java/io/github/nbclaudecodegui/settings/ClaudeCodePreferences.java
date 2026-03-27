@@ -181,13 +181,25 @@ public final class ClaudeCodePreferences {
     }
 
     /**
-     * Persists the debug mode flag.
+     * Persists the debug mode flag and applies the logger level immediately.
      *
      * @param enabled {@code true} to enable debug logging
      */
     public static void setDebugMode(boolean enabled) {
         NbPreferences.forModule(ClaudeCodePreferences.class)
                 .putBoolean(KEY_DEBUG_MODE, enabled);
+        applyDebugMode(enabled);
+    }
+
+    /**
+     * Sets the plugin package logger level to FINE (debug on) or INFO (debug off).
+     *
+     * @param enabled {@code true} to set level FINE, {@code false} to set INFO
+     */
+    public static void applyDebugMode(boolean enabled) {
+        java.util.logging.Logger pkgLogger =
+                java.util.logging.Logger.getLogger("io.github.nbclaudecodegui");
+        pkgLogger.setLevel(enabled ? java.util.logging.Level.FINE : java.util.logging.Level.INFO);
     }
 
     // -------------------------------------------------------------------------

@@ -2,10 +2,7 @@ package io.github.nbclaudecodegui.ui;
 
 import java.awt.Color;
 import java.lang.reflect.Field;
-import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
-import javax.swing.text.DefaultHighlighter;
-import javax.swing.text.Highlighter;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -13,15 +10,19 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Unit tests for {@link AtPathHighlighter}.
  *
- * <p>Verifies that {@code @path} tokens in the text area are highlighted and
- * that highlights are cleared when tokens are removed.
+ * <p>Verifies that {@code @path} tokens in the text area are tracked and
+ * that ranges are cleared when tokens are removed.
  */
 class AtPathHighlighterTest {
+
+    private static AtPathHighlighter.AtHighlightTextArea newArea() {
+        return new AtPathHighlighter.AtHighlightTextArea();
+    }
 
     @Test
     void singleAtTokenProducesOneHighlight() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
             area.setText("@src/Foo.java");
             h.rehighlight();
@@ -32,7 +33,7 @@ class AtPathHighlighterTest {
     @Test
     void multipleAtTokensProduceMultipleHighlights() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
             area.setText("See @src/A.java and @src/B.java for details");
             h.rehighlight();
@@ -43,7 +44,7 @@ class AtPathHighlighterTest {
     @Test
     void noAtTokenProducesNoHighlight() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
             area.setText("No at-tokens here");
             h.rehighlight();
@@ -54,7 +55,7 @@ class AtPathHighlighterTest {
     @Test
     void removingTokenClearsHighlight() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
             area.setText("@src/Foo.java");
             h.rehighlight();
@@ -68,14 +69,10 @@ class AtPathHighlighterTest {
 
     @Test
     void documentListenerTriggersRehighlight() throws Exception {
-        // Document listener is attached; typing text should auto-trigger rehighlight
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
-
-            // Simulate user typing: insertions trigger DocumentListener
             area.setText("@foo/bar.txt");
-            // The DocumentListener fires after setText; highlight count should be 1
             assertEquals(1, h.highlightCount(), "Highlight must be applied via document listener");
         });
     }
@@ -83,7 +80,7 @@ class AtPathHighlighterTest {
     @Test
     void atTokenAtStartOfLine() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
             area.setText("@/absolute/path/File.java\nsome other text");
             h.rehighlight();
@@ -92,37 +89,19 @@ class AtPathHighlighterTest {
     }
 
     @Test
-    void painterIsNotDefaultBackgroundPainter() throws Exception {
-        // Verify that the highlight painter is NOT DefaultHighlightPainter (background),
-        // i.e. that we switched to foreground painting.
-        SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
-            AtPathHighlighter.install(area);
-            area.setText("@src/Foo.java");
-            Highlighter hl = area.getHighlighter();
-            for (Highlighter.Highlight h : hl.getHighlights()) {
-                assertFalse(
-                    h.getPainter() instanceof DefaultHighlighter.DefaultHighlightPainter,
-                    "Painter must NOT be DefaultHighlightPainter (background); expected foreground painter"
-                );
-            }
-        });
-    }
-
-    @Test
-    void highlightColorIsViolet() throws Exception {
-        Field f = AtPathHighlighter.class.getDeclaredField("HIGHLIGHT_COLOR");
+    void tokenColorIsBlue() throws Exception {
+        Field f = AtPathHighlighter.class.getDeclaredField("AT_TOKEN_COLOR");
         f.setAccessible(true);
         Color c = (Color) f.get(null);
-        assertTrue(c.getRed()   >= 0x80, "Red component must be >= 0x80 for violet/purple");
-        assertTrue(c.getBlue()  >= 0x80, "Blue component must be >= 0x80 for violet/purple");
-        assertTrue(c.getGreen() <  0x80, "Green component must be < 0x80 for violet/purple");
+        assertTrue(c.getBlue()  >= 0x80, "Blue component must be >= 0x80");
+        assertTrue(c.getRed()   <  0x80, "Red component must be < 0x80 for blue");
+        assertTrue(c.getGreen() >= 0x80, "Green component must be >= 0x80 for cyan-blue");
     }
 
     @Test
     void multilineTextWithMultipleTokens() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            JTextArea area = new JTextArea();
+            var area = newArea();
             AtPathHighlighter h = AtPathHighlighter.install(area);
             area.setText("@/path/A.java\n@/path/B.java\nPlease fix these files.");
             h.rehighlight();

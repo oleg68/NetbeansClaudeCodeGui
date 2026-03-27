@@ -48,6 +48,9 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
         // Initialize components
         initializeComponents();
 
+        // Apply saved debug mode setting to logger level
+        ClaudeCodePreferences.applyDebugMode(ClaudeCodePreferences.isDebugMode());
+
         // Start the MCP server
         startMCPServer();
 
