@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.model.AttachedFilesModel;
 import io.github.nbclaudecodegui.model.FavoriteEntry;
 import io.github.nbclaudecodegui.model.PromptFavoritesStore;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
@@ -11,6 +12,7 @@ import java.awt.Window;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
@@ -20,6 +22,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
@@ -43,6 +46,9 @@ import javax.swing.SwingUtilities;
  *
  * <p>The send key (Enter / Ctrl+Enter / Shift+Enter / Alt+Enter) is read from
  * {@link ClaudeCodePreferences#getSendKey()} at the time of each key event.
+ *
+ * <p>Stage 15: file attachments are prepended as {@code @/absolute/path\n} lines
+ * before the prompt text when sent to Claude.
  */
 public final class ClaudePromptPanel extends JPanel {
 
@@ -50,7 +56,6 @@ public final class ClaudePromptPanel extends JPanel {
     private static final String ICON_CANCEL    = "\u2716";  // ✖
     private static final String ICON_FAVORITES = "\u2605";  // ★
     private static final String ICON_HISTORY   = "\u2630";  // ☰
-
     private final JTextArea inputArea;
     private final JButton   sendButton;
     private final JButton   cancelButton;
@@ -67,6 +72,15 @@ public final class ClaudePromptPanel extends JPanel {
     /** Shortcut matcher; lazily initialised once a working directory is available. */
     private ShortcutMatcher shortcutMatcher;
 
+    // Stage 15 — file attachment components
+    private final AttachedFilesModel  attachedModel;
+    private final AttachedFilesPanel  attachedFilesPanel;
+    private final FileDropHandler     dropHandler;
+    @SuppressWarnings("FieldCanBeLocal")
+    private final AtPathHighlighter   pathHighlighter;
+    @SuppressWarnings("FieldCanBeLocal")
+    private final AtCompletionPopup   completionPopup;
+
     // -------------------------------------------------------------------------
     // Constructor
     // -------------------------------------------------------------------------
@@ -82,7 +96,7 @@ public final class ClaudePromptPanel extends JPanel {
      * @param promptHistorySupplier  returns the current in-session prompt history
      *                               (index 0 = most recent); queried on demand
      * @param workingDirSupplier     returns the current working directory path; used for
-     *                               the history/favorites popup
+     *                               the history/favorites popup and file completion
      */
     public ClaudePromptPanel(Consumer<String> onSend,
                              Runnable onCancel,
@@ -96,12 +110,24 @@ public final class ClaudePromptPanel extends JPanel {
         this.promptHistorySupplier = promptHistorySupplier;
         this.workingDirSupplier    = workingDirSupplier;
 
+        // --- Stage 15: attachment model ---
+        attachedModel      = new AttachedFilesModel();
+        attachedFilesPanel = new AttachedFilesPanel(attachedModel, () -> { /* chip removed callback */ });
+
         inputArea = new JTextArea(3, 40);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setFocusTraversalKeysEnabled(false);
         bindKeys(inputArea);
         attachContextMenu(inputArea);
+
+        // Stage 15: highlighter and completion popup
+        pathHighlighter  = AtPathHighlighter.install(inputArea);
+        completionPopup  = AtCompletionPopup.install(inputArea, workingDirSupplier);
+
+        // Stage 15: drop handler (DnD + clipboard)
+        dropHandler = new FileDropHandler(attachedModel, attachedFilesPanel, workingDirSupplier);
+        inputArea.setTransferHandler(dropHandler);
 
         sendButton   = new JButton("<html><font color='#228B22'>" + ICON_SEND   + "</font> Send</html>");
         cancelButton = new JButton("<html><font color='#B22222'>" + ICON_CANCEL + "</font> Cancel</html>");
@@ -136,7 +162,7 @@ public final class ClaudePromptPanel extends JPanel {
         leftCol.add(historyButton);
         leftCol.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
-        // Equalize all four button widths and heights.
+        // Equalize all button widths and heights.
         // Done after the component is shown so HTML-rendered labels are measured correctly.
         JButton[] allButtons = {sendButton, cancelButton, historyButton, favoritesButton};
         addAncestorListener(new javax.swing.event.AncestorListener() {
@@ -149,10 +175,15 @@ public final class ClaudePromptPanel extends JPanel {
             @Override public void ancestorMoved(javax.swing.event.AncestorEvent e) {}
         });
 
+        // Center column: chips panel above textarea
+        JPanel centerCol = new JPanel(new BorderLayout());
+        centerCol.add(attachedFilesPanel, BorderLayout.NORTH);
+        centerCol.add(new JScrollPane(inputArea), BorderLayout.CENTER);
+
         setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
-        add(new JScrollPane(inputArea), BorderLayout.CENTER);
-        add(buttonCol, BorderLayout.EAST);
-        add(leftCol, BorderLayout.WEST);
+        add(centerCol,   BorderLayout.CENTER);
+        add(buttonCol,   BorderLayout.EAST);
+        add(leftCol,     BorderLayout.WEST);
 
         // Shift+Tab on buttons (and any other non-textarea child) → cycle edit mode.
         // The inputArea handles its own Shift+Tab in bindKeys because
@@ -191,11 +222,15 @@ public final class ClaudePromptPanel extends JPanel {
 
     /**
      * Clears the input area and resets history navigation.
+     * Also clears file attachments and cleans up temp files.
      * Called by the owning tab when the session stops.
      */
     public void reset() {
         inputArea.setText("");
         historyIndex = -1;
+        attachedModel.clearFiles();
+        attachedModel.cleanup();
+        attachedFilesPanel.refresh();
     }
 
     // -------------------------------------------------------------------------
@@ -230,6 +265,16 @@ public final class ClaudePromptPanel extends JPanel {
                         && !e.isShiftDown() && !e.isAltDown()) {
                     e.consume();
                     navigateHistory(-1);
+                    return;
+                }
+
+                // Ctrl+V — intercept for file/image/text paste
+                if (e.getKeyCode() == KeyEvent.VK_V && e.isControlDown()
+                        && !e.isShiftDown() && !e.isAltDown()) {
+                    e.consume();
+                    if (!dropHandler.importFromClipboard(area)) {
+                        area.paste();
+                    }
                     return;
                 }
 
@@ -275,11 +320,25 @@ public final class ClaudePromptPanel extends JPanel {
 
     private void doSend() {
         String text = inputArea.getText();
-        if (text.isEmpty()) return;
+        List<File> files = attachedModel.getFiles();
+        if (text.isEmpty() && files.isEmpty()) return;
+
+        // Build prompt: attached file chips first as @/absolute/path, then user text
+        StringBuilder sb = new StringBuilder();
+        for (File f : files) {
+            sb.append("@").append(f.getAbsolutePath()).append("\n");
+        }
+        sb.append(text);
+
+        // Clean up attachments before sending
+        attachedModel.clearFiles();
+        attachedModel.cleanup();
+        attachedFilesPanel.refresh();
+
         inputArea.setText("");
         inputArea.requestFocusInWindow();
         historyIndex = -1;
-        onSend.accept(text);
+        onSend.accept(sb.toString());
     }
 
     /** delta=+1 → older, delta=-1 → newer. */
@@ -358,6 +417,45 @@ public final class ClaudePromptPanel extends JPanel {
         Window owner = SwingUtilities.getWindowAncestor(anchor);
         FavoritesDialog dlg = new FavoritesDialog(owner, Path.of(wd), text -> inputArea.setText(text));
         dlg.setVisible(true);
+    }
+
+    // -------------------------------------------------------------------------
+    // File chooser (Attach button)
+    // -------------------------------------------------------------------------
+
+    private void showFileChooser(JButton anchor) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setMultiSelectionEnabled(true);
+        chooser.setDialogTitle("Attach files to prompt");
+        Window owner = SwingUtilities.getWindowAncestor(anchor);
+        int result = chooser.showOpenDialog(owner);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            for (File f : chooser.getSelectedFiles()) {
+                // Check if inside workingDir
+                String wdStr = workingDirSupplier != null ? workingDirSupplier.get() : null;
+                if (wdStr != null) {
+                    Path workDir = Path.of(wdStr).normalize();
+                    Path filePath = f.toPath().toAbsolutePath().normalize();
+                    if (filePath.startsWith(workDir)) {
+                        // Inside: insert relative path into text area
+                        Path rel = workDir.relativize(filePath);
+                        int pos = inputArea.getCaretPosition();
+                        String toInsert = rel.toString().replace(java.io.File.separatorChar, '/');
+                        try {
+                            String before = inputArea.getText(0, pos);
+                            String prefix = (!before.isEmpty() && !before.endsWith(" ") && !before.endsWith("\n")) ? " " : "";
+                            inputArea.getDocument().insertString(pos, prefix + toInsert, null);
+                        } catch (javax.swing.text.BadLocationException ex) {
+                            inputArea.append(" " + toInsert);
+                        }
+                        continue;
+                    }
+                }
+                // Outside: add as chip
+                attachedModel.addFile(f);
+            }
+            attachedFilesPanel.refresh();
+        }
     }
 
     /**
