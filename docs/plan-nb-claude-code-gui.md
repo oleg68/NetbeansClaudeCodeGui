@@ -62,7 +62,6 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   │   ├── ClaudeSessionTab.java           # One TC = one session; thin wrapper around ClaudePromptPanel
     │   │   ├── ClaudePromptPanel.java          # Session UI: terminal + top bar + input + status bar + model discovery
     │   │   ├── ChoiceMenuPanel.java            # Interactive choice UI (ChoiceMenuModel → buttons)
-    │   │   ├── PromptResponsePanel.java        # Interactive questions (Yes/No, radio, free-form)
     │   │   ├── FileDiffPermissionPanel.java    # [✓ Accept][✗ Reject][reason][Cancel]
     │   │   ├── FileDiffTab.java                # Diff TopComponent + PermissionPanel; shared by hook and MCP
     │   │   ├── MarkdownRenderer.java           # Markdown → HTML
@@ -70,8 +69,17 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   │   ├── FavoritesDialog.java            # Popup: favorites list with Send/Move/Rename/Delete/Reorder
     │   │   ├── FavoritesPanel.java             # Reusable panel used inside FavoritesDialog
     │   │   ├── AssignShortcutDialog.java       # Dialog to assign keyboard shortcut to a favorite
-    │   │   ├── ShortcutMatcher.java            # Utility: match key events to registered shortcuts
-    │   │   └── ClaudeSessionSelectorPanel.java # Session selector panel
+    │   │   ├── ClaudeSessionSelectorPanel.java # Session selector panel
+    │   │   └── common/
+    │   │       ├── AtCompletionPopup.java      # @-triggered path completion popup with directory navigation
+    │   │       ├── AtPathHighlighter.java      # Violet foreground highlight for @path tokens in textarea
+    │   │       ├── DecoratedTextArea.java      # JTextArea subclass wired to TextComponentDecorator
+    │   │       ├── DecoratedTextField.java     # JTextField subclass wired to TextComponentDecorator
+    │   │       ├── FileDropHandler.java        # DnD + Ctrl+V → inserts @path tokens at caret
+    │   │       ├── RangeHighlightable.java     # Interface: applyHighlights(List<Range>)
+    │   │       ├── ShortcutMatcher.java        # Match key events to registered shortcuts; suppress KEY_TYPED after match
+    │   │       ├── TextComponentDecorator.java # Wires FileDropHandler + AtCompletionPopup + AtPathHighlighter + TextContextMenu
+    │   │       └── TextContextMenu.java        # Right-click context menu (Cut/Copy/Paste + history nav)
     │   └── process/
     │       ├── ClaudeProcess.java              # PTY lifecycle + settings.local.json merge/cleanup
     │       ├── PtyTtyConnector.java            # PTY ↔ JediTerm bridge
@@ -442,33 +450,26 @@ Extra environment variables
 
 ---
 
-### Stage 15 — File attachments in prompt (planned)
+### Stage 15 — File attachments in prompt ✅ (v0.15.23-SNAPSHOT)
 
-**Goal:** attach files to a prompt — prepended as `@/absolute/path` before the prompt text on send.
+**Goal:** attach files to a prompt via `@path` tokens inserted directly in the textarea.
 
-**UI:** horizontal chip panel above `inputArea` (appears when the first file is added):
-```
-┌──────────────────────────────────────────┐
-│ [src/Foo.java ×]  [README.md ×]          │
-├──────────────────────────────────────────┤
-│ inputArea...                             │
-└──────────────────[Attach][Send][Cancel]──┘
-```
+**Implementation:**
 
-**Ways to add files:**
-1. **Attach** button → JFileChooser
-2. Context menu in the Projects tree: "Add to Claude Prompt"
-3. Drag & drop a file onto `inputPanel`
+| File | Role |
+|------|------|
+| `ui/common/FileDropHandler.java` | DnD files/images and Ctrl+V paste → inserts `@relative` or `@/absolute` path token at caret; clipboard images saved to temp PNG → `@/tmp/…png` |
+| `ui/common/AtCompletionPopup.java` | Single-level @-popup triggered on `@` keystroke; lists directory contents on demand with keyboard navigation |
+| `ui/common/AtPathHighlighter.java` | Violet foreground highlight for `@…` tokens in the textarea via `Highlighter` API |
+| `ui/common/ShortcutMatcher.java` | Matches key events to registered shortcuts; suppresses KEY_TYPED after a match to prevent bleed-through |
+| `ui/common/TextComponentDecorator.java` | Wires FileDropHandler + AtCompletionPopup + AtPathHighlighter + TextContextMenu onto any text component |
+| `ui/common/DecoratedTextArea.java` | `JTextArea` subclass pre-wired to `TextComponentDecorator` |
+| `ui/common/DecoratedTextField.java` | `JTextField` subclass pre-wired to `TextComponentDecorator` |
+| `ui/common/TextContextMenu.java` | Right-click context menu: Cut/Copy/Paste + prev/next history navigation |
+| `ui/common/RangeHighlightable.java` | Interface: `applyHighlights(List<Range>)` |
+| `ui/ClaudePromptPanel.java` | Uses `DecoratedTextArea`; sends textarea text as-is (no chip prepend); Attach button → JFileChooser |
 
-**Components:**
-- `ui/AttachedFilesPanel.java` — chip panel (filename + "×")
-- `actions/AddToClaudePromptAction.java` — context menu on file/folder nodes
-- `ui/ClaudeSessionPanel.java` — Attach button, DnD handler; prepend `@path` in `sendPrompt()`
-- `layer.xml` — register `AddToClaudePromptAction`
-
-**Tests:**
-- `AttachedFilesPanelTest.java` — add file → chip; "×" → chip removed; `clearFiles()` → empty
-- `FileAttachmentPromptTest.java` — two files + text → `@path1\n@path2\ntext\r` in connector
+**Tests:** `AtCompletionPopupTest`, `AtPathHighlighterTest`, `FileDropHandlerTest`, `ShortcutMatcherTest`, `ClaudePromptPanelSendTest`
 
 ---
 
@@ -484,7 +485,20 @@ Extra environment variables
 
 ---
 
-### Stage 17 — Settings + full integration (planned)
+### Stage 17 — Shared input in permission/choice panels (planned)
+
+**Goal:** bring file attachment and shortcut features to `FileDiffPermissionPanel` and `ChoiceMenuPanel`; add AcceptAll.
+
+**What to add:**
+- `FileDiffPermissionPanel` reject-reason field: `DecoratedTextField` with DnD, @-completion, context menu
+- `ChoiceMenuPanel`: DnD support
+- **AcceptAll** button → sets `editModeCombo` to `acceptEdits`
+
+**Files:** `ui/FileDiffPermissionPanel.java`, `ui/ChoiceMenuPanel.java`, `ui/ClaudePromptPanel.java`
+
+---
+
+### Stage 18 — Settings + full integration (planned)
 
 **Goal:** settings drive plugin behaviour; session lifecycle management.
 
@@ -499,7 +513,7 @@ Extra environment variables
 
 ---
 
-### Stage 18 — GitHub CI/CD + NBM publishing (planned)
+### Stage 19 — GitHub CI/CD + NBM publishing (planned)
 
 **Goal:** automated build and release publishing.
 
@@ -511,7 +525,7 @@ Extra environment variables
 
 ---
 
-### Stage 19 — Help + user documentation (planned)
+### Stage 20 — Help + user documentation (planned)
 
 **Goal:** built-in help and end-user documentation.
 

@@ -1,5 +1,7 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.ui.common.AtPathHighlighter;
+import io.github.nbclaudecodegui.ui.common.DecoratedTextArea;
 import java.awt.Color;
 import java.lang.reflect.Field;
 import javax.swing.SwingUtilities;
@@ -15,8 +17,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class AtPathHighlighterTest {
 
-    private static AtPathHighlighter.AtHighlightTextArea newArea() {
-        return new AtPathHighlighter.AtHighlightTextArea();
+    private static DecoratedTextArea newArea() {
+        return new DecoratedTextArea(3, 40, () -> null);
     }
 
     @Test

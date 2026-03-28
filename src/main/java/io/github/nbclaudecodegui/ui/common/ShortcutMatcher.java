@@ -1,21 +1,20 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.ui.common;
 
 import io.github.nbclaudecodegui.model.FavoriteEntry;
 import io.github.nbclaudecodegui.model.FavoriteEntry.Scope;
 import io.github.nbclaudecodegui.model.PromptFavoritesStore;
 import java.awt.event.KeyEvent;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.swing.JTextArea;
+import javax.swing.text.JTextComponent;
 
 /**
  * Matches keyboard shortcut sequences against favorites and inserts the
- * corresponding text into the input area.
+ * corresponding text into the input component.
  *
  * <p>After the first key press that could start a known shortcut the matcher
- * enters "capturing" mode and the input area suspends normal character input.
+ * enters "capturing" mode and the input component suspends normal character input.
  * When a full sequence matches a favorite its text is inserted.
  * When no shortcut can match the accumulated events are replayed as ordinary
  * key-typed events so no characters are lost.
@@ -24,7 +23,7 @@ import javax.swing.JTextArea;
  */
 public final class ShortcutMatcher {
 
-    private final JTextArea            inputArea;
+    private final JTextComponent       inputComponent;
     private final PromptFavoritesStore store;
     private final Consumer<String>     onInsert;
 
@@ -59,25 +58,26 @@ public final class ShortcutMatcher {
     /**
      * Creates a new {@code ShortcutMatcher}.
      *
-     * @param inputArea the text area to insert text into
-     * @param store     the favorites store to read shortcuts from
-     * @param onInsert  called with the matched text (after insert in inputArea);
-     *                  may be null
+     * @param inputComponent the text component to insert text into
+     * @param store          the favorites store to read shortcuts from
+     * @param onInsert       called with the matched text (after insert in inputComponent);
+     *                       may be null
      */
-    public ShortcutMatcher(JTextArea inputArea, PromptFavoritesStore store, Consumer<String> onInsert) {
-        this.inputArea = inputArea;
-        this.store     = store;
-        this.onInsert  = onInsert;
+    public ShortcutMatcher(JTextComponent inputComponent, PromptFavoritesStore store,
+                            Consumer<String> onInsert) {
+        this.inputComponent = inputComponent;
+        this.store          = store;
+        this.onInsert       = onInsert;
     }
 
     /**
      * Convenience constructor with no external callback.
      *
-     * @param inputArea the text area to insert text into
-     * @param store     the favorites store to read shortcuts from
+     * @param inputComponent the text component to insert text into
+     * @param store          the favorites store to read shortcuts from
      */
-    public ShortcutMatcher(JTextArea inputArea, PromptFavoritesStore store) {
-        this(inputArea, store, null);
+    public ShortcutMatcher(JTextComponent inputComponent, PromptFavoritesStore store) {
+        this(inputComponent, store, null);
     }
 
     // -------------------------------------------------------------------------
@@ -121,8 +121,8 @@ public final class ShortcutMatcher {
             reset();
             justMatched = true;
             String text = match.getText();
-            inputArea.setText(text);
-            inputArea.setCaretPosition(inputArea.getDocument().getLength());
+            inputComponent.setText(text);
+            inputComponent.setCaretPosition(inputComponent.getDocument().getLength());
             if (onInsert != null) onInsert.accept(text);
             return true;
         }
@@ -147,16 +147,15 @@ public final class ShortcutMatcher {
         capturing = false;
     }
 
-    /** Replays accumulated raw events as key-typed by dispatching them to the input area. */
+    /** Replays accumulated raw events as key-typed by dispatching them to the input component. */
     private void replay() {
         List<KeyEvent> toReplay = new ArrayList<>(rawEvents);
         reset();
         for (KeyEvent ev : toReplay) {
             // Dispatch a KEY_TYPED event for printable characters
             char ch = ev.getKeyChar();
-            if (ch != KeyEvent.CHAR_UNDEFINED && !java.awt.event.InputEvent.class.isInstance(ev)
-                    && ch >= 32) {
-                inputArea.replaceSelection(String.valueOf(ch));
+            if (ch != KeyEvent.CHAR_UNDEFINED && ch >= 32) {
+                inputComponent.replaceSelection(String.valueOf(ch));
             }
         }
     }

@@ -22,13 +22,14 @@ A NetBeans IDE plugin that embeds Claude Code CLI as a PTY-based terminal sessio
 
 `ClaudeProcess.start(workingDir)`:
 1. Looks up `ClaudeCodeStatusService` → gets the MCP SSE server port (default **28991**, configurable in Tools → Options).
-2. Writes `{workingDir}/.claude/settings.local.json`:
+2. **Merges** (not overwrites) `{workingDir}/.claude/settings.local.json` — only the plugin's own keys are added/updated; all other keys are left untouched:
    ```json
    {
      "mcpServers": {"netbeans": {"type":"sse","url":"http://localhost:{port}/sse"}},
      "hooks": {"PreToolUse": [{"matcher":"Edit|Write|MultiEdit","hooks":[{"type":"http","url":"http://localhost:{port}/hook"}]}]}
    }
    ```
+   On session stop, the plugin removes its own keys; if the file becomes empty it is deleted.
 3. Launches `claude` (no `--print`, `TERM=xterm-256color`) via `pty4j` `PtyProcessBuilder`.
 4. `PtyTtyConnector` bridges the PTY master to JediTerm's `TtyConnector`. The full Claude TUI renders natively.
 
@@ -37,8 +38,8 @@ A NetBeans IDE plugin that embeds Claude Code CLI as a PTY-based terminal sessio
 ### Communication channels
 
 #### PTY — terminal I/O
-- **Claude → plugin:** ANSI TUI bytes rendered by JediTerm. `TtyPromptDetector` / `StreamJsonParser` pattern-match the stream to detect interactive prompts → `PromptResponsePanel` shown.
-- **Plugin → Claude:** raw bytes to the PTY master. Text input from the input bar sent as-is. Option selected → number + `\r`. Cancel → byte `0x03` (Ctrl+C / SIGINT).
+- **Claude → plugin:** ANSI TUI bytes rendered by JediTerm. `ScreenContentDetector` (screen-poll timer) detects interactive choice menus → `ClaudeSessionModel.setActiveChoiceMenu()` → `ChoiceMenuPanel` shown.
+- **Plugin → Claude:** raw bytes to the PTY master. Text input from the input area sent as-is. Option selected → number + `\r`. Cancel → byte `0x03` (Ctrl+C / SIGINT).
 
 #### MCP SSE — IDE tools (`/sse` + `/messages`)
 Claude keeps `GET /sse` open (long-lived SSE stream). JSON-RPC requests arrive as `POST /messages` (HTTP response is always `202 Accepted`). JSON-RPC responses go back **via SSE** (not the POST body — required by the MCP SSE spec).
@@ -61,17 +62,19 @@ The plugin follows an MVC structure for session management:
 
 | Package | Responsibility |
 |---------|---------------|
-| `model/` | `ClaudeSessionModel` — session state container, `SessionLifecycle` enum, `EDIT_MODE_REGISTRY` (cross-thread), listener dispatch on EDT; `ChoiceMenuModel` — interactive-prompt data |
+| `model/` | `ClaudeSessionModel` — session state container, `SessionLifecycle` enum, `EDIT_MODE_REGISTRY` (cross-thread), listener dispatch on EDT; `ChoiceMenuModel` — interactive-prompt data; `PromptHistoryStore`, `PromptFavoritesStore`, `HistoryEntry`, `FavoriteEntry` — persistent history/favorites |
 | `controller/` | `ClaudeSessionController` — PTY process lifecycle, connector wiring, screen polling, model/edit-mode switching, `parseModelDiscovery` |
-| `process/` | `ClaudeProcess` — PTY process start/stop/version; `PtyTtyConnector` — PTY↔JediTerm bridge; `ScreenContentDetector`/`TtyPromptDetector` — screen analysis; `StreamJsonParser` — lightweight NDJSON parser |
-| `ui/` | `ClaudeSessionTopComponent` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff viewer with Accept/Reject/Cancel; `MarkdownRenderer` — markdown→HTML |
-| `settings/` | `ClaudeCodePreferences` — NbPreferences wrapper; `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options integration; `ClaudeProfileStore` — named profiles |
-| `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project node context menu |
-| `org.openbeans.claude.netbeans` | `MCPSseServer` — SSE/HTTP server Claude connects to; `NetBeansMCPHandler` — handles MCP requests including PreToolUse hook; `tools/` — `OpenDiff`, `PermissionPromptTool`, `DiffTabTracker` |
+| `process/` | `ClaudeProcess` — PTY process start/stop/version + `settings.local.json` merge/cleanup; `PtyTtyConnector` — PTY↔JediTerm bridge; `ScreenContentDetector` — screen-poll analysis; `StreamJsonParser` — lightweight NDJSON parser |
+| `ui/` | `ClaudeSessionTab` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff viewer with Accept/Reject/Cancel; `MarkdownRenderer` — markdown→HTML; `HistoryDialog`, `FavoritesDialog`, `FavoritesPanel`, `AssignShortcutDialog` — history/favorites UI |
+| `ui/common/` | Shared input components: `AtCompletionPopup` — @-triggered path popup; `AtPathHighlighter` — blue token highlight; `FileDropHandler` — DnD + Ctrl+V → @path insertion; `ShortcutMatcher` — key→shortcut match with KEY_TYPED suppression; `TextComponentDecorator` — wires all the above; `DecoratedTextArea/TextField`, `TextContextMenu`, `RangeHighlightable` |
+| `settings/` | `ClaudeCodePreferences` — NbPreferences wrapper; `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options (General + Profiles tabs); `ClaudeProfile`, `ClaudeProfileStore` — named profiles with isolated `CLAUDE_CONFIG_DIR`, auth, proxy, extra env vars; `ClaudeProjectProperties` — per-project profile assignment |
+| `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project node context menu; `PromptFavoriteAction` — dynamically registered action per favorite for Keymap API |
+| `io.github.nbclaudecodegui.mcp` | `MCPSseServer` — Jetty `/sse` `/messages` `/hook`; `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook; `tools/` — `OpenDiff`, `PermissionPromptTool`, `DiffTabTracker`, `GetDiagnostics`, `GetOpenEditors`, `GetCurrentSelection`, `OpenFile` |
+| `org.openbeans.claude.netbeans` | Legacy classes: `ClaudeCodeStatusService`, `ClaudeCodeStatusLineElement`, `EditorUtils`, `NbUtils`; `tools/` — `AsyncHandler`, `AsyncResponse`, `GetWorkspaceFolders`, `CheckDocumentDirty`, `SaveDocument`, `CloseTab`, `CloseAllDiffTabs` |
 
 ### Session lifecycle
-1. User clicks toolbar → `ClaudeSessionTopComponent` opens; user picks a directory → `ClaudePromptPanel.startProcess()` creates a `JediTermWidget`, then `ClaudeSessionController.startProcess()` writes `settings.local.json` and launches the PTY.
-2. PTY output renders in JediTerm; `TtyPromptDetector` (real-time) and `ScreenContentDetector` (screen-poll timer) detect interactive prompts → `ClaudeSessionModel.setActiveChoiceMenu()` → `ClaudePromptPanel.onChoiceMenuChanged()` shows the panel.
+1. User clicks toolbar → `ClaudeSessionTab` opens; user picks a directory → `ClaudePromptPanel.startProcess()` creates a `JediTermWidget`, then `ClaudeSessionController.startProcess()` merges `settings.local.json` and launches the PTY.
+2. PTY output renders in JediTerm; `ScreenContentDetector` (screen-poll timer) detects interactive choice menus → `ClaudeSessionModel.setActiveChoiceMenu()` → `ClaudePromptPanel.onChoiceMenuChanged()` shows `ChoiceMenuPanel`.
 3. Claude connects to `GET /sse`; subsequent tool calls arrive as `POST /messages`; file edits trigger `POST /hook`.
 4. Each session = isolated PTY process; closing window confirms if the process is running.
 5. Session state (`SessionLifecycle`, `editMode`, model list, choice menu) lives in `ClaudeSessionModel`; changes are dispatched to `ClaudeSessionModelListener` on the EDT.
@@ -96,7 +99,7 @@ Both paths show the same UI: `[✓ Accept] [✗ Reject] [Reject reason (Optional
 - **Cancel** — denies the change and sends Ctrl+C (byte `0x03`) to the PTY, interrupting Claude's running prompt
 - **× (close tab)** — treated as Reject (hook returns "ask", MCP returns deny)
 
-After any action the originating `ClaudeSessionTopComponent` is re-activated automatically.
+After any action the originating `ClaudeSessionTab` is re-activated automatically.
 
 ### Registration
 `layer.xml` registers the Options category (position 1500) and toolbar action. Icon PNGs are generated at build time from `cc-gui-icon.svg` via the Groovy script in `pom.xml` using Apache Batik.

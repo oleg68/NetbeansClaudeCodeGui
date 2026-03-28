@@ -1,4 +1,4 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.ui.common;
 
 import java.awt.Image;
 import java.awt.datatransfer.DataFlavor;
@@ -12,19 +12,19 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.imageio.ImageIO;
 import javax.swing.JComponent;
-import javax.swing.JTextArea;
 import javax.swing.TransferHandler;
+import javax.swing.text.JTextComponent;
 import org.openide.filesystems.FileUtil;
 import org.openide.nodes.Node;
 import org.openide.nodes.NodeTransfer;
 
 /**
- * {@link TransferHandler} that handles drag-and-drop of files onto the prompt
- * panel and clipboard paste of file lists or images.
+ * {@link TransferHandler} that handles drag-and-drop of files onto a text component
+ * and clipboard paste of file lists or images.
  * <p>Debug logging (java.util.logging FINE) is emitted for each import operation.
  *
  * <p>All files (inside or outside working dir) and clipboard images are inserted
- * as {@code @path} tokens directly into the text area at the caret position:
+ * as {@code @path} tokens directly into the text component at the caret position:
  * <ul>
  *   <li>File inside {@code workingDir}: {@code @relative/path} inserted at caret.</li>
  *   <li>File outside {@code workingDir}: {@code @/absolute/path} inserted at caret.</li>
@@ -48,7 +48,7 @@ public final class FileDropHandler extends TransferHandler {
     private final java.util.function.Supplier<String> workingDirSupplier;
 
     /**
-     * The original TransferHandler of the text area, used to delegate Cut/Copy
+     * The original TransferHandler of the text component, used to delegate Cut/Copy
      * (export) operations that this handler does not override.
      */
     private final TransferHandler originalHandler;
@@ -60,7 +60,7 @@ public final class FileDropHandler extends TransferHandler {
      * Creates a new {@code FileDropHandler}.
      *
      * @param workingDirSupplier supplier for the current working directory path
-     * @param originalHandler    the text area's original TransferHandler (for Cut/Copy delegation)
+     * @param originalHandler    the text component's original TransferHandler (for Cut/Copy delegation)
      */
     public FileDropHandler(java.util.function.Supplier<String> workingDirSupplier,
                            TransferHandler originalHandler) {
@@ -197,23 +197,23 @@ public final class FileDropHandler extends TransferHandler {
     public boolean importData(TransferSupport support) {
         LOG.fine("importData: component=" + support.getComponent().getClass().getSimpleName());
         Transferable t = support.getTransferable();
-        JTextArea textArea = findTextArea(support.getComponent());
-        return doImport(t, textArea);
+        JTextComponent textComponent = findTextComponent(support.getComponent());
+        return doImport(t, textComponent);
     }
 
     // -------------------------------------------------------------------------
-    // Clipboard paste — called explicitly from ClaudePromptPanel on Ctrl+V
+    // Clipboard paste — called explicitly from TextComponentDecorator on Ctrl+V
     // -------------------------------------------------------------------------
 
     /**
      * Attempts to import file list or image from the system clipboard.
      *
-     * @param textArea the text area into which paths should be inserted
+     * @param textComponent the text component into which paths should be inserted
      * @return {@code true} if file/image content was imported; {@code false} if
      *         the clipboard contains only plain text (caller should fall through
      *         to default paste)
      */
-    public boolean importFromClipboard(JTextArea textArea) {
+    public boolean importFromClipboard(JTextComponent textComponent) {
         java.awt.datatransfer.Clipboard cb =
                 java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
         Transferable t = cb.getContents(null);
@@ -223,27 +223,27 @@ public final class FileDropHandler extends TransferHandler {
         boolean hasText  = t.isDataFlavorSupported(DataFlavor.stringFlavor);
         LOG.fine("importFromClipboard: hasFiles=" + hasFiles + " hasImage=" + hasImage + " hasText=" + hasText);
         if (!hasFiles && !hasImage && !hasText) return false;
-        return doImport(t, textArea);
+        return doImport(t, textComponent);
     }
 
     // -------------------------------------------------------------------------
     // Shared import logic
     // -------------------------------------------------------------------------
 
-    private boolean doImport(Transferable t, JTextArea textArea) {
+    private boolean doImport(Transferable t, JTextComponent textComponent) {
         try {
             Node[] nodes = extractNodes(t);
             if (nodes != null && nodes.length > 0) {
                 LOG.fine("doImport: nodes branch, count=" + nodes.length);
-                return importNodes(nodes, textArea);
+                return importNodes(nodes, textComponent);
             }
             if (t.isDataFlavorSupported(DataFlavor.imageFlavor)) {
                 Image img = (Image) t.getTransferData(DataFlavor.imageFlavor);
                 if (img != null) {
                     LOG.fine("doImport: image branch");
                     File tmp = writeTempPng(img);
-                    if (textArea != null) {
-                        insertAtCaret(textArea, "@" + tmp.getAbsolutePath());
+                    if (textComponent != null) {
+                        insertAtCaret(textComponent, "@" + tmp.getAbsolutePath());
                     }
                     return true;
                 }
@@ -264,15 +264,15 @@ public final class FileDropHandler extends TransferHandler {
                     paths.append(fileToAtPath(filePath, workDir));
                 }
 
-                if (paths.length() > 0 && textArea != null) {
-                    insertAtCaret(textArea, paths.toString());
+                if (paths.length() > 0 && textComponent != null) {
+                    insertAtCaret(textComponent, paths.toString());
                 }
                 return true;
             }
             if (t.isDataFlavorSupported(DataFlavor.stringFlavor)) {
                 LOG.fine("doImport: string branch");
                 String s = (String) t.getTransferData(DataFlavor.stringFlavor);
-                if (s != null && textArea != null) { insertAtCaret(textArea, s); return true; }
+                if (s != null && textComponent != null) { insertAtCaret(textComponent, s); return true; }
             }
         } catch (Exception ex) {
             // Import failed; fall through to return false
@@ -296,7 +296,7 @@ public final class FileDropHandler extends TransferHandler {
      *       {@code @/absolute/path} inserted at caret.</li>
      * </ul>
      */
-    boolean importNodes(Node[] nodes, JTextArea textArea) {
+    boolean importNodes(Node[] nodes, JTextComponent textComponent) {
         LOG.fine("importNodes: entry, count=" + (nodes == null ? 0 : nodes.length));
         if (nodes == null || nodes.length == 0) return false;
         String wdStr = workingDirSupplier.get();
@@ -367,7 +367,6 @@ public final class FileDropHandler extends TransferHandler {
                         toInsert = pkg.isEmpty() ? relStr : pkg.replace('/', '.');
                     } else {
                         // Non-source-root directory inside workDir: insert as plain relative path.
-                        // NOTE: No @ prefix is intentional — same convention as file nodes inside workDir.
                         toInsert = relStr;
                     }
                     if (inlineText.length() > 0) inlineText.append(" ");
@@ -393,8 +392,8 @@ public final class FileDropHandler extends TransferHandler {
             }
         }
 
-        if (inlineText.length() > 0 && textArea != null) {
-            insertAtCaret(textArea, inlineText.toString());
+        if (inlineText.length() > 0 && textComponent != null) {
+            insertAtCaret(textComponent, inlineText.toString());
         }
         LOG.fine("importNodes: returning " + (inlineText.length() > 0) + ", text='" + inlineText + "'");
         return inlineText.length() > 0;
@@ -439,28 +438,28 @@ public final class FileDropHandler extends TransferHandler {
         return tmp;
     }
 
-    private static void insertAtCaret(JTextArea area, String text) {
+    private static void insertAtCaret(JTextComponent textComponent, String text) {
         javax.swing.SwingUtilities.invokeLater(() -> {
-            int pos = area.getCaretPosition();
+            int pos = textComponent.getCaretPosition();
             try {
-                String before = area.getText(0, pos);
+                String before = textComponent.getText(0, pos);
                 String toInsert = (!before.isEmpty() && !before.endsWith(" ") && !before.endsWith("\n"))
                         ? " " + text + " "
                         : text + " ";
-                area.getDocument().insertString(pos, toInsert, null);
-                area.setCaretPosition(pos + toInsert.length());
+                textComponent.getDocument().insertString(pos, toInsert, null);
+                textComponent.setCaretPosition(pos + toInsert.length());
             } catch (javax.swing.text.BadLocationException ex) {
-                area.append(" " + text + " ");
+                textComponent.setText(textComponent.getText() + " " + text + " ");
             }
-            area.requestFocusInWindow();
+            textComponent.requestFocusInWindow();
         });
     }
 
-    private static JTextArea findTextArea(java.awt.Component c) {
-        if (c instanceof JTextArea ta) return ta;
+    private static JTextComponent findTextComponent(java.awt.Component c) {
+        if (c instanceof JTextComponent tc) return tc;
         if (c instanceof java.awt.Container container) {
             for (java.awt.Component child : container.getComponents()) {
-                JTextArea found = findTextArea(child);
+                JTextComponent found = findTextComponent(child);
                 if (found != null) return found;
             }
         }

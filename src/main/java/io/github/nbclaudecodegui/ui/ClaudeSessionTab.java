@@ -215,7 +215,10 @@ public class ClaudeSessionTab extends TopComponent
         placeholderLabel.setForeground(Color.GRAY);
 
         // --- chat UI ---
-        choiceMenuPanel = new ChoiceMenuPanel();
+        choiceMenuPanel = new ChoiceMenuPanel(() -> {
+            java.io.File wd = model.getWorkingDirectory();
+            return wd != null ? wd.getAbsolutePath() : null;
+        });
         promptPanel     = new ClaudePromptPanel(
                 this::sendPrompt,
                 this::cancelPrompt,
@@ -474,6 +477,22 @@ public class ClaudeSessionTab extends TopComponent
      */
     public File getWorkingDirectory() {
         return model.getWorkingDirectory();
+    }
+
+    /**
+     * Programmatically sets the session edit mode (e.g. {@code "acceptEdits"}).
+     * No-op if the value is not a known mode or is already selected.
+     *
+     * @param value the edit mode value (one of {@code EDIT_MODE_VALUES})
+     */
+    public void setEditMode(String value) {
+        int idx = editModeIndexOf(value);
+        if (idx >= 0 && editModeCombo.getSelectedIndex() != idx) {
+            editModeCombo.removeActionListener(editModeCombo.getActionListeners()[0]);
+            editModeCombo.setSelectedIndex(idx);
+            editModeCombo.addActionListener(ae -> onEditModeComboChanged());
+            controller.onEditModeComboChanged(value);
+        }
     }
 
     /**

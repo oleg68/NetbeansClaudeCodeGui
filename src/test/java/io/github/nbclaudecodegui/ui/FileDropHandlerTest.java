@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.ui.common.FileDropHandler;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
@@ -637,11 +638,11 @@ class FileDropHandlerTest {
         }
     }
 
-    /** Calls the package-private {@code importNodes(Node[], JTextArea)} via reflection. */
+    /** Calls the package-private {@code importNodes(Node[], JTextComponent)} via reflection. */
     private static boolean callImportNodes(FileDropHandler handler, Node[] nodes, JTextArea area) {
         try {
             java.lang.reflect.Method m = FileDropHandler.class.getDeclaredMethod(
-                    "importNodes", Node[].class, JTextArea.class);
+                    "importNodes", Node[].class, javax.swing.text.JTextComponent.class);
             m.setAccessible(true);
             return (boolean) m.invoke(handler, nodes, area);
         } catch (Exception ex) {
@@ -844,7 +845,7 @@ class FileDropHandlerTest {
     }
 
     /**
-     * Calls the package-private {@code doImport(Transferable, JTextArea)} via reflection.
+     * Calls the package-private {@code doImport(Transferable, JTextComponent)} via reflection.
      */
     private static boolean callDoImport(FileDropHandler handler,
                                         java.awt.datatransfer.Transferable t,
@@ -853,7 +854,7 @@ class FileDropHandlerTest {
             java.lang.reflect.Method m = FileDropHandler.class.getDeclaredMethod(
                     "doImport",
                     java.awt.datatransfer.Transferable.class,
-                    JTextArea.class);
+                    javax.swing.text.JTextComponent.class);
             m.setAccessible(true);
             return (boolean) m.invoke(handler, t, area);
         } catch (Exception ex) {

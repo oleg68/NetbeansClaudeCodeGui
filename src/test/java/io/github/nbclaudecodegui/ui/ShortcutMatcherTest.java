@@ -2,6 +2,7 @@ package io.github.nbclaudecodegui.ui;
 
 import io.github.nbclaudecodegui.model.FavoriteEntry;
 import io.github.nbclaudecodegui.model.PromptFavoritesStore;
+import io.github.nbclaudecodegui.ui.common.ShortcutMatcher;
 import java.awt.event.KeyEvent;
 import java.nio.file.Path;
 import java.util.UUID;

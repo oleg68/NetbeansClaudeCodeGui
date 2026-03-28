@@ -1,8 +1,8 @@
 package io.github.nbclaudecodegui.ui;
 
-import io.github.nbclaudecodegui.model.FavoriteEntry;
-import io.github.nbclaudecodegui.model.PromptFavoritesStore;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
+import io.github.nbclaudecodegui.ui.common.AtPathHighlighter;
+import io.github.nbclaudecodegui.ui.common.DecoratedTextArea;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -26,7 +26,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 
@@ -59,8 +58,8 @@ public final class ClaudePromptPanel extends JPanel {
     private static final String ICON_FAVORITES = "\u2605";
     /** Unicode history icon (☰). */
     private static final String ICON_HISTORY   = "\u2630";
-    /** The prompt input text area with @-path highlighting. */
-    private final AtPathHighlighter.AtHighlightTextArea inputArea;
+    /** The prompt input text area with @-path highlighting and shared input features. */
+    private final DecoratedTextArea inputArea;
     /** Button that sends the current prompt. */
     private final JButton   sendButton;
     /** Button that cancels the running prompt (Ctrl+C). */
@@ -80,18 +79,9 @@ public final class ClaudePromptPanel extends JPanel {
     /** Current position in the history list; {@code -1} = newest (empty field). */
     private int historyIndex = -1;
 
-    /** Shortcut matcher; lazily initialised once a working directory is available. */
-    private ShortcutMatcher shortcutMatcher;
-
-    /** Handles file/image drop and paste into the input area. */
-    /** Handles file/image drop and paste into the input area. */
-    private final FileDropHandler     dropHandler;
     /** Highlights {@code @path} tokens in the input area. */
     @SuppressWarnings("FieldCanBeLocal")
     private final AtPathHighlighter   pathHighlighter;
-    /** Shows path completion suggestions when {@code @} is typed. */
-    @SuppressWarnings("FieldCanBeLocal")
-    private final AtCompletionPopup   completionPopup;
 
     // -------------------------------------------------------------------------
     // Constructor
@@ -122,19 +112,15 @@ public final class ClaudePromptPanel extends JPanel {
         this.promptHistorySupplier = promptHistorySupplier;
         this.workingDirSupplier    = workingDirSupplier;
 
-        inputArea = new AtPathHighlighter.AtHighlightTextArea(3, 40);
+        inputArea = new DecoratedTextArea(3, 40, workingDirSupplier);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setFocusTraversalKeysEnabled(false);
         bindKeys(inputArea);
         attachContextMenu(inputArea);
 
-        // Stage 15: highlighter and completion popup
-        pathHighlighter  = AtPathHighlighter.install(inputArea);  // AtHighlightTextArea required
-        completionPopup  = AtCompletionPopup.install(inputArea, workingDirSupplier);
-
-        dropHandler = new FileDropHandler(workingDirSupplier, inputArea.getTransferHandler());
-        inputArea.setTransferHandler(dropHandler);
+        // Install @-path highlighter (DecoratedTextArea implements RangeHighlightable)
+        pathHighlighter = AtPathHighlighter.install(inputArea);
 
         sendButton   = new JButton("<html><font color='#228B22'>" + ICON_SEND   + "</font> Send</html>");
         cancelButton = new JButton("<html><font color='#B22222'>" + ICON_CANCEL + "</font> Cancel</html>");
@@ -233,14 +219,14 @@ public final class ClaudePromptPanel extends JPanel {
     public void reset() {
         inputArea.setText("");
         historyIndex = -1;
-        dropHandler.cleanup();
+        inputArea.cleanup();
     }
 
     // -------------------------------------------------------------------------
     // Key bindings
     // -------------------------------------------------------------------------
 
-    private void bindKeys(JTextArea area) {
+    private void bindKeys(DecoratedTextArea area) {
         area.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -271,23 +257,6 @@ public final class ClaudePromptPanel extends JPanel {
                     return;
                 }
 
-                // Ctrl+V — intercept for file/image/text paste
-                if (e.getKeyCode() == KeyEvent.VK_V && e.isControlDown()
-                        && !e.isShiftDown() && !e.isAltDown()) {
-                    e.consume();
-                    if (!dropHandler.importFromClipboard(area)) {
-                        area.paste();
-                    }
-                    return;
-                }
-
-                // ShortcutMatcher — try to match favorites shortcuts
-                ShortcutMatcher sm = getOrCreateShortcutMatcher();
-                if (sm != null && sm.keyPressed(e)) {
-                    e.consume();
-                    return;
-                }
-
                 String sendKey = ClaudeCodePreferences.getSendKey();
                 boolean ctrl  = e.isControlDown();
                 boolean shift = e.isShiftDown();
@@ -307,26 +276,7 @@ public final class ClaudePromptPanel extends JPanel {
                     doSend();
                 }
             }
-
-            @Override
-            public void keyTyped(KeyEvent e) {
-                ShortcutMatcher sm = getOrCreateShortcutMatcher();
-                if (sm != null && sm.shouldSuppressKeyTyped()) {
-                    e.consume();
-                }
-            }
         });
-    }
-
-    private ShortcutMatcher getOrCreateShortcutMatcher() {
-        if (workingDirSupplier == null) return null;
-        String wd = workingDirSupplier.get();
-        if (wd == null) return null;
-        if (shortcutMatcher == null) {
-            shortcutMatcher = new ShortcutMatcher(inputArea,
-                    PromptFavoritesStore.getInstance(Path.of(wd)));
-        }
-        return shortcutMatcher;
     }
 
     private void doSend() {
@@ -356,8 +306,10 @@ public final class ClaudePromptPanel extends JPanel {
     // Context menu
     // -------------------------------------------------------------------------
 
-    private void attachContextMenu(JTextArea area) {
-        JPopupMenu menu = TextContextMenu.create(area);
+    private void attachContextMenu(DecoratedTextArea area) {
+        // DecoratedTextArea already has Cut/Copy/Paste/SelectAll/Clear + AddToFavorites/Favorites...
+        // We only need to append history navigation items to the existing menu.
+        JPopupMenu menu = area.getContextMenu();
 
         JMenuItem prevPrompt = new JMenuItem("Previous prompt  (Ctrl+\u2191)");
         prevPrompt.addActionListener(e -> navigateHistory(1));
@@ -365,24 +317,11 @@ public final class ClaudePromptPanel extends JPanel {
         JMenuItem nextPrompt = new JMenuItem("Next prompt  (Ctrl+\u2193)");
         nextPrompt.addActionListener(e -> navigateHistory(-1));
 
-        JMenuItem addToFav = new JMenuItem("Add to Favorites");
-        addToFav.addActionListener(e -> {
-            String text = area.getText().trim();
-            if (!text.isEmpty() && workingDirSupplier != null) {
-                String wd = workingDirSupplier.get();
-                if (wd != null) {
-                    PromptFavoritesStore.getInstance(Path.of(wd))
-                            .addProject(FavoriteEntry.ofProject(text));
-                }
-            }
-        });
-
         menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
             @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
                 List<String> h = promptHistorySupplier.get();
                 prevPrompt.setEnabled(!h.isEmpty() && historyIndex < h.size() - 1);
                 nextPrompt.setEnabled(historyIndex > -1);
-                addToFav.setEnabled(!area.getText().trim().isEmpty());
             }
             @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
             @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
@@ -391,10 +330,6 @@ public final class ClaudePromptPanel extends JPanel {
         menu.addSeparator();
         menu.add(prevPrompt);
         menu.add(nextPrompt);
-        menu.addSeparator();
-        menu.add(addToFav);
-
-        TextContextMenu.attach(area, menu);
     }
 
     // -------------------------------------------------------------------------

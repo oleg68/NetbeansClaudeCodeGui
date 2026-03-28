@@ -1,4 +1,4 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.ui.common;
 
 import java.awt.Dimension;
 import java.awt.Font;
@@ -15,34 +15,31 @@ import javax.swing.DefaultListModel;
 import javax.swing.JList;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.JTextComponent;
 
 /**
- * {@code @}-completion popup for the prompt text area.
+ * {@code @}-completion popup for a prompt text component.
  *
- * <p>When the user types {@code @} in the text area, this popup appears and
+ * <p>When the user types {@code @} in the text component, this popup appears and
  * offers file paths relative to the working directory as completions.
  * Additional characters after {@code @} filter the list. Up/Down navigates;
  * Enter or Tab inserts; Escape dismisses.
  *
- * <p>Directory listing is performed on-demand (one level at a time) on the EDT.
- * Single-level {@link File#listFiles()} is fast enough for interactive use.
- *
- * <p>Install with {@link #install(JTextArea, Supplier)}.
+ * <p>Install with {@link #install(JTextComponent, Supplier)}.
  */
 public final class AtCompletionPopup {
 
-    private final JTextArea  area;
-    private final Supplier<String> workingDirSupplier;
+    private final JTextComponent       tc;
+    private final Supplier<String>     workingDirSupplier;
 
-    private final JPopupMenu           popup;
+    private final JPopupMenu              popup;
     private final DefaultListModel<String> listModel;
-    private final JList<String>        list;
+    private final JList<String>           list;
 
-    private AtCompletionPopup(JTextArea area, Supplier<String> workingDirSupplier) {
-        this.area               = area;
+    private AtCompletionPopup(JTextComponent tc, Supplier<String> workingDirSupplier) {
+        this.tc                 = tc;
         this.workingDirSupplier = workingDirSupplier;
 
         listModel = new DefaultListModel<>();
@@ -63,19 +60,19 @@ public final class AtCompletionPopup {
 
         popup = new JPopupMenu();
         popup.add(scroll);
-        popup.setFocusable(false);   // keep focus in text area
+        popup.setFocusable(false);   // keep focus in text component
     }
 
     /**
-     * Installs an {@code AtCompletionPopup} on the given text area.
+     * Installs an {@code AtCompletionPopup} on the given text component.
      *
-     * @param area              the text area to monitor
+     * @param tc                 the text component to monitor
      * @param workingDirSupplier returns the working directory path
      * @return the installed popup
      */
-    public static AtCompletionPopup install(JTextArea area, Supplier<String> workingDirSupplier) {
-        AtCompletionPopup popup = new AtCompletionPopup(area, workingDirSupplier);
-        area.addKeyListener(new KeyAdapter() {
+    public static AtCompletionPopup install(JTextComponent tc, Supplier<String> workingDirSupplier) {
+        AtCompletionPopup popup = new AtCompletionPopup(tc, workingDirSupplier);
+        tc.addKeyListener(new KeyAdapter() {
             @Override
             public void keyReleased(KeyEvent e) {
                 popup.onKeyReleased(e);
@@ -189,11 +186,11 @@ public final class AtCompletionPopup {
 
         if (!popup.isVisible()) {
             try {
-                int caretPos = area.getCaretPosition();
-                java.awt.Rectangle r = area.modelToView2D(caretPos).getBounds();
-                popup.show(area, r.x, r.y + r.height);
+                int caretPos = tc.getCaretPosition();
+                java.awt.Rectangle r = tc.modelToView2D(caretPos).getBounds();
+                popup.show(tc, r.x, r.y + r.height);
             } catch (BadLocationException ex) {
-                popup.show(area, 0, area.getHeight());
+                popup.show(tc, 0, tc.getHeight());
             }
         }
     }
@@ -246,8 +243,8 @@ public final class AtCompletionPopup {
     }
 
     private void replaceToken(String newText) {
-        String text     = area.getText();
-        int caretPos    = area.getCaretPosition();
+        String text     = tc.getText();
+        int caretPos    = tc.getCaretPosition();
         int atIdx       = -1;
         for (int i = caretPos - 1; i >= 0; i--) {
             char c = text.charAt(i);
@@ -259,12 +256,12 @@ public final class AtCompletionPopup {
         int end = caretPos;
         while (end < text.length() && !Character.isWhitespace(text.charAt(end))) end++;
         try {
-            area.getDocument().remove(atIdx, end - atIdx);
-            area.getDocument().insertString(atIdx, newText, null);
+            tc.getDocument().remove(atIdx, end - atIdx);
+            tc.getDocument().insertString(atIdx, newText, null);
             // Place caret at end of inserted text
-            area.setCaretPosition(atIdx + newText.length());
+            tc.setCaretPosition(atIdx + newText.length());
         } catch (BadLocationException ex) {
-            area.append(newText);
+            tc.setText(tc.getText() + newText);
         }
     }
 
@@ -289,8 +286,8 @@ public final class AtCompletionPopup {
      * the caret is not inside an {@code @\S+} token.
      */
     private String currentAtToken() {
-        String text = area.getText();
-        int pos = area.getCaretPosition();
+        String text = tc.getText();
+        int pos = tc.getCaretPosition();
         if (pos <= 0 || pos > text.length()) return null;
 
         // Walk back to find @

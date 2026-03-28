@@ -1,11 +1,13 @@
 package io.github.nbclaudecodegui.ui;
 
 import io.github.nbclaudecodegui.model.ChoiceMenuModel;
+import io.github.nbclaudecodegui.ui.common.DecoratedTextField;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -34,8 +36,16 @@ public final class ChoiceMenuPanel extends JPanel {
     /** Callback invoked with the selected option string when the user makes a choice. */
     private Consumer<String> callback;
 
-    /** Creates an initially-hidden choice menu panel. */
-    public ChoiceMenuPanel() {
+    /** Supplies the current working directory path for context menus. */
+    private final Supplier<String> workingDirSupplier;
+
+    /**
+     * Creates an initially-hidden choice menu panel.
+     *
+     * @param workingDirSupplier supplies the current working directory path (may return {@code null})
+     */
+    public ChoiceMenuPanel(Supplier<String> workingDirSupplier) {
+        this.workingDirSupplier = workingDirSupplier;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
@@ -147,16 +157,8 @@ public final class ChoiceMenuPanel extends JPanel {
                 group.add(rb);
                 radioButtons[i] = rb;
 
-                // Description subtitle under the radio button
-                if (opt.description() != null && !opt.description().isBlank()) {
-                    JLabel desc = new JLabel("<html><small>" + escapeHtml(opt.description()) + "</small></html>");
-                    desc.setForeground(Color.GRAY);
-                    desc.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    leftCol.add(desc);
-                }
-
                 if (isTypeInputOption(opt)) {
-                    JTextField tf = new JTextField(20);
+                    DecoratedTextField tf = new DecoratedTextField(workingDirSupplier);
                     tf.setMaximumSize(new java.awt.Dimension(
                             Integer.MAX_VALUE, tf.getPreferredSize().height));
                     tf.setEnabled(false); // disabled until radio button is selected
@@ -167,9 +169,8 @@ public final class ChoiceMenuPanel extends JPanel {
                             rb.setSelected(true); // clicking field also selects this option
                         }
                     });
-                    TextContextMenu.attach(tf);
                     typeFields[i] = tf;
-                    // Bug 2: text field inline to the right of the radio button
+                    // text field inline to the right of the radio button
                     rb.setText(" "); // placeholder text already shown in the text field
                     rb.setName("typeInputRb");
                     JPanel typeRow = new JPanel();
@@ -181,6 +182,14 @@ public final class ChoiceMenuPanel extends JPanel {
                     leftCol.add(typeRow);
                 } else {
                     leftCol.add(rb);
+                }
+
+                // Description subtitle under the radio button / typeRow
+                if (opt.description() != null && !opt.description().isBlank()) {
+                    JLabel desc = new JLabel("<html><small>" + escapeHtml(opt.description()) + "</small></html>");
+                    desc.setForeground(Color.GRAY);
+                    desc.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    leftCol.add(desc);
                 }
 
                 int idx = model.options().indexOf(opt);
@@ -195,10 +204,9 @@ public final class ChoiceMenuPanel extends JPanel {
 
         // Free-form input (no options at all)
         if (model.options().isEmpty()) {
-            freeField = new JTextField(30);
+            freeField = new DecoratedTextField(workingDirSupplier);
             freeField.setMaximumSize(new java.awt.Dimension(Integer.MAX_VALUE, freeField.getPreferredSize().height));
             freeField.setAlignmentX(Component.LEFT_ALIGNMENT);
-            TextContextMenu.attach(freeField);
             final JTextField ff = freeField;
             freeField.addKeyListener(new java.awt.event.KeyAdapter() {
                 @Override

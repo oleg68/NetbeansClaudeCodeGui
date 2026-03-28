@@ -27,7 +27,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testInitiallyHidden() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             assertFalse(panel.isVisible(), "panel should be hidden initially");
         });
     }
@@ -35,7 +35,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testShowWithOptionsCreatesButtons() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Allow?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(model, answer -> {});
@@ -53,7 +53,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testYesButtonIsGreen() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Q?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(model, answer -> {});
@@ -67,7 +67,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testNoButtonIsRed() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Q?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(model, answer -> {});
@@ -81,7 +81,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testRadioButtonForNonYesNoOption() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Q?",
                     List.of(new Option("Maybe", "3")), -1);
             panel.show(model, answer -> {});
@@ -95,21 +95,21 @@ class ChoiceMenuPanelTest {
     void testCancelAlwaysPresent() throws Exception {
         // With Yes/No only
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
             assertNotNull(findButton(panel, "Cancel"), "Cancel must be present with Yes/No options");
         });
 
         // With radio options
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
             assertNotNull(findButton(panel, "Cancel"), "Cancel must be present with radio options");
         });
 
         // Free-form
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(), -1), a -> {});
             assertNotNull(findButton(panel, "Cancel"), "Cancel must be present for free-form input");
         });
@@ -118,7 +118,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testSendAbsentWhenOnlyYesNo() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
             assertNull(findButton(panel, "Send"), "Send button must NOT be present when only Yes/No options");
         });
@@ -127,7 +127,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testSendPresentWhenOtherOptionsExist() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?",
                     List.of(new Option("Yes", "1"), new Option("Maybe", "3")), -1), a -> {});
             assertNotNull(findButton(panel, "Send"), "Send button must be present when other options exist");
@@ -137,7 +137,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testSendDisabledUntilRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
             JButton send = findButton(panel, "Send");
             assertNotNull(send, "Send must exist");
@@ -153,7 +153,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testSendEnabledWhenDefaultRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "1")), 0), a -> {});
             JButton send = findButton(panel, "Send");
             assertNotNull(send, "Send must exist");
@@ -164,7 +164,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testDefaultRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "1")), 0), a -> {});
             JRadioButton rb = findRadioButton(panel, "Maybe");
             assertNotNull(rb, "JRadioButton for Maybe must exist");
@@ -177,7 +177,7 @@ class ChoiceMenuPanelTest {
         List<String> received = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Allow?",
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(model, received::add);
@@ -194,7 +194,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testHideAfterButtonClick() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Go?", List.of(new Option("Yes", "1")), -1);
             panel.show(model, answer -> {});
 
@@ -212,7 +212,7 @@ class ChoiceMenuPanelTest {
         List<Boolean> nullReceived = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1")), -1);
             panel.show(model, answer -> {
                 if (answer == null) nullReceived.add(true);
@@ -233,7 +233,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testHideMethodHidesPanel() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1")), -1);
             panel.show(model, answer -> {});
             assertTrue(panel.isVisible());
@@ -246,7 +246,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testShowWithNoOptionsShowsSendAndCancelButtons() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Enter your response:", List.of(), -1);
             panel.show(model, answer -> {});
             assertTrue(panel.isVisible());
@@ -260,7 +260,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testCancelAndSendAreInRightCol() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Maybe", "3")), -1), a -> {});
 
             JPanel rightCol = findPanelByName(panel, "rightCol");
@@ -273,7 +273,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testCancelInRightColWhenOnlyYesNo() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             panel.show(new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
 
             JPanel rightCol = findPanelByName(panel, "rightCol");
@@ -292,7 +292,7 @@ class ChoiceMenuPanelTest {
         List<String> received = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Do you want to proceed?",
                     List.of(new Option(" Yes", "1"), new Option(" No", "3")), 0);
             panel.show(model, answer -> received.add(String.valueOf(answer)));
@@ -316,7 +316,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testTypeInputOptionRendersTextField() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
                     List.of(new Option("Option A", "1"),
                             new Option("Type something.", "2")), 0);
@@ -330,7 +330,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testTypeInputFieldDisabledByDefault() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
                     List.of(new Option("Option A", "1"),
                             new Option("Type something.", "2")), 0);
@@ -346,7 +346,7 @@ class ChoiceMenuPanelTest {
     @Test
     void testTypeInputFieldEnabledWhenRadioSelected() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
                     List.of(new Option("Option A", "1"),
                             new Option("Type something.", "2")), 0);
@@ -368,7 +368,7 @@ class ChoiceMenuPanelTest {
         // Bug 4: callback must send "TYPE:N:text" so writePtyAnswer can send the digit first
         List<String> captured = new ArrayList<>();
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             // "Type something." is option index 1 (0-based) → 1-based = 2
             ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
                     List.of(new Option("Option A", "1"),
@@ -400,7 +400,7 @@ class ChoiceMenuPanelTest {
     void testTypeInputOptionLayoutIsHorizontal() throws Exception {
         // Bug 2: text field must be in the same row as the radio button (horizontal layout)
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
                     List.of(new Option("Option A", "1"),
                             new Option("Type something.", "2")), 0);
@@ -421,7 +421,7 @@ class ChoiceMenuPanelTest {
     void testFocusTraversalOrderRadiosThenSendCancel() throws Exception {
         // Bug 3: Tab order must be: radios → Send → Cancel
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel panel = new ChoiceMenuPanel();
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Choose?",
                     List.of(new Option("Option A", "1"),
                             new Option("Option B", "2")), 0);
@@ -459,7 +459,7 @@ class ChoiceMenuPanelTest {
     @Test
     void preferredHeightAfterSplitPaneValidateCoversAllContent() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ChoiceMenuPanel choiceMenuPanel = new ChoiceMenuPanel();
+            ChoiceMenuPanel choiceMenuPanel = new ChoiceMenuPanel(() -> null);
             JPanel promptPanel = new JPanel();
             promptPanel.setVisible(false);
 

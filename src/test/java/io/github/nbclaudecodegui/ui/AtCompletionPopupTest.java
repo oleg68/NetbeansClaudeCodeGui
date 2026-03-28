@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.ui.common.AtCompletionPopup;
 import java.io.File;
 import java.lang.reflect.Method;
 import javax.swing.DefaultListModel;

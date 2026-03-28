@@ -2,7 +2,7 @@
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
-Current version: **0.14.20-SNAPSHOT**
+Current version: **0.15.24-SNAPSHOT**
 
 ---
 
@@ -26,7 +26,7 @@ mvn nbm:nbm
 The installable plugin file is created at:
 
 ```
-target/netbeans-claude-code-gui-0.14.20-SNAPSHOT.nbm
+target/netbeans-claude-code-gui-0.15.24-SNAPSHOT.nbm
 ```
 
 ### Install into NetBeans
@@ -125,6 +125,7 @@ onClaudeIdle()                  → READY
 | `controller/` | `ClaudeSessionController` — PTY lifecycle, screen polling, model switching, `parseModelDiscovery` |
 | `process/` | `ClaudeProcess` — PTY lifecycle + `settings.local.json` generation; `PtyTtyConnector` — PTY↔JediTerm bridge; `StreamJsonParser` — lightweight NDJSON parser |
 | `ui/` | `ClaudeSessionTab` — one TC per session; `ClaudePromptPanel` — passive View, implements `ClaudeSessionModelListener`; `ChoiceMenuPanel` — interactive choice UI; `FileDiffTab` + `FileDiffPermissionPanel` — diff TopComponent with permission bar; `MarkdownRenderer` — markdown→HTML |
+| `ui/common/` | Shared input components: `AtCompletionPopup` — @-triggered path popup; `AtPathHighlighter` — blue token highlight; `FileDropHandler` — DnD + Ctrl+V → @path insertion; `ShortcutMatcher` — key event → shortcut matching; `TextComponentDecorator` — wires all the above; `DecoratedTextArea/TextField`, `TextContextMenu`, `RangeHighlightable` |
 | `settings/` | `ClaudeCodePreferences` (default MCP port 28991); `ClaudeCodeOptionsPanelController` / `ClaudeCodeOptionsPanel` — Tools→Options (General + Profiles tabs); `ClaudeProfile`, `ClaudeProfileStore` — named profiles with isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy settings, and extra env vars; `ClaudeProjectProperties` — per-project profile assignment |
 | `actions/` | `ClaudeCodeAction` — toolbar button; `OpenWithClaudeAction` — project context menu |
 | `io.github.nbclaudecodegui.mcp` | `MCPSseServer` — Jetty HTTP server (`/sse`, `/messages`, `/hook`); `NetBeansMCPHandler` — MCP dispatcher + PreToolUse hook handler; reads edit mode via `ClaudeSessionModel.EDIT_MODE_REGISTRY`; `tools/` — `PermissionPromptTool`, `DiffTabTracker`, `OpenDiff`, and other IDE tools |
@@ -209,9 +210,12 @@ src/
       process/          ClaudeProcess, PtyTtyConnector, StreamJsonParser
       settings/         ClaudeCodePreferences, ClaudeCodeOptionsPanel(Controller),
                         ClaudeProfile, ClaudeProfileStore, ModelAlias, ModelAliasesDialog
-      ui/               ClaudeSessionTab, ClaudePromptPanel, PromptResponsePanel,
+      ui/               ClaudeSessionTab, ClaudePromptPanel, ChoiceMenuPanel,
                         MarkdownRenderer, HistoryDialog, FavoritesDialog, FavoritesPanel,
-                        AssignShortcutDialog, ShortcutMatcher, ClaudeSessionSelectorPanel
+                        AssignShortcutDialog, ClaudeSessionSelectorPanel
+      ui/common/        AtCompletionPopup, AtPathHighlighter, FileDropHandler,
+                        ShortcutMatcher, TextContextMenu, TextComponentDecorator,
+                        DecoratedTextArea, DecoratedTextField, RangeHighlightable
     java/org/openbeans/claude/netbeans/
                         ClaudeCodeStatusService, ClaudeCodeStatusLineElement,
                         EditorUtils, NbUtils, tools/…
@@ -244,7 +248,12 @@ src/
 | 12 | Model picker, edit-mode selector, split pane input, status bar | ✅ |
 | 13 | Named profiles: isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy, extra env vars; per-project assignment | ✅ |
 | 14 | Prompt history & favorites: persistent history (Ctrl+Up/Down), popup list, global/per-project favorites, hotkey assignment | ✅ |
-| 15 | File attachments in prompt (`@path` chips, Attach button, DnD) | planned |
+| 15 | File attachments: @path token insertion, DnD + Ctrl+V, @-completion popup, blue token highlight, `ui/common/` shared components | ✅ |
+| 16 | FileDiff location config (SESSION \| TOPLEVEL) | planned |
+| 17 | Shared input in FileDiffPermissionPanel/ChoiceMenuPanel + AcceptAll button | planned |
+| 18 | Settings + full integration (auto-start, CLI path, send key) | planned |
+| 19 | GitHub CI/CD + NBM publishing | planned |
+| 20 | Help + user documentation | planned |
 
 ---
 

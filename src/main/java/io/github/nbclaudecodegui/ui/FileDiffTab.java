@@ -1,9 +1,11 @@
 package io.github.nbclaudecodegui.ui;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
 import java.io.Writer;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -130,6 +132,22 @@ public final class FileDiffTab {
             // firing again when diffTC.close() triggers componentClosed().
             AtomicBoolean decided = new AtomicBoolean(false);
 
+            // Look up the session whose working directory matches the file being edited.
+            // confirmedDir != null (hook case): use exact directory match.
+            // confirmedDir == null (MCP case): fall back to isFileUnderDirectory.
+            final ClaudeSessionTab sessionTab = WindowManager.getDefault().getRegistry().getOpened().stream()
+                    .map(tc -> {
+                        if (!(tc instanceof ClaudeSessionTab s)) return null;
+                        File dir = s.getWorkingDirectory();
+                        if (dir == null) return null;
+                        String abs = dir.getAbsolutePath();
+                        return (confirmedDir != null ? abs.equals(confirmedDir)
+                                : isFileUnderDirectory(filePath, abs)) ? s : null;
+                    })
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+
             TopComponent diffTC = new TopComponent() {
                 @Override
                 public void componentClosed() {
@@ -142,6 +160,10 @@ public final class FileDiffTab {
             };
             diffTC.setDisplayName(tabName);
             diffTC.setLayout(new java.awt.BorderLayout());
+
+            String workingDir = sessionTab != null && sessionTab.getWorkingDirectory() != null
+                    ? sessionTab.getWorkingDirectory().getAbsolutePath()
+                    : null;
 
             FileDiffPermissionPanel permPanel = new FileDiffPermissionPanel(
                 () -> {
@@ -156,12 +178,20 @@ public final class FileDiffTab {
                     diffTC.close();
                     activateSessionForFile(filePath);
                 },
-                () -> {
+                sessionTab == null ? null : () -> {
+                    sessionTab.setEditMode("acceptEdits");
+                    decided.set(true);
+                    onAccept.run();
+                    diffTC.close();
+                    activateSessionForFile(filePath);
+                },
+                sessionTab == null ? null : () -> {
                     decided.set(true);
                     onCancel.run();
                     diffTC.close();
                     activateSessionForFile(filePath);
-                }
+                },
+                workingDir
             );
 
             // Keep the DiffView's own navigation toolbar (prev/next difference buttons)
