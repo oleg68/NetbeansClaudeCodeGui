@@ -1,0 +1,12 @@
+{
+  "text": "Для пункта 4 (вставка проектов и пакетов): каким триггером пользователь вставляет проекты и пакеты?",
+  "options": [
+    {"display": "Через @-completion", "response": "1", "description": "Проекты и пакеты появляются в popup при вводе @ наряду с файлами"},
+    {"display": "Drag-and-drop из дерева", "response": "2", "description": "Перетаскивание узлов проектов/пакетов из Project Explorer в input area"},
+    {"display": "Оба способа", "response": "3", "description": "И через @-completion popup, и через drag-and-drop из дерева проектов"},
+    {"display": "Type something.", "response": "4"},
+    {"display": "Chat about this", "response": "5"},
+    {"display": "Skip interview and plan immediately", "response": "6"}
+  ],
+  "defaultOptionIndex": 0
+}

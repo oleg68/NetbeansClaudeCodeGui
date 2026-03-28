@@ -29,7 +29,7 @@
 
      Esc to cancel · Tab to amend · ctrl+e to explain
     ```
-- [ ] Не появилось choice-меню
+- [x] Не появилось choice-меню (v0.15.28: fixture added — detector works correctly, was a timing/render issue)
     ```
     ● Read 2 files (ctrl+o to expand)                                                                                                                                                                                                    
 
@@ -54,7 +54,7 @@
     Enter to select · Tab/Arrow keys to navigate · Esc to cancel
     ```
 
-- [ ] ложное срабатывание меню, когда перечисление - процитированный промпт, и есть новый маркер ввода
+- [x] ложное срабатывание меню, когда перечисление - процитированный промпт, и есть новый маркер ввода (v0.15.28: guard — separator below last option with no option lines below it → return empty)
     ```
     ❯ /clear                                                                                                                                                                                                                             
       ⎿  (no content)
@@ -77,7 +77,7 @@
     ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       ⏸ plan mode on (shift+tab to cycle) · esc to interrupt                                                                                             ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code  
     ```
-- [ ] Не сработало choice menu
+- [x] Не сработало choice menu (v0.15.28: fixture added — detector works correctly, was a timing/render issue)
     ```
     ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
      Claude has written up a plan and is ready to execute. Would you like to proceed?

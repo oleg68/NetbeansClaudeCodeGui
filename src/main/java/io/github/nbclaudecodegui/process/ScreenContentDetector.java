@@ -207,6 +207,24 @@ public final class ScreenContentDetector {
         }
         if (!hasCursor) return Optional.empty();
 
+        // Guard: if a separator line exists below the last option, a real menu always has
+        // at least one option line below that separator (e.g. "6. Chat about this" in
+        // interview-style menus). An echoed user prompt has no options below the separator
+        // that frames the input prompt ❯. Applies only when a separator is actually found.
+        int firstSepBelow = -1;
+        for (int i = lastOptionRow + 1; i < screenLines.size(); i++) {
+            if (isSeparatorLine(screenLines.get(i).trim())) { firstSepBelow = i; break; }
+        }
+        if (firstSepBelow >= 0) {
+            boolean hasOptionBelowSep = false;
+            for (int i = firstSepBelow + 1; i < screenLines.size(); i++) {
+                if (OPTION_LINE.matcher(screenLines.get(i).trim()).matches()) {
+                    hasOptionBelowSep = true; break;
+                }
+            }
+            if (!hasOptionBelowSep) return Optional.empty();
+        }
+
         if (ClaudeCodePreferences.isDebugMode()) {
             LOG.info(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
         }

@@ -1,0 +1,10 @@
+❯ 1. First task to do
+2. Second task to do
+3. Third task to do
+
+● Some Claude output here
+
+───────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle) · esc to interrupt

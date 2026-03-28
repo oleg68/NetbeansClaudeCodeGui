@@ -1,0 +1,19 @@
+❯ /clear
+  ⎿  (no content)
+
+❯ 1. Свой проект вставляется как пусто. Вставлять как аттач "@./"
+2. DND пакетов запрещён. Нужно разрешить.
+3. Порядок: bump - тесты - воспроизведение - исправление - успешные тесты - сборка
+
+● Explore(Explore attached files and @-completion features)
+  ⎿  Done (13 tool uses · 63.3k tokens · 48s)
+
+● Reading 1 file… (ctrl+o to expand)
+  ⎿  src/main/java/io/github/nbclaudecodegui/ui/FileDropHandler.java
+
+✢ Herding… (1m 26s · ↓ 3.9k tokens · thinking with low effort)
+
+───────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────
+  ⏸ plan mode on (shift+tab to cycle) · esc to interrupt
