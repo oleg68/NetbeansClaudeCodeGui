@@ -42,8 +42,8 @@ public final class PromptFavoritesStore {
     private final Path         globalFile;
     private final ObjectMapper mapper;
 
-    /** Package-private for tests. */
-    PromptFavoritesStore(Path projectFile, Path globalFile) {
+    /** Visible for tests — use {@link #getInstance(Path)} in production code. */
+    public PromptFavoritesStore(Path projectFile, Path globalFile) {
         this.projectFile = projectFile;
         this.globalFile  = globalFile;
         mapper = new ObjectMapper();
@@ -54,6 +54,12 @@ public final class PromptFavoritesStore {
 
     /**
      * Returns (or creates) the store for the given working directory.
+     *
+     * <p><b>Note for tests:</b> the global file always resolves to the real user path
+     * (see {@link #resolveGlobalFile()}), regardless of {@code workingDir}.
+     * Tests that call {@link #addGlobal} must use the package-private constructor
+     * {@code new PromptFavoritesStore(projectFile, globalFile)} with both paths
+     * inside a temp directory.
      *
      * @param workingDir absolute path of the working directory
      * @return store instance

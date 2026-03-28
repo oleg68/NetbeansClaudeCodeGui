@@ -32,7 +32,9 @@ class ShortcutMatcherTest {
     void setUp() throws Exception {
         inputArea = new JTextArea();
 
-        store = PromptFavoritesStore.getInstance(tempDir);
+        store = new PromptFavoritesStore(
+                tempDir.resolve("favorites.json"),
+                tempDir.resolve("global-favorites.json"));
 
         // Register a two-key shortcut: Ctrl+K Ctrl+F → "Hello"
         FavoriteEntry entry = new FavoriteEntry("Hello", UUID.randomUUID(), "Ctrl+K Ctrl+F",

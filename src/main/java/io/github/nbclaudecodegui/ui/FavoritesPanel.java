@@ -2,10 +2,21 @@ package io.github.nbclaudecodegui.ui;
 
 import io.github.nbclaudecodegui.model.FavoriteEntry;
 import io.github.nbclaudecodegui.model.PromptFavoritesStore;
+import io.github.nbclaudecodegui.ui.common.BasicTextContextMenu;
+import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Window;
+import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
+import javax.swing.JButton;
+import javax.swing.JDialog;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
 
@@ -98,11 +109,71 @@ public abstract class FavoritesPanel extends PromptListPanel {
         int row = singleSelectedRow();
         if (row < 0 || row >= currentEntries.size()) return;
         FavoriteEntry entry = currentEntries.get(row);
-        String newText = JOptionPane.showInputDialog(dialogParent, "Edit text:", entry.getText());
+        String newText = showMultiLineEditDialog(dialogParent, entry.getText());
         if (newText == null || newText.isBlank()) return;
         entry.setText(newText.trim());
         store.update(entry);
         refreshTable();
+    }
+
+    /**
+     * Shows a modal multi-line edit dialog.
+     *
+     * @param parent      component used to determine dialog owner and position
+     * @param initialText initial text to populate in the text area
+     * @return trimmed text if the user confirmed, or {@code null} if cancelled
+     */
+    protected String showMultiLineEditDialog(Component parent, String initialText) {
+        Window owner = SwingUtilities.getWindowAncestor(parent);
+        JDialog dialog = new JDialog(owner, "Edit favorite", java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        JTextArea textArea = new JTextArea(initialText, 8, 40);
+        BasicTextContextMenu.attach(textArea);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        JScrollPane scroll = new JScrollPane(textArea);
+
+        String[] result = {null};
+
+        JButton okBtn = new JButton("OK");
+        JButton cancelBtn = new JButton("Cancel");
+
+        okBtn.addActionListener(e -> {
+            String text = textArea.getText().trim();
+            if (!text.isBlank()) result[0] = text;
+            dialog.dispose();
+        });
+        cancelBtn.addActionListener(e -> dialog.dispose());
+
+        // Ctrl+Enter → confirm
+        textArea.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, java.awt.event.InputEvent.CTRL_DOWN_MASK), "confirm");
+        textArea.getActionMap().put("confirm", new javax.swing.AbstractAction() {
+            @Override public void actionPerformed(java.awt.event.ActionEvent e) { okBtn.doClick(); }
+        });
+
+        // Escape → cancel
+        dialog.getRootPane().registerKeyboardAction(e -> dialog.dispose(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW);
+
+        dialog.getRootPane().setDefaultButton(okBtn);
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 4));
+        btnPanel.add(cancelBtn);
+        btnPanel.add(okBtn);
+
+        JPanel content = new JPanel(new BorderLayout(4, 4));
+        content.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 4, 8));
+        content.add(scroll, BorderLayout.CENTER);
+        content.add(btnPanel, BorderLayout.SOUTH);
+
+        dialog.setContentPane(content);
+        dialog.pack();
+        dialog.setLocationRelativeTo(parent);
+        dialog.setVisible(true);
+
+        return result[0];
     }
 
     /**

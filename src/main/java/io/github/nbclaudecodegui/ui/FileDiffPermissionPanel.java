@@ -43,6 +43,9 @@ public final class FileDiffPermissionPanel extends JPanel {
     /** \u2713 CHECK MARK — used on confirmation buttons (Accept, Yes) */
     public static final String ICON_ACCEPT = "\u2713";
 
+    /** Double check mark — used on AcceptAll button */
+    private static final String ICON_ACCEPT_ALL = ICON_ACCEPT + ICON_ACCEPT;
+
     /** \u2717 BALLOT X — used on decline buttons (Decline, No) */
     public static final String ICON_DECLINE = "\u2717";
 
@@ -63,21 +66,10 @@ public final class FileDiffPermissionPanel extends JPanel {
 
         final String wdFinal = workingDir;
 
-        // AcceptAll button (dark green)
-        JButton acceptAllBtn = new JButton(ICON_ACCEPT + " AcceptAll");
+        // AcceptAll button
+        JButton acceptAllBtn = new JButton(ICON_ACCEPT_ALL + " AcceptAll");
         acceptAllBtn.setToolTipText("Accept all future changes in this session (sets edit mode to Accept on Edit)");
-        acceptAllBtn.setOpaque(true);
-        acceptAllBtn.setBackground(new Color(0, 100, 0));
-        acceptAllBtn.setForeground(Color.WHITE);
         acceptAllBtn.setEnabled(onAcceptAll != null);
-        acceptAllBtn.addFocusListener(new java.awt.event.FocusAdapter() {
-            @Override public void focusGained(java.awt.event.FocusEvent e) {
-                if (acceptAllBtn.isEnabled()) acceptAllBtn.setBackground(new Color(0, 100, 0).brighter());
-            }
-            @Override public void focusLost(java.awt.event.FocusEvent e) {
-                acceptAllBtn.setBackground(new Color(0, 100, 0));
-            }
-        });
 
         // Accept button (green)
         JButton acceptBtn = new JButton(ICON_ACCEPT + " Accept");

@@ -77,14 +77,25 @@
     ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       ⏸ plan mode on (shift+tab to cycle) · esc to interrupt                                                                                             ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code  
     ```
+- [ ] Не сработало choice menu
+    ```
+    ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+     Claude has written up a plan and is ready to execute. Would you like to proceed?
 
+     ❯ 1. Yes, clear context (39% used) and auto-accept edits
+       2. Yes, auto-accept edits
+       3. Yes, manually approve edits
+       4. Type here to tell Claude what to change
+
+     ctrl-g to edit in nano · ~/.claude/plans/tranquil-roaming-forest.md
+    ```
 - [x] Stage 15 input panel fixes (v0.15.1):
   - Fix: plain-text Ctrl+V broken — FileDropHandler.canImport/doImport now handles stringFlavor
   - UX: Remove Attach button (DnD/clipboard sufficient)
   - UX: @-completion shows one directory level at a time; ".." always present; Enter on dir navigates in; Space completes as file; Enter on file completes with trailing space
   - UX: @path tokens rendered in foreground color (blue text) instead of background highlight
 
-- [ ] Compilation warnings
+- [x] Compilation warnings
 
 # Features
 

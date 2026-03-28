@@ -225,6 +225,17 @@ class FileDiffPermissionPanelTest {
     }
 
     @Test
+    void acceptAllButtonTextContainsDoubleCheckMark() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            FileDiffPermissionPanel panel = new FileDiffPermissionPanel(() -> {}, reason -> {}, () -> {}, () -> {}, null);
+            JButton acceptAll = findButton(panel, "AcceptAll");
+            assertNotNull(acceptAll, "AcceptAll button must exist");
+            assertTrue(acceptAll.getText().contains("\u2713\u2713"),
+                    "AcceptAll button text must contain double check mark \u2713\u2713, got: " + acceptAll.getText());
+        });
+    }
+
+    @Test
     void acceptAllButtonCallsOnAcceptAll() throws Exception {
         List<String> fired = new ArrayList<>();
         SwingUtilities.invokeAndWait(() -> {
