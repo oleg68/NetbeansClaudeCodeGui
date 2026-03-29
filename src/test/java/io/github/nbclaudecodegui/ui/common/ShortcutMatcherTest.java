@@ -1,4 +1,4 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.ui.common;
 
 import io.github.nbclaudecodegui.model.FavoriteEntry;
 import io.github.nbclaudecodegui.model.PromptFavoritesStore;

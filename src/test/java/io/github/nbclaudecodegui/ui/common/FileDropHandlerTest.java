@@ -1,4 +1,4 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.ui.common;
 
 import io.github.nbclaudecodegui.ui.common.FileDropHandler;
 import java.awt.image.BufferedImage;

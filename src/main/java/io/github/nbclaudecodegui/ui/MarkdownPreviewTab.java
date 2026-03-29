@@ -3,6 +3,7 @@ package io.github.nbclaudecodegui.ui;
 import java.awt.BorderLayout;
 import javax.swing.JEditorPane;
 import javax.swing.JScrollPane;
+import io.github.nbclaudecodegui.ui.common.MarkdownRenderer;
 import org.openide.filesystems.FileObject;
 import org.openide.windows.TopComponent;
 

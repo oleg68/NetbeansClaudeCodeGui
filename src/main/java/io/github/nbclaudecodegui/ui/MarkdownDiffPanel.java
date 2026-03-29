@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.ui.common.MarkdownRenderer;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;

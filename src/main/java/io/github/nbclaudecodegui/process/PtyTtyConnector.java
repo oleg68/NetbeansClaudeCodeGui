@@ -91,10 +91,8 @@ public final class PtyTtyConnector implements TtyConnector {
                         String stripped = ANSI_PATTERN.matcher(expanded).replaceAll("").trim();
                         lineBuffer.setLength(0);
                         if (!stripped.isEmpty()) {
-                            if (ClaudeCodePreferences.isDebugMode()) {
-                                LOG.info(tag + "[PTY raw] " + raw.replace("\u001B", "<ESC>"));
-                                LOG.info(tag + "[PTY stripped] " + stripped);
-                            }
+                            LOG.fine(tag + "[PTY raw] " + raw.replace("\u001B", "<ESC>"));
+                            LOG.fine(tag + "[PTY stripped] " + stripped);
                             Consumer<String> l = lineListener;
                             if (l != null) l.accept(stripped);
                         }
@@ -135,9 +133,7 @@ public final class PtyTtyConnector implements TtyConnector {
 
     @Override
     public void resize(Dimension termWinSize) {
-        if (ClaudeCodePreferences.isDebugMode()) {
-            LOG.info(tag + "[PTY resize] cols=" + termWinSize.width + " rows=" + termWinSize.height);
-        }
+        LOG.fine(tag + "[PTY resize] cols=" + termWinSize.width + " rows=" + termWinSize.height);
         if (process.isAlive()) {
             process.setWinSize(
                     new WinSize(termWinSize.width, termWinSize.height));

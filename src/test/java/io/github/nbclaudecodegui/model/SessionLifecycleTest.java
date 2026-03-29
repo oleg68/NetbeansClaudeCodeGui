@@ -1,4 +1,4 @@
-package io.github.nbclaudecodegui.ui;
+package io.github.nbclaudecodegui.model;
 
 import io.github.nbclaudecodegui.model.SessionLifecycle;
 import org.junit.jupiter.api.Test;

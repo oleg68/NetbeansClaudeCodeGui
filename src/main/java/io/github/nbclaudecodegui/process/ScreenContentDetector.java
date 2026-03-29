@@ -225,9 +225,7 @@ public final class ScreenContentDetector {
             if (!hasOptionBelowSep) return Optional.empty();
         }
 
-        if (ClaudeCodePreferences.isDebugMode()) {
-            LOG.info(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
-        }
+        LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
         return Optional.of(new ChoiceMenuModel(question, options, 0));
     }
 

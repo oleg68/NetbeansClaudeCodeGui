@@ -175,9 +175,7 @@ public final class ClaudeSessionController {
         screenContentDetector.setSessionTag(tag);
 
         connector.setLineListener(line -> {
-            if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info(tag + "[PTY line] " + line);
-            }
+            LOG.fine(tag + "[PTY line] " + line);
             synchronized (recentPtyLines) {
                 recentPtyLines.addLast(line);
                 if (recentPtyLines.size() > PTY_LINE_BUFFER_SIZE) {
@@ -190,9 +188,7 @@ public final class ClaudeSessionController {
             }
             SwingUtilities.invokeLater(() -> {
                 promptFlushTimer.restart();
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(tag + "[timer] restart, running=" + promptFlushTimer.isRunning());
-                }
+                LOG.fine(tag + "[timer] restart, running=" + promptFlushTimer.isRunning());
             });
         });
 
@@ -340,17 +336,13 @@ public final class ClaudeSessionController {
     public void writePtyAnswer(String answer) {
         try {
             if (answer == null) {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info("[PTY write] \\x1b (Cancel/ESC)");
-                }
+                LOG.fine("[PTY write] \\x1b (Cancel/ESC)");
                 sendCancelToPty(new byte[]{0x1b});
             } else if (answer.startsWith("TYPE:")) {
                 int sep = answer.indexOf(':', 5);
                 String digit = answer.substring(5, sep);
                 String text = answer.substring(sep + 1);
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info("[PTY write] type-input digit=" + digit + " text=" + text);
-                }
+                LOG.fine("[PTY write] type-input digit=" + digit + " text=" + text);
                 Thread t = new Thread(() -> {
                     try {
                         connector.write(digit);
@@ -369,9 +361,7 @@ public final class ClaudeSessionController {
             } else {
                 boolean isMenuDigit = answer.matches("[0-9]");
                 String toWrite = isMenuDigit ? answer : answer + "\r";
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info("[PTY write] " + toWrite.replace("\r", "\\r").replace("\n", "\\n"));
-                }
+                LOG.fine("[PTY write] " + toWrite.replace("\r", "\\r").replace("\n", "\\n"));
                 connector.write(toWrite);
             }
         } catch (IOException ex) {
@@ -611,16 +601,12 @@ public final class ClaudeSessionController {
             Optional<ChoiceMenuModel> menuOpt = screenContentDetector.detectChoiceMenu(lines);
             if (model.getActiveChoiceMenu() == null) {
                 menuOpt.ifPresent(m -> {
-                    if (ClaudeCodePreferences.isDebugMode()) {
-                        LOG.info("[pollScreenState] setting choice menu: \"" + m.text() + "\"");
-                    }
+                    LOG.fine("[pollScreenState] setting choice menu: \"" + m.text() + "\"");
                     model.setActiveChoiceMenu(m);
                 });
             } else if (menuOpt.isEmpty() && !screenContentDetector.detectYesNoPrompt(lines)) {
                 // Menu was set but no longer on screen and no Y/n fallback — clear it.
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info("[pollScreenState] menu gone from screen, dismissing");
-                }
+                LOG.fine("[pollScreenState] menu gone from screen, dismissing");
                 model.clearChoiceMenu();
             }
         }
@@ -655,33 +641,29 @@ public final class ClaudeSessionController {
      * If no menu is active and the screen shows one, the model is updated (show path).
      */
     void flushPendingPrompt() {
-        if (ClaudeCodePreferences.isDebugMode()) {
-            LOG.info("[flushPendingPrompt] enter, modelDiscoveryInProgress=" + modelDiscoveryInProgress);
-        }
+        LOG.fine("[flushPendingPrompt] enter, modelDiscoveryInProgress=" + modelDiscoveryInProgress);
         if (modelDiscoveryInProgress) return;
 
         Optional<ChoiceMenuModel> req = Optional.empty();
         List<String> lines = screenLines.get();
         boolean screenBlank = lines.isEmpty()
                 || lines.stream().allMatch(s -> s.trim().isEmpty());
-        if (ClaudeCodePreferences.isDebugMode()) {
-            long nonBlank = lines.stream().filter(s -> !s.trim().isEmpty()).count();
-            LOG.info("[screen prompt flush] screenLines.size()=" + lines.size()
-                    + " nonBlank=" + nonBlank + " screenBlank=" + screenBlank
-                    + (lines.size() > 0 && nonBlank == 0 && !lines.isEmpty()
-                       ? " firstLineLen=" + lines.get(0).length()
-                         + " firstLineChars=" + (lines.get(0).length() > 0
-                             ? String.format("0x%04x", (int) lines.get(0).charAt(0)) : "N/A")
-                       : ""));
-        }
+        long nonBlank = lines.stream().filter(s -> !s.trim().isEmpty()).count();
+        LOG.fine("[screen prompt flush] screenLines.size()=" + lines.size()
+                + " nonBlank=" + nonBlank + " screenBlank=" + screenBlank
+                + (lines.size() > 0 && nonBlank == 0 && !lines.isEmpty()
+                   ? " firstLineLen=" + lines.get(0).length()
+                     + " firstLineChars=" + (lines.get(0).length() > 0
+                         ? String.format("0x%04x", (int) lines.get(0).charAt(0)) : "N/A")
+                   : ""));
         if (screenBlank) {
             // JediTerm screen buffer is empty or cleared (ESC[2J).
             // Fall back to the rolling PTY line buffer for prompt detection.
             synchronized (recentPtyLines) {
                 lines = new java.util.ArrayList<>(recentPtyLines);
             }
-            if (ClaudeCodePreferences.isDebugMode() && !lines.isEmpty()) {
-                LOG.info("[screen prompt flush] screen blank, using PTY buffer (" + lines.size() + " lines)");
+            if (!lines.isEmpty()) {
+                LOG.fine("[screen prompt flush] screen blank, using PTY buffer (" + lines.size() + " lines)");
             }
         }
         if (!lines.isEmpty()) {
@@ -695,14 +677,10 @@ public final class ClaudeSessionController {
                 if (!lines.isEmpty() && screenContentDetector.detectYesNoPrompt(lines)) {
                     return;
                 }
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info("[screen prompt] menu gone from screen, dismissing");
-                }
+                LOG.fine("[screen prompt] menu gone from screen, dismissing");
                 model.clearChoiceMenu();
             } else {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info("[screen prompt] menu still on screen, keeping (req=" + req.get().text() + ")");
-                }
+                LOG.fine("[screen prompt] menu still on screen, keeping (req=" + req.get().text() + ")");
             }
             return;
         }
@@ -718,17 +696,13 @@ public final class ClaudeSessionController {
                             new ChoiceMenuModel.Option("Yes", "y"),
                             new ChoiceMenuModel.Option("No", "n")),
                     0);
-            if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info("[screen prompt flush] Y/n prompt detected: \"" + question + "\"");
-            }
+            LOG.fine("[screen prompt flush] Y/n prompt detected: \"" + question + "\"");
             model.setActiveChoiceMenu(synthetic);
             return;
         }
 
         req.ifPresent(r -> {
-            if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info("[screen prompt flush] setting choice menu: \"" + r.text() + "\" | options=" + r.options());
-            }
+            LOG.fine("[screen prompt flush] setting choice menu: \"" + r.text() + "\" | options=" + r.options());
             model.setActiveChoiceMenu(r);
         });
     }

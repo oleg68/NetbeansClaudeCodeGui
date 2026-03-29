@@ -418,9 +418,7 @@ public class ClaudeSessionTab extends TopComponent
             LOG.fine(sessionTag + "[onChoiceMenuChanged] showing menu: \"" + menu.text()
                     + "\" EDT=" + SwingUtilities.isEventDispatchThread());
             choiceMenuPanel.show(menu, answer -> {
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[PTY prompt answer] " + answer);
-                }
+                LOG.fine(sessionTag + "[PTY prompt answer] " + answer);
                 SwingUtilities.invokeLater(() -> switchSouthCard(CARD_PROMPT));
                 revalidate();
                 repaint();
@@ -632,10 +630,8 @@ public class ClaudeSessionTab extends TopComponent
                             .getInt(getSavedCardKey(), southCard.getPreferredSize().height);
                 }
                 int divLoc = total - splitPane.getDividerSize() - bottom;
-                if (ClaudeCodePreferences.isDebugMode()) {
-                    LOG.info(sessionTag + "[splitPane resize] total=" + total
-                            + " bottom=" + bottom + " divLoc=" + divLoc);
-                }
+                LOG.fine(sessionTag + "[splitPane resize] total=" + total
+                        + " bottom=" + bottom + " divLoc=" + divLoc);
                 splitPane.setDividerLocation(divLoc);
             }
         });
