@@ -64,7 +64,6 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   │   ├── ChoiceMenuPanel.java            # Interactive choice UI (ChoiceMenuModel → buttons)
     │   │   ├── FileDiffPermissionPanel.java    # [✓ Accept][✗ Reject][reason][Cancel]
     │   │   ├── FileDiffTab.java                # Diff TopComponent + PermissionPanel; shared by hook and MCP
-    │   │   ├── MarkdownRenderer.java           # Markdown → HTML
     │   │   ├── HistoryDialog.java              # Popup: history list with Send/Favorite/Delete
     │   │   ├── FavoritesDialog.java            # Popup: favorites list with Send/Move/Rename/Delete/Reorder
     │   │   ├── FavoritesPanel.java             # Reusable panel used inside FavoritesDialog
@@ -76,6 +75,7 @@ NetbeansClaudeCodePlugin/          ← repository root
     │   │       ├── DecoratedTextArea.java      # JTextArea subclass wired to TextComponentDecorator
     │   │       ├── DecoratedTextField.java     # JTextField subclass wired to TextComponentDecorator
     │   │       ├── FileDropHandler.java        # DnD + Ctrl+V → inserts @path tokens at caret
+    │   │       ├── MarkdownRenderer.java       # Markdown → HTML
     │   │       ├── RangeHighlightable.java     # Interface: applyHighlights(List<Range>)
     │   │       ├── ShortcutMatcher.java        # Match key events to registered shortcuts; suppress KEY_TYPED after match
     │   │       ├── TextComponentDecorator.java # Wires FileDropHandler + AtCompletionPopup + AtPathHighlighter + TextContextMenu
@@ -469,36 +469,24 @@ Extra environment variables
 | `ui/common/RangeHighlightable.java` | Interface: `applyHighlights(List<Range>)` |
 | `ui/ClaudePromptPanel.java` | Uses `DecoratedTextArea`; sends textarea text as-is (no chip prepend); Attach button → JFileChooser |
 
-**Tests:** `AtCompletionPopupTest`, `AtPathHighlighterTest`, `FileDropHandlerTest`, `ShortcutMatcherTest`, `ClaudePromptPanelSendTest`
+**Tests** (all in `test/ui/common/`): `AtCompletionPopupTest`, `AtPathHighlighterTest`, `FileDropHandlerTest`, `ShortcutMatcherTest`, `MarkdownRendererTest`; `ClaudePromptPanelSendTest` in `test/ui/`
 
 ---
 
-### Stage 16 — FileDiff location config (planned)
+### Stage 16 — FileDiff location config ✅
 
 **Goal:** allow the user to choose whether FileDiff appears embedded in the session window or in a separate TopComponent (current behaviour).
 
-**What to add:**
-- New key in `ClaudeCodePreferences`: `diffLocation = SESSION | TOPLEVEL`
-- `FileDiffTab.open()` reads the setting and picks the display mode accordingly
+**What was added:**
+- Boolean preference `openDiffInSeparateTab` (default `false`) in `ClaudeCodePreferences`
+- `FileDiffTab.open()` reads the setting and picks inline panel vs. separate TopComponent
+- Checkbox in `ClaudeCodeOptionsPanel` ("Open diff in separate tab")
 
 **Files:** `ClaudeCodePreferences.java`, `FileDiffTab.java`, `ClaudeCodeOptionsPanel.java`
 
 ---
 
-### Stage 17 — Shared input in permission/choice panels (planned)
-
-**Goal:** bring file attachment and shortcut features to `FileDiffPermissionPanel` and `ChoiceMenuPanel`; add AcceptAll.
-
-**What to add:**
-- `FileDiffPermissionPanel` reject-reason field: `DecoratedTextField` with DnD, @-completion, context menu
-- `ChoiceMenuPanel`: DnD support
-- **AcceptAll** button → sets `editModeCombo` to `acceptEdits`
-
-**Files:** `ui/FileDiffPermissionPanel.java`, `ui/ChoiceMenuPanel.java`, `ui/ClaudePromptPanel.java`
-
----
-
-### Stage 18 — Settings + full integration (planned)
+### Stage 17 — Settings + full integration (planned)
 
 **Goal:** settings drive plugin behaviour; session lifecycle management.
 
@@ -513,7 +501,7 @@ Extra environment variables
 
 ---
 
-### Stage 19 — GitHub CI/CD + NBM publishing (planned)
+### Stage 18 — GitHub CI/CD + NBM publishing (planned)
 
 **Goal:** automated build and release publishing.
 
@@ -525,7 +513,7 @@ Extra environment variables
 
 ---
 
-### Stage 20 — Help + user documentation (planned)
+### Stage 19 — Help + user documentation (planned)
 
 **Goal:** built-in help and end-user documentation.
 

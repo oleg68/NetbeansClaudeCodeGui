@@ -130,11 +130,10 @@ Closing a session window while a PTY process is running shows a confirmation dia
 | 13 | Named profiles: isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy, extra env vars; per-project assignment | ✅ |
 | 14 | Prompt history & favorites: persistent history (Ctrl+Up/Down), popup list, global/per-project favorites, hotkey assignment | ✅ |
 | 15 | File attachments: @path token insertion, DnD + Ctrl+V, @-completion popup, blue token highlight, `ui/common/` shared components | ✅ |
-| 16 | FileDiff location config (SESSION \| TOPLEVEL) | planned |
-| 17 | Shared input in FileDiffPermissionPanel/ChoiceMenuPanel + AcceptAll button | planned |
-| 18 | Settings + full integration (auto-start, CLI path, send key) | planned |
-| 19 | GitHub CI/CD + NBM publishing | planned |
-| 20 | Help + user documentation | planned |
+| 16 | FileDiff location config: inline panel or separate tab (boolean preference) | ✅ |
+| 17 | Settings + full integration (auto-start, CLI path, send key) | planned |
+| 18 | GitHub CI/CD + NBM publishing | planned |
+| 19 | Help + user documentation | planned |
 
 ---
 
