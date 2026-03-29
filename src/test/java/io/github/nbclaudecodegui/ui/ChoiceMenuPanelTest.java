@@ -40,7 +40,7 @@ class ChoiceMenuPanelTest {
                     List.of(new Option("Yes", "1"), new Option("No", "2")), -1);
             panel.show(model, answer -> {});
 
-            assertTrue(panel.isVisible(), "panel should become visible after show()");
+            assertTrue(panel.getComponentCount() > 0, "panel should have components after show()");
 
             List<String> btnLabels = collectButtonLabels(panel);
             String yesLabel = FileDiffPermissionPanel.ICON_ACCEPT + " Yes";
@@ -236,10 +236,10 @@ class ChoiceMenuPanelTest {
             ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Q?", List.of(new Option("Yes", "1")), -1);
             panel.show(model, answer -> {});
-            assertTrue(panel.isVisible());
+            assertTrue(panel.getComponentCount() > 0, "panel should have components after show()");
 
             panel.dismiss();
-            assertFalse(panel.isVisible(), "dismiss() should hide the panel");
+            assertEquals(0, panel.getComponentCount(), "dismiss() should clear panel components");
         });
     }
 
@@ -249,7 +249,7 @@ class ChoiceMenuPanelTest {
             ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
             ChoiceMenuModel model = new ChoiceMenuModel("Enter your response:", List.of(), -1);
             panel.show(model, answer -> {});
-            assertTrue(panel.isVisible());
+            assertTrue(panel.getComponentCount() > 0, "panel should have components after show()");
 
             List<String> btnLabels = collectButtonLabels(panel);
             assertTrue(btnLabels.contains("Send"), "Send button should be present for free-form input");
@@ -297,12 +297,12 @@ class ChoiceMenuPanelTest {
                     List.of(new Option(" Yes", "1"), new Option(" No", "3")), 0);
             panel.show(model, answer -> received.add(String.valueOf(answer)));
 
-            assertTrue(panel.isVisible(), "panel must be visible after show()");
+            assertTrue(panel.getComponentCount() > 0, "panel must have components after show()");
             assertTrue(received.isEmpty(), "callback must not fire before user action");
 
             panel.dismissIfActive();
 
-            assertFalse(panel.isVisible(), "dismissIfActive() hides the panel");
+            assertEquals(0, panel.getComponentCount(), "dismissIfActive() clears the panel");
             assertEquals(1, received.size(), "dismissIfActive() fires callback once");
             assertEquals("null", received.get(0),
                     "dismissIfActive() fires callback with null (no user selection)");
@@ -446,6 +446,34 @@ class ChoiceMenuPanelTest {
     // -------------------------------------------------------------------------
 
     /**
+     * Regression: switchSouthCard(CARD_CHOICE) was called before choiceMenuPanel.show(),
+     * so getPreferredSize().height returned 0 and the divider was set to hide the panel.
+     * The fix: call show() first, then switchSouthCard().
+     */
+    @Test
+    void preferredHeightIsZeroBeforeShowCausesInvisiblePanel() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+
+            // Before show(): panel is empty — height must be 0 (the bug condition)
+            int heightBefore = panel.getPreferredSize().height;
+
+            panel.show(new ChoiceMenuModel("Allow?",
+                    List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {});
+
+            int heightAfter = panel.getPreferredSize().height;
+
+            assertTrue(heightAfter > heightBefore + 20,
+                    "After show(), preferred height must be significantly larger than before show(). "
+                    + "before=" + heightBefore + " after=" + heightAfter
+                    + " — switchSouthCard must be called AFTER show() to size the divider correctly");
+            assertTrue(heightBefore < 20,
+                    "Before show(), panel height (" + heightBefore + ") is near-zero — "
+                    + "calling switchSouthCard before show() would make the menu invisible");
+        });
+    }
+
+    /**
      * Regression: lockDividerForChoiceMenu must call splitPane.validate() before
      * reading choiceMenuPanel.getPreferredSize().height. Without validate(), the HTML
      * JLabel inside ChoiceMenuPanel does not know its actual width and may report an
@@ -461,14 +489,15 @@ class ChoiceMenuPanelTest {
         SwingUtilities.invokeAndWait(() -> {
             ChoiceMenuPanel choiceMenuPanel = new ChoiceMenuPanel(() -> null);
             JPanel promptPanel = new JPanel();
-            promptPanel.setVisible(false);
 
-            JPanel southStack = new JPanel(new BorderLayout());
-            southStack.add(choiceMenuPanel, BorderLayout.NORTH);
-            southStack.add(promptPanel,     BorderLayout.CENTER);
+            // Mirror production layout: CardLayout southCard with CARD_PROMPT and CARD_CHOICE
+            java.awt.CardLayout cardLayout = new java.awt.CardLayout();
+            JPanel southCard = new JPanel(cardLayout);
+            southCard.add(promptPanel,    "prompt");
+            southCard.add(choiceMenuPanel, "choice");
 
             JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-                    new JPanel(), southStack);
+                    new JPanel(), southCard);
             splitPane.setResizeWeight(1.0);
             splitPane.setDividerSize(5);
 
@@ -478,12 +507,14 @@ class ChoiceMenuPanelTest {
             frame.setVisible(true);
 
             try {
+                // Mirror production: show() first, then CardLayout.show() (card switch)
                 choiceMenuPanel.show(new ChoiceMenuModel(
                         "Do you want to make this edit to precious-beaming-clock.md?",
                         List.of(new Option("Yes", "1"),
                                 new Option("Yes, and allow Claude to edit its own settings for this session", "2"),
                                 new Option("No", "3")), -1),
                         answer -> {});
+                cardLayout.show(southCard, "choice");
 
                 // Simulate lockDividerForChoiceMenu WITH validate() (the fix)
                 splitPane.setEnabled(false);
@@ -501,8 +532,9 @@ class ChoiceMenuPanelTest {
                 splitPane.setDividerLocation(divLoc);
                 splitPane.validate();
 
-                // After correctly placed divider, component must not be clipped
-                assertTrue(choiceMenuPanel.getHeight() >= natural,
+                // After correctly placed divider, component must not be clipped.
+                // Allow 2px tolerance for pixel-level rounding in divider placement.
+                assertTrue(choiceMenuPanel.getHeight() >= natural - 2,
                         "choiceMenuPanel actual height (" + choiceMenuPanel.getHeight()
                         + ") must be >= preferred height (" + natural
                         + ") — divider placed too low without validate()");

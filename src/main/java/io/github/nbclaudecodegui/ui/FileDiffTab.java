@@ -1,5 +1,6 @@
 package io.github.nbclaudecodegui.ui;
 
+import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
@@ -10,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.JToolBar;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.diff.Diff;
 import org.netbeans.api.diff.DiffView;
@@ -129,7 +131,7 @@ public final class FileDiffTab {
             }
 
             // Flag set to true once a button is clicked — prevents onClose from
-            // firing again when diffTC.close() triggers componentClosed().
+            // firing again when the diff is closed.
             AtomicBoolean decided = new AtomicBoolean(false);
 
             // Look up the session whose working directory matches the file being edited.
@@ -148,6 +150,73 @@ public final class FileDiffTab {
                     .findFirst()
                     .orElse(null);
 
+            String workingDir = sessionTab != null && sessionTab.getWorkingDirectory() != null
+                    ? sessionTab.getWorkingDirectory().getAbsolutePath()
+                    : null;
+
+            // Forward reference for the close action (resolved below for each branch).
+            Runnable[] closeDiffRef = { null };
+
+            FileDiffPermissionPanel permPanel = new FileDiffPermissionPanel(
+                () -> {
+                    decided.set(true);
+                    onAccept.run();
+                    closeDiffRef[0].run();
+                    activateSessionForFile(filePath);
+                },
+                reason -> {
+                    decided.set(true);
+                    onDecline.accept(reason);
+                    closeDiffRef[0].run();
+                    activateSessionForFile(filePath);
+                },
+                sessionTab == null ? null : () -> {
+                    sessionTab.setEditMode("acceptEdits");
+                    decided.set(true);
+                    onAccept.run();
+                    closeDiffRef[0].run();
+                    activateSessionForFile(filePath);
+                },
+                sessionTab == null ? null : () -> {
+                    decided.set(true);
+                    onCancel.run();
+                    closeDiffRef[0].run();
+                    activateSessionForFile(filePath);
+                },
+                workingDir
+            );
+
+            boolean isMdFile = filePath.toLowerCase().endsWith(".md")
+                    || filePath.toLowerCase().endsWith(".markdown");
+
+            // Keep the DiffView's own navigation toolbar (prev/next difference buttons)
+            // Null means this DiffView provider offers no toolbar — don't add an empty one.
+            JToolBar toolbar = diffView.getToolBar();
+
+            // Build the main content component: for .md files with preview enabled,
+            // embed a MarkdownDiffPanel above the diff in a vertical split pane.
+            java.awt.Component mainComponent = diffView.getComponent();
+            if (isMdFile && ClaudeCodePreferences.isMdPreviewInDiff()) {
+                MarkdownDiffPanel mdPanel = new MarkdownDiffPanel(before, after);
+                mdPanel.attachRawDiffSync(diffView.getComponent());
+                javax.swing.JSplitPane mdSplit = new javax.swing.JSplitPane(
+                        javax.swing.JSplitPane.VERTICAL_SPLIT, mdPanel, diffView.getComponent());
+                mdSplit.setResizeWeight(0.5);
+                mainComponent = mdSplit;
+            }
+
+            // --- SESSION branch ---
+            if (!ClaudeCodePreferences.isOpenDiffInSeparateTab()
+                    && sessionTab != null) {
+                closeDiffRef[0] = sessionTab::hideEmbeddedDiff;
+                boolean shown = sessionTab.showEmbeddedDiff(
+                        outsideProject, outsideWarning,
+                        toolbar, mainComponent, permPanel,
+                        () -> { if (!decided.get()) { onClose.run(); activateSessionForFile(filePath); } });
+                if (shown) return;
+            }
+
+            // --- TOPLEVEL branch ---
             TopComponent diffTC = new TopComponent() {
                 @Override
                 public void componentClosed() {
@@ -158,50 +227,15 @@ public final class FileDiffTab {
                     }
                 }
             };
+            closeDiffRef[0] = diffTC::close;
             diffTC.setDisplayName(tabName);
             diffTC.setLayout(new java.awt.BorderLayout());
 
-            String workingDir = sessionTab != null && sessionTab.getWorkingDirectory() != null
-                    ? sessionTab.getWorkingDirectory().getAbsolutePath()
-                    : null;
-
-            FileDiffPermissionPanel permPanel = new FileDiffPermissionPanel(
-                () -> {
-                    decided.set(true);
-                    onAccept.run();
-                    diffTC.close();
-                    activateSessionForFile(filePath);
-                },
-                reason -> {
-                    decided.set(true);
-                    onDecline.accept(reason);
-                    diffTC.close();
-                    activateSessionForFile(filePath);
-                },
-                sessionTab == null ? null : () -> {
-                    sessionTab.setEditMode("acceptEdits");
-                    decided.set(true);
-                    onAccept.run();
-                    diffTC.close();
-                    activateSessionForFile(filePath);
-                },
-                sessionTab == null ? null : () -> {
-                    decided.set(true);
-                    onCancel.run();
-                    diffTC.close();
-                    activateSessionForFile(filePath);
-                },
-                workingDir
-            );
-
-            // Keep the DiffView's own navigation toolbar (prev/next difference buttons)
-            javax.swing.JToolBar toolbar = diffView.getToolBar();
-            if (toolbar == null) {
-                toolbar = new javax.swing.JToolBar();
+            if (toolbar != null) {
+                toolbar.setFloatable(false);
+                diffTC.add(toolbar, java.awt.BorderLayout.NORTH);
             }
-            toolbar.setFloatable(false);
-            diffTC.add(toolbar, java.awt.BorderLayout.NORTH);
-            diffTC.add(diffView.getComponent(), java.awt.BorderLayout.CENTER);
+            diffTC.add(mainComponent, java.awt.BorderLayout.CENTER);
             if (outsideProject) {
                 permPanel.showWarning(outsideWarning);
             }

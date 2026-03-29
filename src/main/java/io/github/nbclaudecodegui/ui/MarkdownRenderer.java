@@ -133,7 +133,7 @@ public final class MarkdownRenderer {
      * @param markdown the markdown source
      * @return the corresponding HTML fragment (no {@code <html>/<body>} wrapper)
      */
-    static String toHtml(String markdown) {
+    public static String toHtml(String markdown) {
         StringBuilder html = new StringBuilder();
         // Split on fenced code blocks; odd-indexed segments are code content.
         String[] parts = markdown.split("```[^\\n]*\\n", -1);

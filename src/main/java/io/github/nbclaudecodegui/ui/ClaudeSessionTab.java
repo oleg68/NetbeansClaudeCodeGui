@@ -9,6 +9,7 @@ import io.github.nbclaudecodegui.model.ClaudeSessionModel;
 import io.github.nbclaudecodegui.model.SessionLifecycle;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.event.ComponentAdapter;
@@ -92,6 +93,15 @@ public class ClaudeSessionTab extends TopComponent
     static final String[] EDIT_MODE_VALUES = {"plan",      "default",     "acceptEdits"};
 
     // -------------------------------------------------------------------------
+    // South card constants
+    // -------------------------------------------------------------------------
+
+    private static final String CARD_PROMPT = "prompt";
+    private static final String CARD_CHOICE = "choice";
+    private static final String CARD_DIFF   = "diff";
+    private static final int    DEFAULT_DIFF_HEIGHT = 300;
+
+    // -------------------------------------------------------------------------
     // Persistence fields
     // -------------------------------------------------------------------------
 
@@ -128,7 +138,10 @@ public class ClaudeSessionTab extends TopComponent
 
     private JediTermWidget  terminalWidget;
     private JSplitPane      splitPane;
-    private JPanel          southStack;
+    private JPanel          southCard;
+    private CardLayout      southCardLayout;
+    private String          activeCard;
+    private Runnable        pendingDiffOnClose;
 
     // -------------------------------------------------------------------------
     // UI — always present after construction
@@ -324,6 +337,10 @@ public class ClaudeSessionTab extends TopComponent
         super.componentClosed();
         File dir = model.getWorkingDirectory();
         pathToRestore = (dir != null) ? dir.getAbsolutePath() : null;
+        if (pendingDiffOnClose != null) {
+            try { pendingDiffOnClose.run(); } catch (Exception ex) { /* ignore */ }
+            pendingDiffOnClose = null;
+        }
         stopProcess();
     }
 
@@ -394,32 +411,26 @@ public class ClaudeSessionTab extends TopComponent
         if (ready) promptPanel.requestFocusOnInputArea();
     }
 
-    /** Shows / hides the choice-menu and locks the split-pane divider. */
+    /** Shows / hides the choice-menu using the card layout. */
     @Override
     public void onChoiceMenuChanged(ChoiceMenuModel menu) {
         if (menu != null) {
-            if (ClaudeCodePreferences.isDebugMode()) {
-                LOG.info(sessionTag + "[onChoiceMenuChanged] showing menu: \"" + menu.text() + "\"");
-            }
-            promptPanel.setVisible(false);
+            LOG.fine(sessionTag + "[onChoiceMenuChanged] showing menu: \"" + menu.text()
+                    + "\" EDT=" + SwingUtilities.isEventDispatchThread());
             choiceMenuPanel.show(menu, answer -> {
                 if (ClaudeCodePreferences.isDebugMode()) {
                     LOG.info(sessionTag + "[PTY prompt answer] " + answer);
                 }
-                promptPanel.setVisible(true);
-                SwingUtilities.invokeLater(this::unlockDividerFromChoiceMenu);
+                SwingUtilities.invokeLater(() -> switchSouthCard(CARD_PROMPT));
                 revalidate();
                 repaint();
                 controller.writePtyAnswer(answer);
             });
-            SwingUtilities.invokeLater(this::lockDividerForChoiceMenu);
-            revalidate();
-            repaint();
+            switchSouthCard(CARD_CHOICE);
         } else {
-            if (choiceMenuPanel.isVisible()) {
+            if (CARD_CHOICE.equals(activeCard)) {
                 choiceMenuPanel.dismiss();
-                promptPanel.setVisible(true);
-                SwingUtilities.invokeLater(this::unlockDividerFromChoiceMenu);
+                SwingUtilities.invokeLater(() -> switchSouthCard(CARD_PROMPT));
                 revalidate();
                 repaint();
             }
@@ -572,11 +583,33 @@ public class ClaudeSessionTab extends TopComponent
         selectorPanel.setVisible(false);
         terminalWidget = widget;
 
-        southStack = new JPanel(new BorderLayout());
-        southStack.add(choiceMenuPanel, BorderLayout.NORTH);
-        southStack.add(promptPanel,     BorderLayout.CENTER);
+        southCardLayout = new CardLayout();
+        southCard = new JPanel(southCardLayout) {
+            @Override public java.awt.Dimension getMinimumSize() {
+                for (java.awt.Component c : getComponents()) {
+                    if (c.isVisible()) return c.getMinimumSize();
+                }
+                return super.getMinimumSize();
+            }
+            @Override public java.awt.Dimension getPreferredSize() {
+                for (java.awt.Component c : getComponents()) {
+                    if (c.isVisible()) return c.getPreferredSize();
+                }
+                return super.getPreferredSize();
+            }
+        };
 
-        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southStack);
+        JPanel promptCard = new JPanel(new BorderLayout());
+        promptCard.add(promptPanel, BorderLayout.CENTER);
+
+        southCard.add(promptCard,    CARD_PROMPT);
+        southCard.add(choiceMenuPanel, CARD_CHOICE);
+        // CARD_DIFF is added dynamically in showEmbeddedDiff()
+
+        activeCard = CARD_PROMPT;
+        southCardLayout.show(southCard, CARD_PROMPT);
+
+        splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, widget, southCard);
         splitPane.setResizeWeight(1.0);
         splitPane.setDividerSize(5);
 
@@ -592,11 +625,11 @@ public class ClaudeSessionTab extends TopComponent
                 int bottom;
                 if (!savingEnabled[0]) {
                     bottom = savedBottomHeight > 0 ? savedBottomHeight
-                                                   : southStack.getPreferredSize().height;
+                                                   : southCard.getPreferredSize().height;
                     savingEnabled[0] = true;
                 } else {
                     bottom = NbPreferences.forModule(ClaudeSessionTab.class)
-                            .getInt("bottomHeight", southStack.getPreferredSize().height);
+                            .getInt(getSavedCardKey(), southCard.getPreferredSize().height);
                 }
                 int divLoc = total - splitPane.getDividerSize() - bottom;
                 if (ClaudeCodePreferences.isDebugMode()) {
@@ -608,12 +641,13 @@ public class ClaudeSessionTab extends TopComponent
         });
         splitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
             if (!savingEnabled[0] || !splitPane.isEnabled()) return;
+            if (CARD_CHOICE.equals(activeCard)) return;
             int total = splitPane.getHeight();
             int loc   = (int) e.getNewValue();
             if (total > 0 && loc > 0) {
                 int bottom = total - splitPane.getDividerSize() - loc;
                 if (bottom > 0) NbPreferences.forModule(ClaudeSessionTab.class)
-                        .putInt("bottomHeight", bottom);
+                        .putInt(getSavedCardKey(), bottom);
             }
         });
 
@@ -621,6 +655,54 @@ public class ClaudeSessionTab extends TopComponent
         revalidate();
         repaint();
         widget.requestFocusInWindow();
+    }
+
+    /**
+     * Returns the preference key used to save the divider height for the current active card.
+     * Uses backward-compatible {@code "bottomHeight"} key for the prompt card.
+     *
+     * @return preference key string
+     */
+    private String getSavedCardKey() {
+        if (CARD_PROMPT.equals(activeCard) || activeCard == null) return "bottomHeight";
+        return activeCard + "Height";
+    }
+
+    private void switchSouthCard(String card) {
+        if (southCard == null || southCardLayout == null) return;
+        activeCard = card;
+        southCardLayout.show(southCard, card);
+        splitPane.setEnabled(!CARD_CHOICE.equals(card));
+        if (!CARD_CHOICE.equals(card)) {
+            // restore divider for this card
+            int total = splitPane.getHeight();
+            if (total > 0) {
+                int bottom = NbPreferences.forModule(ClaudeSessionTab.class)
+                        .getInt(getSavedCardKey(), DEFAULT_DIFF_HEIGHT);
+                int divLoc = total - splitPane.getDividerSize() - bottom;
+                splitPane.setDividerLocation(divLoc);
+            }
+        } else {
+            // lock divider for choice menu
+            splitPane.validate();
+            int total = splitPane.getHeight();
+            if (total > 0) {
+                int natural = choiceMenuPanel.getPreferredSize().height;
+                splitPane.setDividerLocation(total - splitPane.getDividerSize() - natural);
+            }
+            LOG.fine(sessionTag + "[switchSouthCard CHOICE] total=" + splitPane.getHeight()
+                    + " natural=" + choiceMenuPanel.getPreferredSize().height
+                    + " choiceVisible=" + choiceMenuPanel.isVisible()
+                    + " choiceBounds=" + choiceMenuPanel.getBounds()
+                    + " southCardVisible=" + southCard.isVisible()
+                    + " southCardBounds=" + southCard.getBounds());
+            SwingUtilities.invokeLater(() -> LOG.fine(sessionTag + "[switchSouthCard CHOICE post-EDT]"
+                    + " choiceShowing=" + choiceMenuPanel.isShowing()
+                    + " choiceBounds=" + choiceMenuPanel.getBounds()
+                    + " componentCount=" + choiceMenuPanel.getComponentCount()));
+        }
+        southCard.revalidate();
+        southCard.repaint();
     }
 
     private void stopProcess() {
@@ -631,10 +713,16 @@ public class ClaudeSessionTab extends TopComponent
         }
         choiceMenuPanel.dismiss();
         promptPanel.reset();
+        if (pendingDiffOnClose != null) {
+            try { pendingDiffOnClose.run(); } catch (Exception ex) { /* ignore */ }
+            pendingDiffOnClose = null;
+        }
         if (splitPane != null) {
             remove(splitPane);
-            splitPane  = null;
-            southStack = null;
+            splitPane       = null;
+            southCard       = null;
+            southCardLayout = null;
+            activeCard      = null;
         }
         selectorPanel.setVisible(true);
         selectorPanel.unlock();
@@ -662,7 +750,7 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     private void requestFocusOnInput() {
-        if (choiceMenuPanel.isVisible()) return;
+        if (CARD_CHOICE.equals(activeCard) || CARD_DIFF.equals(activeCard)) return;
         if (promptPanel.isVisible()) {
             promptPanel.requestFocusOnInputArea();
         } else if (terminalWidget != null) {
@@ -671,27 +759,58 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     // -------------------------------------------------------------------------
-    // Split-pane divider helpers
+    // Embedded diff support
     // -------------------------------------------------------------------------
 
-    private void lockDividerForChoiceMenu() {
-        if (splitPane == null) return;
-        splitPane.setEnabled(false);
-        splitPane.validate(); // force layout so HTML labels compute height at actual width
-        int total = splitPane.getHeight();
-        if (total <= 0) return;
-        int natural = choiceMenuPanel.getPreferredSize().height;
-        splitPane.setDividerLocation(total - splitPane.getDividerSize() - natural);
+    /**
+     * Shows an embedded diff inside the session tab's south area.
+     *
+     * @param outsideProject  whether the file is outside the project
+     * @param outsideWarning  warning text to show when outside project
+     * @param toolbar         the diff view's toolbar (may be empty)
+     * @param diffComponent   the diff view component
+     * @param permPanel       the permission panel
+     * @param onTabClose      called if the session tab is closed before a decision
+     * @return {@code true} if the diff was shown; {@code false} if the session is not active
+     */
+    public boolean showEmbeddedDiff(boolean outsideProject, String outsideWarning,
+            javax.swing.JToolBar toolbar, java.awt.Component diffComponent,
+            FileDiffPermissionPanel permPanel, Runnable onTabClose) {
+        if (southCard == null) return false;
+
+        if (toolbar != null) {
+            toolbar.setFloatable(false);
+        }
+        if (outsideProject) {
+            permPanel.showWarning(outsideWarning);
+        }
+
+        JPanel diffCard = new JPanel(new BorderLayout());
+        if (toolbar != null) {
+            diffCard.add(toolbar, BorderLayout.NORTH);
+        }
+        diffCard.add(diffComponent, BorderLayout.CENTER);
+        diffCard.add(permPanel,     BorderLayout.SOUTH);
+
+        southCard.add(diffCard, CARD_DIFF);
+
+        pendingDiffOnClose = onTabClose;
+        switchSouthCard(CARD_DIFF);
+        revalidate();
+        repaint();
+        SwingUtilities.invokeLater(permPanel::requestAcceptFocus);
+        return true;
     }
 
-    private void unlockDividerFromChoiceMenu() {
-        if (splitPane == null) return;
-        splitPane.setEnabled(true);
-        int total = splitPane.getHeight();
-        if (total <= 0) return;
-        int bottom = NbPreferences.forModule(ClaudeSessionTab.class)
-                .getInt("bottomHeight", southStack.getPreferredSize().height);
-        splitPane.setDividerLocation(total - splitPane.getDividerSize() - bottom);
+    /**
+     * Hides the embedded diff and switches back to the prompt card.
+     */
+    public void hideEmbeddedDiff() {
+        pendingDiffOnClose = null;
+        if (southCard == null) return;
+        switchSouthCard(CARD_PROMPT);
+        revalidate();
+        repaint();
     }
 
     // -------------------------------------------------------------------------

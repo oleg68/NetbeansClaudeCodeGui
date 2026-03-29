@@ -414,9 +414,18 @@ public final class ChoiceMenuPanel extends JPanel {
         setFocusTraversalPolicy(new ListFTP(tabOrder));
         setFocusTraversalPolicyProvider(true);
 
-        setVisible(true);
+        // Do NOT call setVisible(true) here — CardLayout manages visibility.
+        // Calling setVisible(true) before CardLayout.show() corrupts CardLayout state:
+        // CardLayout's first pass hides the first visible component (which becomes this
+        // panel after setVisible(true)), then shows it again, but internal state breaks
+        // and subsequent card switches stop working.
         revalidate();
         repaint();
+        LOG.fine("[ChoiceMenuPanel] show() done: visible=" + isVisible()
+                + " componentCount=" + getComponentCount()
+                + " preferredSize=" + getPreferredSize()
+                + " parent=" + (getParent() != null ? getParent().getClass().getSimpleName() : "null")
+                + " parentVisible=" + (getParent() != null && getParent().isVisible()));
 
         // --- Default focus: the element Claude pre-selected (❯) ---
         final java.awt.Component focusTarget;
@@ -438,7 +447,7 @@ public final class ChoiceMenuPanel extends JPanel {
 
     /** Hides the panel if a prompt is still pending (called when Claude accepted input via terminal). */
     public void dismissIfActive() {
-        if (isVisible() && callback != null) {
+        if (callback != null) {
             LOG.info("[ChoiceMenuPanel] dismissing — Claude accepted terminal input");
             Consumer<String> cb = callback;
             setVisible(false);

@@ -348,6 +348,63 @@ public final class ClaudeCodePreferences {
                 .putInt(KEY_HISTORY_TTL_DAYS, Math.max(0, Math.min(3650, v)));
     }
 
+    // -------------------------------------------------------------------------
+    // openDiffInSeparateTab
+    // -------------------------------------------------------------------------
+
+    /** Preference key: open file diffs in a separate TopComponent tab. */
+    public static final String KEY_OPEN_DIFF_IN_SEPARATE_TAB = "openDiffInSeparateTab";
+    /** Default: embed diff inside the session tab. */
+    public static final boolean DEFAULT_OPEN_DIFF_IN_SEPARATE_TAB = false;
+
+    /**
+     * Returns whether file diffs should open in a separate tab.
+     *
+     * @return {@code true} to open in a separate TopComponent; {@code false} to embed in session tab
+     */
+    public static boolean isOpenDiffInSeparateTab() {
+        return NbPreferences.forModule(ClaudeCodePreferences.class)
+                .getBoolean(KEY_OPEN_DIFF_IN_SEPARATE_TAB, DEFAULT_OPEN_DIFF_IN_SEPARATE_TAB);
+    }
+
+    /**
+     * Persists the diff location setting.
+     *
+     * @param v {@code true} to open in a separate tab; {@code false} to embed in session tab
+     */
+    public static void setOpenDiffInSeparateTab(boolean v) {
+        NbPreferences.forModule(ClaudeCodePreferences.class)
+                .putBoolean(KEY_OPEN_DIFF_IN_SEPARATE_TAB, v);
+    }
+
+    // -------------------------------------------------------------------------
+    // mdPreviewInDiff
+    // -------------------------------------------------------------------------
+
+    /** Preference key: show markdown preview for .md files in diff. */
+    public static final String KEY_MD_PREVIEW_IN_DIFF = "mdPreviewInDiff";
+    /** Default: markdown preview enabled. */
+    public static final boolean DEFAULT_MD_PREVIEW_IN_DIFF = true;
+
+    /**
+     * Returns whether the markdown preview is shown for .md files in diffs.
+     *
+     * @return {@code true} if the preview is enabled
+     */
+    public static boolean isMdPreviewInDiff() {
+        return NbPreferences.forModule(ClaudeCodePreferences.class)
+                .getBoolean(KEY_MD_PREVIEW_IN_DIFF, DEFAULT_MD_PREVIEW_IN_DIFF);
+    }
+
+    /**
+     * Persists the markdown-preview-in-diff setting.
+     *
+     * @param v {@code true} to enable the preview
+     */
+    public static void setMdPreviewInDiff(boolean v) {
+        NbPreferences.forModule(ClaudeCodePreferences.class).putBoolean(KEY_MD_PREVIEW_IN_DIFF, v);
+    }
+
     private static String validated(String value, String fallback) {
         return ENTER.equals(value) || SHIFT_ENTER.equals(value)
                 || CTRL_ENTER.equals(value) || ALT_ENTER.equals(value)

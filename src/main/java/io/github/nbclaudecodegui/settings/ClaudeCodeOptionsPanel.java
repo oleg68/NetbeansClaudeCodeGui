@@ -60,6 +60,10 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
     private JSpinner historyTtlDaysSpinner;
     /** Checkbox to enable debug logging. */
     private javax.swing.JCheckBox debugCheckBox;
+    /** Checkbox to open diff in a separate tab. */
+    private javax.swing.JCheckBox diffInSessionCheck;
+    /** Checkbox to show markdown preview for .md files in diff. */
+    private javax.swing.JCheckBox mdPreviewInDiffCheck;
 
     /** send-key radio buttons: value → button */
     private final Map<String, JRadioButton> sendRadios = new LinkedHashMap<>();
@@ -181,6 +185,26 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         form.add(debugCheckBox, dbgGbc);
         row++;
 
+        // --- diff in session ---
+        diffInSessionCheck = new javax.swing.JCheckBox("Open diff in a separate tab");
+        GridBagConstraints diffGbc = new GridBagConstraints();
+        diffGbc.gridx = 0; diffGbc.gridy = row;
+        diffGbc.gridwidth = 3;
+        diffGbc.anchor = GridBagConstraints.WEST;
+        diffGbc.insets = new Insets(4, 8, 4, 8);
+        form.add(diffInSessionCheck, diffGbc);
+        row++;
+
+        // --- md preview in diff ---
+        mdPreviewInDiffCheck = new javax.swing.JCheckBox("Show markdown preview for .md files in diff");
+        GridBagConstraints mdGbc = new GridBagConstraints();
+        mdGbc.gridx = 0; mdGbc.gridy = row;
+        mdGbc.gridwidth = 3;
+        mdGbc.anchor = GridBagConstraints.WEST;
+        mdGbc.insets = new Insets(4, 8, 4, 8);
+        form.add(mdPreviewInDiffCheck, mdGbc);
+        row++;
+
         // spacer
         GridBagConstraints spacer = new GridBagConstraints();
         spacer.gridx = 0; spacer.gridy = row;
@@ -251,6 +275,9 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         historyMaxDepthSpinner.setValue(ClaudeCodePreferences.getHistoryMaxDepth());
         historyTtlDaysSpinner.setValue(ClaudeCodePreferences.getHistoryTtlDays());
         debugCheckBox.setSelected(ClaudeCodePreferences.isDebugMode());
+        diffInSessionCheck.setSelected(
+                ClaudeCodePreferences.isOpenDiffInSeparateTab());
+        mdPreviewInDiffCheck.setSelected(ClaudeCodePreferences.isMdPreviewInDiff());
 
         String sendVal    = ClaudeCodePreferences.getSendKey();
         String newlineVal = ClaudeCodePreferences.getNewlineKey();
@@ -276,6 +303,8 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
         ClaudeCodePreferences.setHistoryMaxDepth((Integer) historyMaxDepthSpinner.getValue());
         ClaudeCodePreferences.setHistoryTtlDays((Integer) historyTtlDaysSpinner.getValue());
         ClaudeCodePreferences.setDebugMode(debugCheckBox.isSelected());
+        ClaudeCodePreferences.setOpenDiffInSeparateTab(diffInSessionCheck.isSelected());
+        ClaudeCodePreferences.setMdPreviewInDiff(mdPreviewInDiffCheck.isSelected());
         ClaudeCodePreferences.setSendKey(selectedValue(sendRadios));
         ClaudeCodePreferences.setNewlineKey(selectedValue(newlineRadios));
 
