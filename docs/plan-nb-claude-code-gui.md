@@ -486,22 +486,7 @@ Extra environment variables
 
 ---
 
-### Stage 17 — Settings + full integration (planned)
-
-**Goal:** settings drive plugin behaviour; session lifecycle management.
-
-**What to add:**
-- `ClaudeCodeOptionsPanel` — extend: Claude CLI path (Browse), auto-start (checkbox), send key
-- Auto-start when `ClaudeSessionTopComponent` opens if `autoStart=true`
-- On project close — stop associated processes
-
-**Tests:**
-- `ClaudeCodePreferencesAutoStartTest.java` — `autoStart=true` → `componentOpened` calls `panel.autoStart()`
-- `FullIntegrationIT.java` (NbModuleSuite) — end-to-end
-
----
-
-### Stage 18 — GitHub CI/CD + NBM publishing (planned)
+### Stage 17 — GitHub CI/CD + NBM publishing (planned)
 
 **Goal:** automated build and release publishing.
 
@@ -513,7 +498,7 @@ Extra environment variables
 
 ---
 
-### Stage 19 — Help + user documentation (planned)
+### Stage 18 — Help + user documentation (planned)
 
 **Goal:** built-in help and end-user documentation.
 

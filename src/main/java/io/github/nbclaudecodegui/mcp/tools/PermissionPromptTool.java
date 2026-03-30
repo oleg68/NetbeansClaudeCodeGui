@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import io.github.nbclaudecodegui.ui.FileDiffTab;
+import io.github.nbclaudecodegui.ui.FileDiffOpener;
 import org.openbeans.claude.netbeans.tools.AsyncHandler;
 import org.openbeans.claude.netbeans.tools.AsyncResponse;
 import org.openbeans.claude.netbeans.tools.Tool;
@@ -124,7 +124,7 @@ public class PermissionPromptTool implements Tool<PermissionPromptTool.Params, A
         String tabName = "Diff: " + new File(filePath).getName();
         final String finalTabName = resolveUniqueTabName(tabName);
 
-        return handler -> FileDiffTab.open(filePath, before, after, finalTabName, null,
+        return handler -> FileDiffOpener.open(filePath, before, after, finalTabName, null,
             () -> {
                 LOGGER.info("Permission granted for tab: " + finalTabName);
                 AsyncHandler<List<Content>> h = DiffTabTracker.remove(finalTabName);
@@ -138,7 +138,7 @@ public class PermissionPromptTool implements Tool<PermissionPromptTool.Params, A
             () -> {
                 LOGGER.info("Permission cancelled for tab: " + finalTabName);
                 DiffTabTracker.setRejected(finalTabName);
-                FileDiffTab.cancelCurrentPromptForFile(filePath);
+                FileDiffOpener.cancelCurrentPromptForFile(filePath);
             },
             () -> {
                 LOGGER.info("Permission tab closed for tab: " + finalTabName);

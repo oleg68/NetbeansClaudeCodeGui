@@ -48,7 +48,7 @@ import java.beans.PropertyChangeListener;
 import javax.swing.SwingUtilities;
 import org.openide.windows.WindowManager;
 import io.github.nbclaudecodegui.ui.ClaudeSessionTab;
-import io.github.nbclaudecodegui.ui.FileDiffTab;
+import io.github.nbclaudecodegui.ui.FileDiffOpener;
 import io.github.nbclaudecodegui.mcp.tools.DiffTabTracker;
 import io.github.nbclaudecodegui.mcp.tools.GetDiagnostics;
 import io.github.nbclaudecodegui.mcp.tools.GetOpenEditors;
@@ -499,7 +499,7 @@ public class NetBeansMCPHandler {
 
             // acceptEdits: auto-allow only if file is inside the session's confirmed directory
             if ("acceptEdits".equals(editMode)
-                    && io.github.nbclaudecodegui.ui.FileDiffTab.isFileUnderDirectory(filePath, cwd)) {
+                    && io.github.nbclaudecodegui.ui.FileDiffOpener.isFileUnderDirectory(filePath, cwd)) {
                 LOGGER.info("acceptEdits mode — file inside project, auto-allowing: " + filePath);
                 return CompletableFuture.completedFuture(hookAllowJson());
             }
@@ -512,12 +512,12 @@ public class NetBeansMCPHandler {
             CompletableFuture<String> future = DiffTabTracker.registerHookFuture(tabName);
 
             // Pass cwd as confirmedDir so FileDiffTab can warn if file is outside this project
-            FileDiffTab.open(filePath, before, after, tabName, cwd,
+            FileDiffOpener.open(filePath, before, after, tabName, cwd,
             () -> DiffTabTracker.resolveHook(tabName, hookAllowJson()),
             reason -> DiffTabTracker.resolveHook(tabName, hookDenyJson(reason)),
             () -> {
                 DiffTabTracker.resolveHook(tabName, hookDenyJson(""));
-                FileDiffTab.cancelCurrentPromptForFile(filePath);
+                FileDiffOpener.cancelCurrentPromptForFile(filePath);
             },
             () -> DiffTabTracker.resolveHook(tabName, hookAskJson())
         );
