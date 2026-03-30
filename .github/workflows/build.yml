@@ -89,6 +89,7 @@ jobs:
       - name: Set version
         run: mvn versions:set -DnewVersion=${{ needs.calc_ver.outputs.project_ver }} --batch-mode
       - name: Build
+        # xvfb-run provides a virtual display so Swing UI tests don't throw HeadlessException
         run: xvfb-run mvn package --batch-mode
       - name: Upload artifact and release asset
         uses: nanoufo/action-upload-artifacts-and-release-assets@v2
