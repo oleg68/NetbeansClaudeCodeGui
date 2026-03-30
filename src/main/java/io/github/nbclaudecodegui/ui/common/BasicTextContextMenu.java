@@ -2,8 +2,6 @@ package io.github.nbclaudecodegui.ui.common;
 
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.KeyStroke;
@@ -93,14 +91,7 @@ public class BasicTextContextMenu {
      * @param menu the popup menu to show on right-click
      */
     public static void attach(JTextComponent tc, JPopupMenu menu) {
-        tc.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e) {
-                if (e.isPopupTrigger()) menu.show(tc, e.getX(), e.getY());
-            }
-            @Override public void mouseReleased(MouseEvent e) {
-                if (e.isPopupTrigger()) menu.show(tc, e.getX(), e.getY());
-            }
-        });
+        tc.setComponentPopupMenu(menu);
     }
 
     /**

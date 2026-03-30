@@ -43,8 +43,7 @@ public class MarkdownPreviewTab extends TopComponent {
             MarkdownPreviewTab tab = new MarkdownPreviewTab();
             tab.setDisplayName("Preview: " + fo.getNameExt());
             tab.setLayout(new BorderLayout());
-            JEditorPane pane = new JEditorPane("text/html", html);
-            pane.setEditable(false);
+            JEditorPane pane = MarkdownRenderer.createOutputPane(html);
             tab.add(new JScrollPane(pane), BorderLayout.CENTER);
             tab.open();
             tab.requestActive();

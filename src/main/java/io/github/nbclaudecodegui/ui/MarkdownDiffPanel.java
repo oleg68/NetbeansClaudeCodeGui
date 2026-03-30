@@ -38,10 +38,8 @@ public class MarkdownDiffPanel extends JPanel {
         String beforeHtml = MarkdownRenderer.toHtml(before != null ? before : "");
         String afterHtml  = MarkdownRenderer.toHtml(after  != null ? after  : "");
 
-        mdBeforePane = new JEditorPane("text/html", beforeHtml);
-        mdBeforePane.setEditable(false);
-        mdAfterPane  = new JEditorPane("text/html", afterHtml);
-        mdAfterPane.setEditable(false);
+        mdBeforePane = MarkdownRenderer.createOutputPane(beforeHtml);
+        mdAfterPane  = MarkdownRenderer.createOutputPane(afterHtml);
 
         beforeScroll = new JScrollPane(mdBeforePane);
         afterScroll  = new JScrollPane(mdAfterPane);

@@ -54,6 +54,12 @@ public final class MarkdownRenderer {
      *
      * @return a ready-to-use output pane
      */
+    public static JEditorPane createOutputPane(String html) {
+        JEditorPane pane = createOutputPane();
+        pane.setText(html);
+        return pane;
+    }
+
     public static JEditorPane createOutputPane() {
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet ss = kit.getStyleSheet();
