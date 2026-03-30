@@ -86,6 +86,8 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
+      - name: Set version
+        run: mvn versions:set -DnewVersion=${{ needs.calc_ver.outputs.project_ver }} --batch-mode
       - name: Build
         run: mvn package --batch-mode
       - name: Upload artifact and release asset
