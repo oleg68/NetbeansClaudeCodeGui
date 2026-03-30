@@ -1,0 +1,109 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  JAVA_VERSION: '17'
+  JAVA_DISTRIBUTION: temurin
+
+jobs:
+  calc_ver:
+    runs-on: ubuntu-latest
+    outputs:
+      project_ver: ${{ steps.ver.outputs.project_ver }}
+      release_flag: ${{ steps.ver.outputs.release_flag }}
+      release_tag: ${{ steps.ver.outputs.release_tag }}
+      release_upload_url: ${{ steps.ver.outputs.release_upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+
+      - name: Auto-tag
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+          bash build-scripts/autotag.sh
+
+      - name: Calculate version
+        id: ver
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch --prune --tags
+          # Release tag on current commit?
+          REL_TAG=$(git tag --points-at HEAD | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [[ -n "$REL_TAG" ]]; then
+            VER="$REL_TAG"
+            RELEASE=ON
+            # Create draft release if not yet exists
+            if ! gh release view "$REL_TAG" --json id -q .id &>/dev/null; then
+              NOTES=RELNOTES.md
+              [[ -f "$NOTES" ]] || echo "Release $VER" > "$NOTES"
+              gh release create "$REL_TAG" --draft --title "$VER" --notes-file "$NOTES"
+            fi
+            UPLOAD_URL=$(gh release view "$REL_TAG" --json uploadUrl -q .uploadUrl)
+          else
+            BASE_TAG=$(git tag | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1 || echo "0.0")
+            N=$(git rev-list "${BASE_TAG}..HEAD" --count 2>/dev/null || echo "0")
+            VER="${BASE_TAG}.${N}"
+            RELEASE=OFF
+            UPLOAD_URL=""
+            REL_TAG=""
+          fi
+          echo "project_ver=$VER" >> $GITHUB_OUTPUT
+          echo "release_flag=$RELEASE" >> $GITHUB_OUTPUT
+          echo "release_tag=$REL_TAG" >> $GITHUB_OUTPUT
+          echo "release_upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
+          echo "Version: $VER (release=$RELEASE)"
+
+  build:
+    needs: calc_ver
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+      - name: Build
+        run: mvn package --batch-mode
+      - name: Upload artifact and release asset
+        uses: nanoufo/action-upload-artifacts-and-release-assets@v2
+        with:
+          path: target/*.nbm
+          upload-release-files: ${{ needs.calc_ver.outputs.release_flag == 'ON' }}
+          release-upload-url: ${{ needs.calc_ver.outputs.release_upload_url }}
+
+  release:
+    needs: [calc_ver, build]
+    if: needs.calc_ver.outputs.release_flag == 'ON'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ needs.calc_ver.outputs.release_tag }}" \
+            --draft=false \
+            --repo ${{ github.repository }}
