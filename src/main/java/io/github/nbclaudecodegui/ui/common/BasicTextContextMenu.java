@@ -26,7 +26,38 @@ public class BasicTextContextMenu {
     protected BasicTextContextMenu() {}
 
     /**
-     * Creates a JPopupMenu with Cut, Copy, Paste, Select All, [separator], Clear.
+     * Creates a read-only JPopupMenu with Select All and Copy.
+     * Copy is enabled only when text is selected (checked when menu opens).
+     *
+     * @param tc the text component whose actions the menu items delegate to
+     * @return the configured popup menu
+     */
+    public static JPopupMenu createReadOnly(JTextComponent tc) {
+        JPopupMenu menu = new JPopupMenu();
+
+        JMenuItem selectAll = new JMenuItem("Select All");
+        selectAll.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK));
+        selectAll.addActionListener(e -> tc.selectAll());
+
+        JMenuItem copy = new JMenuItem("Copy");
+        copy.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK));
+        copy.addActionListener(e -> tc.copy());
+
+        menu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent e) {
+                copy.setEnabled(tc.getSelectionStart() != tc.getSelectionEnd());
+            }
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent e) {}
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent e) {}
+        });
+
+        menu.add(selectAll);
+        menu.add(copy);
+        return menu;
+    }
+
+    /**
+     * Creates a JPopupMenu with Select All, Copy, [separator], Cut, Paste, Clear.
      * Does NOT attach it — call {@link #attach(JTextComponent, JPopupMenu)} afterwards
      * if you need to add more items first.
      *
@@ -34,32 +65,22 @@ public class BasicTextContextMenu {
      * @return the configured popup menu
      */
     public static JPopupMenu create(JTextComponent tc) {
-        JPopupMenu menu = new JPopupMenu();
+        JPopupMenu menu = createReadOnly(tc);  // SelectAll + Copy (with enable logic)
 
         JMenuItem cut = new JMenuItem("Cut");
         cut.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.CTRL_DOWN_MASK));
         cut.addActionListener(e -> tc.cut());
 
-        JMenuItem copy = new JMenuItem("Copy");
-        copy.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK));
-        copy.addActionListener(e -> tc.copy());
-
         JMenuItem paste = new JMenuItem("Paste");
         paste.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, InputEvent.CTRL_DOWN_MASK));
         paste.addActionListener(e -> tc.paste());
 
-        JMenuItem selectAll = new JMenuItem("Select All");
-        selectAll.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK));
-        selectAll.addActionListener(e -> tc.selectAll());
-
         JMenuItem clear = new JMenuItem("Clear");
         clear.addActionListener(e -> tc.setText(""));
 
-        menu.add(cut);
-        menu.add(copy);
-        menu.add(paste);
-        menu.add(selectAll);
         menu.addSeparator();
+        menu.add(cut);
+        menu.add(paste);
         menu.add(clear);
         return menu;
     }

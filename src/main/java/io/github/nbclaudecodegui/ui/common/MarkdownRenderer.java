@@ -83,6 +83,7 @@ public final class MarkdownRenderer {
         pane.setEditable(false);
         pane.setCursor(java.awt.Cursor.getPredefinedCursor(
                 java.awt.Cursor.TEXT_CURSOR));
+        BasicTextContextMenu.attach(pane, BasicTextContextMenu.createReadOnly(pane));
         return pane;
     }
 
