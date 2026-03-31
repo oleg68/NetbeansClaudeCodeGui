@@ -5,32 +5,24 @@
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
-Current version: **0.15.24-SNAPSHOT**
+The plugin code was written entirely by [Claude Code](https://claude.ai/code) using **Claude Sonnet 4.6**, with the author acting as architect and reviewer.
 
 ---
 
 ## Requirements
 
-- Apache NetBeans 23 (RELEASE230) or later
-- Java 17+
-- Maven 3.8+
-- `claude` CLI installed and available in PATH
+- [Apache NetBeans 23](https://netbeans.apache.org/front/main/download/) or later
+- [Java 17+](https://adoptium.net/)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/getting-started) — recommended: add to `PATH`
+  - If `claude` is not in `PATH`, set the path manually after installing the plugin in **Tools → Options → Claude Code**
 
 ---
 
 ## Build & Install
 
-### Build the NBM package
+### Recommended: download from GitHub Releases
 
-```bash
-mvn nbm:nbm
-```
-
-The installable plugin file is created at:
-
-```
-target/netbeans-claude-code-gui-0.15.24-SNAPSHOT.nbm
-```
+Download the latest `.nbm` file from the [Releases page](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest).
 
 ### Install into NetBeans
 
@@ -40,7 +32,19 @@ target/netbeans-claude-code-gui-0.15.24-SNAPSHOT.nbm
 4. Click **Install** and follow the wizard
 5. Restart NetBeans when prompted
 
-### Build commands
+### Build from source
+
+```bash
+mvn nbm:nbm
+```
+
+The installable plugin file is created at:
+
+```
+target/netbeans-claude-code-gui-*.nbm
+```
+
+### Other build commands
 
 ```bash
 mvn package              # Full build with tests
@@ -134,9 +138,9 @@ Closing a session window while a PTY process is running shows a confirmation dia
 | 14 | Prompt history & favorites: persistent history (Ctrl+Up/Down), popup list, global/per-project favorites, hotkey assignment | ✅ |
 | 15 | File attachments: @path token insertion, DnD + Ctrl+V, @-completion popup, blue token highlight, `ui/common/` shared components | ✅ |
 | 16 | FileDiff location config: inline panel or separate tab (boolean preference) | ✅ |
-| 17 | Settings + full integration (auto-start, CLI path, send key) | planned |
-| 18 | GitHub CI/CD + NBM publishing | planned |
-| 19 | Help + user documentation | planned |
+| 17 | GitHub CI/CD + NBM publishing | ✅ |
+| 18 | Help + user documentation | planned |
+| 19 | Choice menu improvements + Markdown preview | 🔧 |
 
 ---
 

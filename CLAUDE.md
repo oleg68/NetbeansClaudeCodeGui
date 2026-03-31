@@ -14,6 +14,39 @@ mvn test -Dtest=ClassName   # Run a single test class
 
 After every fix or change, increment the patch version in `pom.xml` and rebuild.
 
+## Release & Versioning
+
+### Versioning scheme
+
+Build version is computed from git tags by CI:
+- Base tag `MAJOR.MINOR` (e.g. `0.17`) + commit count from it → `MAJOR.MINOR.N` (e.g. `0.17.5`)
+- `pom.xml` holds `MAJOR.MINOR.0-SNAPSHOT` — only MAJOR.MINOR matters to CI; patch and SNAPSHOT suffix are ignored
+
+### Release cycle
+
+A release has an explicit **start** and **finish**:
+
+**Starting a release** (only this, nothing else):
+- Bump `pom.xml` to `MAJOR.MINOR.0-SNAPSHOT` → CI creates base tag `MAJOR.MINOR`, build version becomes `MAJOR.MINOR.0`
+- Each subsequent push to main → version `MAJOR.MINOR.N` (N increments automatically)
+
+**During development** — add user-visible changes to `CHANGELOG.md` (see rules below).
+
+**Finishing a release** (only this, nothing else):
+- Update `CHANGELOG.md` heading to `# MAJOR.MINOR` (matching current `pom.xml`) → CI sees this as the release signal, creates release tag `MAJOR.MINOR.N`, and publishes a GitHub Release
+
+**After a published release** — any push without bumping `pom.xml` → **build error**. Start a new release first.
+
+Implemented in `build-scripts/autotag.sh` and `.github/workflows/build.yml`.
+
+### CHANGELOG.md rules
+
+The heading `# MAJOR.MINOR` is the CI release signal — **only add it when finishing a release**.
+
+During development, add bullet lines at the **very top** of `CHANGELOG.md` (above any existing heading), with no section heading. When finishing a release, add the `# MAJOR.MINOR` heading above those bullets.
+
+Every user-visible change **must** add a new bullet at the **top** of the list (reverse chronological order — newest entries first). "User-visible" means: new feature, changed behavior, bug fix, UI change, new setting, README update. Internal refactors, test-only changes, and CI changes do not require an entry.
+
 ## Architecture
 
 A NetBeans IDE plugin that embeds Claude Code CLI as a PTY-based terminal session connected to the IDE via three channels: PTY, MCP SSE, and an HTTP hook.

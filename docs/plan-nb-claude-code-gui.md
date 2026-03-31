@@ -486,7 +486,7 @@ Extra environment variables
 
 ---
 
-### Stage 17 — GitHub CI/CD + NBM publishing (planned)
+### Stage 17 — GitHub CI/CD + NBM publishing ✅
 
 **Goal:** automated build and release publishing.
 
@@ -506,6 +506,20 @@ Extra environment variables
 - NetBeans Help integration (JavaHelp)
 - `docs/user-guide.md` or GitHub Wiki: installation, profiles, history, favorites, keyboard shortcuts
 - External announcements on releases: posts in NetBeans community forum and Anthropic/Claude community (manual)
+
+---
+
+### Stage 19 — Choice menu & Markdown preview improvements (v0.18.0-SNAPSHOT) 🔧
+
+**Goal:** fix outstanding choice menu detection bugs; fix pin preview not tracking file changes; support checkbox menus.
+
+**Bug fixes:**
+- Two unreproduced choice menu non-detection cases (screenshots in to-do.md)
+- Pin preview doesn't track file changes
+
+**New features:**
+- Checkbox menus (`[ ] option` multi-select) — send selected numbers then `→`
+- Profiles settings: add links to API key pages
 
 ---
 

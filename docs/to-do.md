@@ -138,6 +138,7 @@
     ❯ 1. Submit answers
       2. Cancel
     ```
+- [ ] pin preview не отслеживает изменение в файле
 
 # Features
 

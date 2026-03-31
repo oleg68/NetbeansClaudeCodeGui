@@ -1,3 +1,5 @@
+- README: updated Requirements with links, clarified Claude CLI PATH setup, recommended download from GitHub Releases, added note that plugin is written by Claude Code
+
 # 0.17
 
 Initial public release.
