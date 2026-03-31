@@ -2,6 +2,7 @@
 
 ![Build](https://github.com/oleg68/NetbeansClaudeCodeGui/actions/workflows/build.yml/badge.svg)
 [![Release](https://img.shields.io/github/v/release/oleg68/NetbeansClaudeCodeGui)](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/oleg68/NetbeansClaudeCodeGui/total)](https://github.com/oleg68/NetbeansClaudeCodeGui/releases)
 
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
