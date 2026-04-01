@@ -97,7 +97,7 @@
 
 - [x] Compilation warnings
 
-- [ ] Не распознаётся Choice Menu
+- [x] Не распознаётся Choice Menu (v0.18.4: fixture added — detector works correctly, was a timing/render issue)
     ```
     ● User answered Claude's questions:
       ⎿  · MarkdownDiffPanel — «Hide»: что должно происходить? → Да, но после сокрытия будет негде делать повторный клик. Поэтому есть второй пункт о Preview Markdown
@@ -139,7 +139,21 @@
       2. Cancel
     ```
 - [ ] pin preview не отслеживает изменение в файле
+- [ ] Не распозналось меню
+    ```
+    …………………█ █   █ █………………………………………………………………………………………………………………
 
+
+     Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.
+
+     Select login method:
+
+     ❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise
+
+       2. Anthropic Console account · API usage billing
+
+       3. 3rd-party platform · Amazon Bedrock, Microsoft Foundry, or Vertex AI
+    ```
 # Features
 
 - [x] Возможность подключения md-вьюера в FileDiff

@@ -1,0 +1,11 @@
+{
+  "text": "Уточнение дизайна: «Hide» в MD-панели и чекбокс «Preview Markdown» в diff-панели — это один и тот же toggle, просто доступный из двух мест?",
+  "options": [
+    {"display": "Да, один toggle", "response": "1", "description": "Hide в MD-панели = снять галку Preview Markdown в diff-панели. Оба синхронизированы."},
+    {"display": "Нет, независимые", "response": "2", "description": "Hide только прячет MD-панель, а Preview Markdown — отдельная опция с другой логикой."},
+    {"display": "Type something.", "response": "3"},
+    {"display": "Chat about this", "response": "4"},
+    {"display": "Skip interview and plan immediately", "response": "5"}
+  ],
+  "defaultOptionIndex": 0
+}

@@ -108,6 +108,8 @@ public final class ScreenContentDetector {
             }
         }
         if (lastOptionRow < 0) return Optional.empty();
+        LOG.fine(tag + "[ScreenContentDetector] lastOptionRow=" + lastOptionRow
+                + " line=" + screenLines.get(lastOptionRow).trim());
 
         // Walk upward to collect all contiguous option lines.
         // Allow up to 3 consecutive "continuation" lines (non-option, non-blank)
@@ -132,7 +134,11 @@ public final class ScreenContentDetector {
                 if ("1".equals(opt.response())) break;
             } else if (!trimmed.isBlank()) {
                 continuationCount++;
-                if (continuationCount > 3) break;
+                if (continuationCount > 3) {
+                    LOG.fine(tag + "[ScreenContentDetector] stopped upward scan at row " + i
+                            + " (continuationCount>3): " + trimmed);
+                    break;
+                }
             }
         }
 
@@ -169,6 +175,8 @@ public final class ScreenContentDetector {
         }
 
         if (options.isEmpty()) return Optional.empty();
+        LOG.fine(tag + "[ScreenContentDetector] collected options=" + options
+                + " firstOptionRow=" + firstOptionRow);
 
         // Bug 1 guard: a single option with no Esc/cancel/amend hint in the
         // 3 lines below lastOptionRow is likely an echoed previous selection,
@@ -182,7 +190,10 @@ public final class ScreenContentDetector {
                     break;
                 }
             }
-            if (!hasHint) return Optional.empty();
+            if (!hasHint) {
+                LOG.fine(tag + "[ScreenContentDetector] rejected: single option with no hint");
+                return Optional.empty();
+            }
         }
 
         // First non-blank line above the first option is the question
@@ -205,7 +216,10 @@ public final class ScreenContentDetector {
                 break;
             }
         }
-        if (!hasCursor) return Optional.empty();
+        if (!hasCursor) {
+            LOG.fine(tag + "[ScreenContentDetector] rejected: no cursor glyph found");
+            return Optional.empty();
+        }
 
         // Guard: if a separator line exists below the last option, a real menu always has
         // at least one option line below that separator (e.g. "6. Chat about this" in
@@ -222,7 +236,12 @@ public final class ScreenContentDetector {
                     hasOptionBelowSep = true; break;
                 }
             }
-            if (!hasOptionBelowSep) return Optional.empty();
+            if (!hasOptionBelowSep) {
+                LOG.fine(tag + "[ScreenContentDetector] rejected: separator at row "
+                        + firstSepBelow + " with no options below: "
+                        + screenLines.get(firstSepBelow).trim());
+                return Optional.empty();
+            }
         }
 
         LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);

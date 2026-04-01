@@ -4,54 +4,15 @@
 [![Release](https://img.shields.io/github/v/release/oleg68/NetbeansClaudeCodeGui)](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/oleg68/NetbeansClaudeCodeGui/total)](https://github.com/oleg68/NetbeansClaudeCodeGui/releases)
 
+> **Alpha:** The plugin is under active development. Some features may not work correctly.
+
 A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
 
 The plugin code was written entirely by [Claude Code](https://claude.ai/code) using **Claude Sonnet 4.6**, with the author acting as architect and reviewer.
 
 ---
 
-## Requirements
-
-- [Apache NetBeans 23](https://netbeans.apache.org/front/main/download/) or later
-- [Java 17+](https://adoptium.net/)
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/getting-started) — recommended: add to `PATH`
-  - If `claude` is not in `PATH`, set the path manually after installing the plugin in **Tools → Options → Claude Code**
-
----
-
-## Build & Install
-
-### Recommended: download from GitHub Releases
-
-Download the latest `.nbm` file from the [Releases page](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest).
-
-### Install into NetBeans
-
-1. Open NetBeans → **Tools → Plugins**
-2. Switch to the **Downloaded** tab
-3. Click **Add Plugins…** and select the `.nbm` file
-4. Click **Install** and follow the wizard
-5. Restart NetBeans when prompted
-
-### Build from source
-
-```bash
-mvn nbm:nbm
-```
-
-The installable plugin file is created at:
-
-```
-target/netbeans-claude-code-gui-*.nbm
-```
-
-### Other build commands
-
-```bash
-mvn package              # Full build with tests
-mvn package -DskipTests  # Build without tests
-mvn test                 # Run all unit tests
-```
+See [Installation & Build](docs/installation.md) for requirements, installation steps, and build instructions.
 
 ---
 

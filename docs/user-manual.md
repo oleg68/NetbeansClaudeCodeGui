@@ -5,20 +5,19 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Requirements](#2-requirements)
-3. [Installation](#3-installation)
-4. [Quick Start](#4-quick-start)
-5. [Session Window](#5-session-window)
-6. [Sending Prompts](#6-sending-prompts)
-7. [File Attachments](#7-file-attachments)
-8. [Prompt History](#8-prompt-history)
-9. [Favorites](#9-favorites)
-10. [File-Change Permissions (Diff Panel)](#10-file-change-permissions-diff-panel)
-11. [Interactive Prompts (Choice Menu)](#11-interactive-prompts-choice-menu)
-12. [Settings (Tools → Options → Claude Code)](#12-settings)
-13. [Keyboard Shortcuts Reference](#13-keyboard-shortcuts-reference)
-14. [MCP Tools Reference](#14-mcp-tools-reference)
-15. [Troubleshooting](#15-troubleshooting)
+2. [Requirements & Installation](#2-requirements--installation)
+3. [Quick Start](#3-quick-start)
+4. [Session Window](#4-session-window)
+5. [Sending Prompts](#5-sending-prompts)
+6. [File Attachments](#6-file-attachments)
+7. [Prompt History](#7-prompt-history)
+8. [Favorites](#8-favorites)
+9. [File-Change Permissions (Diff Panel)](#9-file-change-permissions-diff-panel)
+10. [Interactive Prompts (Choice Menu)](#10-interactive-prompts-choice-menu)
+11. [Settings (Tools → Options → Claude Code)](#11-settings)
+12. [Keyboard Shortcuts Reference](#12-keyboard-shortcuts-reference)
+13. [MCP Tools Reference](#13-mcp-tools-reference)
+14. [Troubleshooting](#14-troubleshooting)
 
 ---
 
@@ -28,30 +27,13 @@ NetBeans Claude Code GUI is a NetBeans IDE plugin that embeds the [Claude Code C
 
 ---
 
-## 2. Requirements
+## 2. Requirements & Installation
 
-| Requirement | Minimum version |
-|-------------|-----------------|
-| NetBeans IDE | 23 (RELEASE230) |
-| Java | 17 |
-| [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/getting-started) (`claude`) | latest stable |
-
-The `claude` executable must be on your system `PATH` **or** its absolute path must be configured in **Tools → Options → Claude Code → General → Claude CLI path**.
+See [Installation & Build](installation.md) for requirements, installation steps, and build instructions.
 
 ---
 
-## 3. Installation
-
-1. Download the latest `.nbm` file from the [GitHub Releases page](https://github.com/YOUR_REPO/releases).
-2. In NetBeans: **Tools → Plugins → Downloaded** tab → **Add Plugins…**
-3. Select the downloaded `.nbm` file and click **Install**.
-4. Restart NetBeans when prompted.
-
-<!-- TODO: screenshot: Tools → Plugins → Downloaded tab -->
-
----
-
-## 4. Quick Start
+## 3. Quick Start
 
 1. Open the Claude Code session: click the **Claude Code** button in the toolbar (or **Window → Claude Code**).
 2. In the session tab, click the **directory bar** at the top and select (or type) the working directory — typically your project root.
@@ -63,7 +45,7 @@ The `claude` executable must be on your system `PATH` **or** its absolute path m
 
 ---
 
-## 5. Session Window
+## 4. Session Window
 
 <!-- TODO: screenshot: annotated session window -->
 
@@ -83,7 +65,7 @@ The **Send** button is enabled only when Claude is idle (ready to accept input).
 
 ---
 
-## 6. Sending Prompts
+## 5. Sending Prompts
 
 ### Input area
 A multi-line text area. Wrap long prompts naturally — newlines are preserved. `@path` tokens are highlighted in blue (see [File Attachments](#7-file-attachments)).
@@ -105,7 +87,7 @@ Press **Shift+Tab** anywhere in the prompt panel to cycle Claude Code's edit mod
 
 ---
 
-## 7. File Attachments
+## 6. File Attachments
 
 You can attach files to a prompt as `@path` tokens. Claude Code interprets these as file references.
 
@@ -133,7 +115,7 @@ If the clipboard contains file paths (e.g., copied from a file manager), paste t
 
 ---
 
-## 8. Prompt History
+## 7. Prompt History
 
 The plugin records every sent prompt per working directory.
 
@@ -176,7 +158,7 @@ Configure in **Tools → Options → Claude Code → General**:
 
 ---
 
-## 9. Favorites
+## 8. Favorites
 
 Favorites are saved prompts you can reuse with a button click or a keyboard shortcut.
 
@@ -205,7 +187,7 @@ Use the **↑** / **↓** buttons in the Favorites tab or dialog to reorder entr
 
 ---
 
-## 10. File-Change Permissions (Diff Panel)
+## 9. File-Change Permissions (Diff Panel)
 
 When Claude Code is about to edit or create a file, the plugin intercepts the operation and shows a diff panel **before** the change is written to disk.
 
@@ -245,7 +227,7 @@ For `.md` files, a rendered markdown preview is shown alongside the raw diff. Di
 
 ---
 
-## 11. Interactive Prompts (Choice Menu)
+## 10. Interactive Prompts (Choice Menu)
 
 Claude Code sometimes presents interactive prompts (Yes/No, multiple choice, or free-form input). The plugin detects these and shows a **Choice Menu** panel above the prompt input area.
 
@@ -260,7 +242,7 @@ Claude Code sometimes presents interactive prompts (Yes/No, multiple choice, or 
 
 ---
 
-## 12. Settings
+## 11. Settings
 
 Open **Tools → Options → Claude Code** in NetBeans.
 
@@ -329,7 +311,7 @@ When a session is started in that project's directory, the selected profile's se
 
 ---
 
-## 13. Keyboard Shortcuts Reference
+## 12. Keyboard Shortcuts Reference
 
 ### In the prompt input area
 
@@ -377,7 +359,7 @@ The send and newline keys are configurable in **Tools → Options → Claude Cod
 
 ---
 
-## 14. MCP Tools Reference
+## 13. MCP Tools Reference
 
 The plugin exposes the following tools to Claude Code via the MCP protocol. Claude calls these automatically — you do not need to invoke them manually. This table is for power users and troubleshooting.
 
@@ -400,7 +382,7 @@ The plugin also installs a **PreToolUse HTTP hook** that fires before every `Edi
 
 ---
 
-## 15. Troubleshooting
+## 14. Troubleshooting
 
 ### Enable debug mode
 Go to **Tools → Options → Claude Code → General** and check **Debug mode**. This writes detailed logs of all Claude I/O (PTY bytes, MCP messages, hook calls) to:

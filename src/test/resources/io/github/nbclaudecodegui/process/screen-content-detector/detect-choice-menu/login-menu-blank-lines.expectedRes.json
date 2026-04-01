@@ -1,0 +1,9 @@
+{
+  "text": "Select login method:",
+  "options": [
+    {"display": "Claude account with subscription · Pro, Max, Team, or Enterprise", "response": "1"},
+    {"display": "Anthropic Console account · API usage billing", "response": "2"},
+    {"display": "3rd-party platform · Amazon Bedrock, Microsoft Foundry, or Vertex AI", "response": "3"}
+  ],
+  "defaultOptionIndex": 0
+}

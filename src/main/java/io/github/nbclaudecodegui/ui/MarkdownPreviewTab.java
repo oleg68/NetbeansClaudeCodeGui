@@ -2,12 +2,15 @@ package io.github.nbclaudecodegui.ui;
 
 import io.github.nbclaudecodegui.ui.common.MarkdownRenderer;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Point;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.WeakHashMap;
 import javax.swing.JEditorPane;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import org.openide.filesystems.FileChangeAdapter;
 import org.openide.filesystems.FileChangeListener;
@@ -30,10 +33,13 @@ public class MarkdownPreviewTab extends TopComponent {
      * WeakHashMap so that closed / GC'd TCs are eventually removed automatically.
      */
     private static final Map<String, MarkdownPreviewTab> OPEN_TABS =
-            Collections.synchronizedMap(new WeakHashMap<>());
+            Collections.synchronizedMap(new HashMap<>());
 
     /** The editor pane that renders HTML-converted markdown. */
     JEditorPane pane;
+
+    /** The scroll pane wrapping {@link #pane}, used to preserve scroll position on updates. */
+    private JScrollPane scrollPane;
 
     /** Listener attached to the backing FileObject, if any. */
     private FileChangeListener fileListener;
@@ -63,6 +69,11 @@ public class MarkdownPreviewTab extends TopComponent {
         MarkdownPreviewTab existing = OPEN_TABS.get(filePath);
         if (existing != null && existing.isOpened()) {
             existing.updateContent(content);
+            if (existing.fileObject == null && fo != null) {
+                existing.fileObject = fo;
+                existing.fileListener = makeFileListener(existing, fo);
+                fo.addFileChangeListener(existing.fileListener);
+            }
             existing.requestActive();
             return;
         }
@@ -77,19 +88,11 @@ public class MarkdownPreviewTab extends TopComponent {
         String name = new java.io.File(filePath).getName();
         tab.setDisplayName("Preview: " + name);
         tab.setLayout(new BorderLayout());
-        tab.add(new JScrollPane(tab.pane), BorderLayout.CENTER);
+        tab.scrollPane = new JScrollPane(tab.pane);
+        tab.add(tab.scrollPane, BorderLayout.CENTER);
 
         if (fo != null) {
-            tab.fileListener = new FileChangeAdapter() {
-                @Override
-                public void fileChanged(FileEvent fe) {
-                    try {
-                        tab.updateContent(fo.asText());
-                    } catch (IOException e) {
-                        // silently ignore
-                    }
-                }
-            };
+            tab.fileListener = makeFileListener(tab, fo);
             fo.addFileChangeListener(tab.fileListener);
         }
 
@@ -107,7 +110,21 @@ public class MarkdownPreviewTab extends TopComponent {
     public void updateContent(String markdown) {
         String html = MarkdownRenderer.toHtml(markdown != null ? markdown : "");
         SwingUtilities.invokeLater(() -> {
-            if (pane != null) pane.setText(html);
+            if (pane == null) return;
+            if (scrollPane == null) {
+                pane.setText(html);
+                return;
+            }
+            JViewport viewport = scrollPane.getViewport();
+            Dimension viewSize = viewport.getViewSize();
+            double relY = viewSize.height > 0
+                    ? (double) viewport.getViewPosition().y / viewSize.height : 0.0;
+            pane.setText(html);
+            SwingUtilities.invokeLater(() -> {
+                Dimension newSize = viewport.getViewSize();
+                int newY = (int) (relY * newSize.height);
+                viewport.setViewPosition(new Point(0, newY));
+            });
         });
     }
 
@@ -120,6 +137,33 @@ public class MarkdownPreviewTab extends TopComponent {
         if (filePath != null) {
             OPEN_TABS.remove(filePath);
         }
+    }
+
+    /**
+     * Creates a {@link FileChangeListener} that refreshes {@code tab} whenever
+     * {@code fo} changes on disk.  Handles both in-place writes ({@code fileChanged})
+     * and atomic-replace writes ({@code fileDataCreated}) and calls
+     * {@link FileObject#refresh} before reading to avoid stale VFS cache.
+     */
+    private static FileChangeListener makeFileListener(MarkdownPreviewTab tab, FileObject fo) {
+        return new FileChangeAdapter() {
+            @Override
+            public void fileChanged(FileEvent fe) {
+                reload();
+            }
+            @Override
+            public void fileDataCreated(FileEvent fe) {
+                reload();
+            }
+            private void reload() {
+                try {
+                    fo.refresh(false);
+                    tab.updateContent(fo.asText());
+                } catch (IOException e) {
+                    // silently ignore
+                }
+            }
+        };
     }
 
     /**

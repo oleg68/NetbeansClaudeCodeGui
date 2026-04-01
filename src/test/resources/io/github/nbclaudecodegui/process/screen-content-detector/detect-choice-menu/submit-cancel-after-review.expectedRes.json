@@ -1,0 +1,8 @@
+{
+  "text": "Ready to submit your answers?",
+  "options": [
+    {"display": "Submit answers", "response": "1"},
+    {"display": "Cancel", "response": "2"}
+  ],
+  "defaultOptionIndex": 0
+}
