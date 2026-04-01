@@ -19,6 +19,16 @@
         </file>
     </folder>
 
+    <!-- MIME resolver: .md / .markdown → text/x-markdown (fallback when netbeans-markdown is absent) -->
+    <folder name="Services">
+        <folder name="MIMEResolver">
+            <file name="io-github-nbclaudecodegui-markdown-mime-resolver.xml"
+                  url="markdown-mime-resolver.xml">
+                <attr name="position" intvalue="9000"/>
+            </file>
+        </folder>
+    </folder>
+
     <!-- Project Properties — Claude Code panel (Maven) -->
     <folder name="Projects">
         <folder name="org-netbeans-modules-maven">

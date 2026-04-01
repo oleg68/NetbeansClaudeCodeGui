@@ -47,6 +47,16 @@ During development, add bullet lines at the **very top** of `CHANGELOG.md` (abov
 
 Every user-visible change **must** add a new bullet at the **top** of the list (reverse chronological order — newest entries first). "User-visible" means: new feature, changed behavior, bug fix, UI change, new setting, README update. Internal refactors, test-only changes, and CI changes do not require an entry.
 
+Entries must describe the change from the **user's perspective** — what the user experiences, not how it was implemented. Implementation details belong in the commit message body.
+
+Each entry must start with a past-tense verb: **Fixed**, **Added**, **Improved**, **Changed**, **Removed**, etc.
+
+Each changelog entry must be committed **together with the code change it describes** — never in a separate commit.
+
+### Commit message rules
+
+Commit messages must also start with a past-tense verb (e.g. "Fixed ...", "Added ..."). The subject line describes *what* was done; the body (if needed) explains *how* or *why*.
+
 ## Architecture
 
 A NetBeans IDE plugin that embeds Claude Code CLI as a PTY-based terminal session connected to the IDE via three channels: PTY, MCP SSE, and an HTTP hook.

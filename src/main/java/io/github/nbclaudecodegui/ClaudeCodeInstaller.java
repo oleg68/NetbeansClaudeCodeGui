@@ -60,6 +60,7 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
         // Listen for project changes to update lock file
          OpenProjects.getDefault().addPropertyChangeListener(this);
 
+        LOGGER.info("MIME type for .md: " + org.openide.filesystems.FileUtil.getMIMEType("md"));
         LOGGER.info("Claude Code NetBeans plugin started successfully");
     }
 
