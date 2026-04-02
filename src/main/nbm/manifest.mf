@@ -1,4 +1,5 @@
 Manifest-Version: 1.0
 OpenIDE-Module-Layer: io/github/nbclaudecodegui/layer.xml
 OpenIDE-Module-Install: io/github/nbclaudecodegui/ClaudeCodeInstaller.class
+OpenIDE-Module-Name: Claude Code GUI
 
