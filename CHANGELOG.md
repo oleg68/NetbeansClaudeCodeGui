@@ -1,9 +1,7 @@
-- Fixed markdown pin preview tab jumping to the top on each content update — scroll position is now preserved relative to document height
+- Added "Preview Markdown" context menu item for .md files in Projects/Files trees
+- Fixed markdown pin preview tab — scroll position now preserved on updates; file-change tracking no longer lost on re-activation
 - Added alpha-status notice to README
 - Moved Requirements and Installation/Build instructions to docs/installation.md; README and user manual now link to it
-- Fixed pin preview tab losing file-change tracking due to WeakHashMap key GC; now uses HashMap with proper cleanup
-- Fixed pin preview not attaching file-change listener when tab is re-activated for a file that was unavailable at initial open time
-- Added choice menu detection fixtures for interview menus with descriptions, submit/cancel menus, and login menus with blank-separated options (all detected correctly by existing algorithm)
 - Added user manual draft covering all plugin features (docs/user-manual.md)
 - README: updated Requirements with links, clarified Claude CLI PATH setup, recommended download from GitHub Releases, added note that plugin is written by Claude Code
 
