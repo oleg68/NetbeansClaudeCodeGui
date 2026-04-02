@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import org.netbeans.api.annotations.common.StaticResource;
+import javax.swing.JMenuItem;
 import org.openide.awt.ActionID;
 import org.openide.awt.ActionReference;
 import org.openide.awt.ActionReferences;
@@ -16,6 +16,7 @@ import org.openide.loaders.DataObject;
 import org.openide.util.ContextAwareAction;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle.Messages;
+import org.openide.util.actions.Presenter;
 
 /**
  * Context-menu action that opens a rendered markdown preview for {@code .md} files.
@@ -28,11 +29,12 @@ import org.openide.util.NbBundle.Messages;
 @ActionRegistration(displayName = "#CTL_PreviewMarkdownAction", lazy = false)
 @ActionReferences({
     @ActionReference(path = "Loaders/text/x-markdown-nb/Actions", position = 300),
-    @ActionReference(path = "Loaders/text/x-markdown/Actions",    position = 300),
-    @ActionReference(path = "Loaders/text/plain/Actions",          position = 300)
+    @ActionReference(path = "Loaders/text/plain/Actions",          position = 300),
+    @ActionReference(path = "Loaders/content/unknown/Actions",     position = 300)
 })
 @Messages("CTL_PreviewMarkdownAction=Preview Markdown")
-public final class PreviewMarkdownAction extends AbstractAction implements ContextAwareAction {
+public final class PreviewMarkdownAction extends AbstractAction
+        implements ContextAwareAction, Presenter.Popup {
 
     public PreviewMarkdownAction() {
         super("Preview Markdown");
@@ -41,6 +43,13 @@ public final class PreviewMarkdownAction extends AbstractAction implements Conte
     @Override
     public void actionPerformed(ActionEvent e) {
         // global fallback — not called when context-aware instance is used
+    }
+
+    @Override
+    public JMenuItem getPopupPresenter() {
+        JMenuItem item = new JMenuItem(this);
+        item.setVisible(false); // global instance — always hidden
+        return item;
     }
 
     @Override
@@ -63,7 +72,7 @@ public final class PreviewMarkdownAction extends AbstractAction implements Conte
         return new ContextAction(mdFiles);
     }
 
-    private static final class ContextAction extends AbstractAction {
+    private static final class ContextAction extends AbstractAction implements Presenter.Popup {
         private final List<FileObject> files;
 
         ContextAction(List<FileObject> files) {
@@ -76,6 +85,13 @@ public final class PreviewMarkdownAction extends AbstractAction implements Conte
             for (FileObject fo : files) {
                 MarkdownPreviewTab.openFile(fo);
             }
+        }
+
+        @Override
+        public JMenuItem getPopupPresenter() {
+            JMenuItem item = new JMenuItem(this);
+            item.setText("Preview Markdown");
+            return item; // visible — only created for .md files
         }
     }
 }

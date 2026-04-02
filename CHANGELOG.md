@@ -1,3 +1,5 @@
+- Fixed Markdown Preview tabs not restoring after IDE restart; tabs now reopen with correct content and scroll position
+- Added hyperlink navigation in Markdown Preview: click to open in same tab, right-click for same tab / new tab / browser; back and forward navigation
 - Added "Preview Markdown" context menu item for .md files in Projects/Files trees
 - Fixed markdown pin preview tab — scroll position now preserved on updates; file-change tracking no longer lost on re-activation
 - Added alpha-status notice to README

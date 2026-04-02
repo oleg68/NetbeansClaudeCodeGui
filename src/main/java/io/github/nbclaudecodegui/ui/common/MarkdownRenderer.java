@@ -39,7 +39,8 @@ public final class MarkdownRenderer {
             "\\*\\*\\*(.+?)\\*\\*\\*"    // group 1: bold-italic
             + "|\\*\\*(.+?)\\*\\*"       // group 2: bold
             + "|\\*([^*\\n]+)\\*"        // group 3: italic
-            + "|`([^`]+)`",              // group 4: inline code
+            + "|`([^`]+)`"               // group 4: inline code
+            + "|\\[([^\\]]+)\\]\\(([^)]+)\\)",  // group 5: link text, group 6: link url
             Pattern.DOTALL);
 
     // -------------------------------------------------------------------------
@@ -82,6 +83,7 @@ public final class MarkdownRenderer {
         ss.addRule("h3 { font-size: 13pt; margin: 4px 0 2px; }");
         ss.addRule(".user-label { color: #0064b4; font-weight: bold; }");
         ss.addRule(".info  { color: #888; font-size: 11pt; }");
+        ss.addRule("a { cursor: pointer; color: #0066cc; }");
 
         JEditorPane pane = new JEditorPane();
         pane.setEditorKit(kit);
@@ -346,6 +348,9 @@ public final class MarkdownRenderer {
                 sb.append("<em>").append(esc(m.group(3))).append("</em>");
             } else if (m.group(4) != null) {
                 sb.append("<code>").append(esc(m.group(4))).append("</code>");
+            } else if (m.group(5) != null) {
+                sb.append("<a href=\"").append(esc(m.group(6))).append("\">")
+                        .append(esc(m.group(5))).append("</a>");
             }
             lastEnd = m.end();
         }

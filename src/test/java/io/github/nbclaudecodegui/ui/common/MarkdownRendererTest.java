@@ -172,6 +172,35 @@ class MarkdownRendererTest {
         assertTrue(html.contains("C&amp;D"), "& escaped in cell");
     }
 
+    // -------------------------------------------------------------------------
+    // inlineToHtml() — links
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testInlineLink() {
+        String result = MarkdownRenderer.inlineToHtml("[Installation & Build](docs/installation.md)");
+        assertTrue(result.contains("<a href=\"docs/installation.md\">"), "anchor href");
+        assertTrue(result.contains("Installation &amp; Build"), "link text escaped");
+        assertTrue(result.contains("</a>"), "anchor close");
+        assertFalse(result.contains("[Installation"), "raw markdown should not appear");
+    }
+
+    @Test
+    void testInlineLinkInParagraph() {
+        String html = MarkdownRenderer.toHtml(
+                "See [Installation & Build](docs/installation.md) for requirements.");
+        assertTrue(html.contains("<a href=\"docs/installation.md\">"), "link in paragraph");
+        assertTrue(html.contains("Installation &amp; Build"), "link text");
+        assertFalse(html.contains("[Installation"), "raw markdown should not appear");
+    }
+
+    @Test
+    void testInlineLinkMixedWithBold() {
+        String result = MarkdownRenderer.inlineToHtml("See [guide](readme.md) and **bold**");
+        assertTrue(result.contains("<a href=\"readme.md\">guide</a>"), "link");
+        assertTrue(result.contains("<b>bold</b>"), "bold");
+    }
+
     @Test
     void testTableFollowedByParagraph() {
         String md = "| X |\n|---|\n| v |\n\nSome text after.";
