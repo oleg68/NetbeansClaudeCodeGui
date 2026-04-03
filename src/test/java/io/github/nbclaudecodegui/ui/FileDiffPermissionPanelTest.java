@@ -34,8 +34,8 @@ class FileDiffPermissionPanelTest {
             if (text.contains(lbl)) {
                 // Prefer exact containment: skip if there is a longer keyword that subsumes ours
                 // (e.g. "acceptall" when searching for "accept")
-                if (lbl.equals("accept") && text.contains("acceptall")) {
-                    // skip AcceptAll button
+                if (lbl.equals("accept") && (text.contains("acceptall") || text.contains("accept all"))) {
+                    // skip Accept All button
                 } else {
                     return btn;
                 }
@@ -188,9 +188,9 @@ class FileDiffPermissionPanelTest {
     void acceptAllButtonDisabledWhenOnAcceptAllIsNull() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             FileDiffPermissionPanel panel = new FileDiffPermissionPanel(() -> {}, reason -> {}, null, () -> {}, null);
-            JButton acceptAll = findButton(panel, "AcceptAll");
-            assertNotNull(acceptAll, "AcceptAll button must exist");
-            assertFalse(acceptAll.isEnabled(), "AcceptAll button must be disabled when onAcceptAll is null");
+            JButton acceptAll = findButton(panel, "Accept All");
+            assertNotNull(acceptAll, "Accept All button must exist");
+            assertFalse(acceptAll.isEnabled(), "Accept All button must be disabled when onAcceptAll is null");
         });
     }
 
@@ -198,9 +198,9 @@ class FileDiffPermissionPanelTest {
     void acceptAllButtonEnabledWhenOnAcceptAllIsProvided() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             FileDiffPermissionPanel panel = new FileDiffPermissionPanel(() -> {}, reason -> {}, () -> {}, () -> {}, null);
-            JButton acceptAll = findButton(panel, "AcceptAll");
-            assertNotNull(acceptAll, "AcceptAll button must exist");
-            assertTrue(acceptAll.isEnabled(), "AcceptAll button must be enabled when onAcceptAll is non-null");
+            JButton acceptAll = findButton(panel, "Accept All");
+            assertNotNull(acceptAll, "Accept All button must exist");
+            assertTrue(acceptAll.isEnabled(), "Accept All button must be enabled when onAcceptAll is non-null");
         });
     }
 
@@ -228,10 +228,10 @@ class FileDiffPermissionPanelTest {
     void acceptAllButtonTextContainsDoubleCheckMark() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             FileDiffPermissionPanel panel = new FileDiffPermissionPanel(() -> {}, reason -> {}, () -> {}, () -> {}, null);
-            JButton acceptAll = findButton(panel, "AcceptAll");
-            assertNotNull(acceptAll, "AcceptAll button must exist");
+            JButton acceptAll = findButton(panel, "Accept All");
+            assertNotNull(acceptAll, "Accept All button must exist");
             assertTrue(acceptAll.getText().contains("\u2713\u2713"),
-                    "AcceptAll button text must contain double check mark \u2713\u2713, got: " + acceptAll.getText());
+                    "Accept All button text must contain double check mark \u2713\u2713, got: " + acceptAll.getText());
         });
     }
 
@@ -241,10 +241,10 @@ class FileDiffPermissionPanelTest {
         SwingUtilities.invokeAndWait(() -> {
             FileDiffPermissionPanel panel = new FileDiffPermissionPanel(
                     () -> {}, reason -> {}, () -> fired.add("all"), () -> {}, null);
-            JButton acceptAll = findButton(panel, "AcceptAll");
+            JButton acceptAll = findButton(panel, "Accept All");
             assertNotNull(acceptAll);
             acceptAll.doClick();
         });
-        assertEquals(List.of("all"), fired, "onAcceptAll must be called when AcceptAll is clicked");
+        assertEquals(List.of("all"), fired, "onAcceptAll must be called when Accept All is clicked");
     }
 }

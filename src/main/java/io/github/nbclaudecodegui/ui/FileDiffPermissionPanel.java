@@ -67,7 +67,7 @@ public final class FileDiffPermissionPanel extends JPanel {
         final String wdFinal = workingDir;
 
         // AcceptAll button
-        JButton acceptAllBtn = new JButton(ICON_ACCEPT_ALL + " AcceptAll");
+        JButton acceptAllBtn = new JButton(ICON_ACCEPT_ALL + " Accept All");
         acceptAllBtn.setToolTipText("Accept all future changes in this session (sets edit mode to Accept on Edit)");
         acceptAllBtn.setEnabled(onAcceptAll != null);
 
@@ -123,8 +123,7 @@ public final class FileDiffPermissionPanel extends JPanel {
             if (!reason.isEmpty()) {
                 int choice = JOptionPane.showConfirmDialog(
                         acceptBtn,
-                        "You have typed a decline reason: \"" + reason + "\"\n"
-                        + "It will NOT be sent. Accept the change anyway?",
+                        "You have typed a decline reason that will NOT be sent. Accept the change anyway?",
                         "Accept with decline reason",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
@@ -140,9 +139,8 @@ public final class FileDiffPermissionPanel extends JPanel {
             if (!reason.isEmpty()) {
                 int choice = JOptionPane.showConfirmDialog(
                         acceptAllBtn,
-                        "You have typed a decline reason: \"" + reason + "\"\n"
-                        + "It will NOT be sent. Accept all changes anyway?",
-                        "AcceptAll with decline reason",
+                        "You have typed a decline reason that will NOT be sent. Accept all changes anyway?",
+                        "Accept All with decline reason",
                         JOptionPane.YES_NO_OPTION,
                         JOptionPane.WARNING_MESSAGE);
                 if (choice != JOptionPane.YES_OPTION) return;

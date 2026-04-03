@@ -34,7 +34,9 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
+import java.net.URI;
 import java.util.logging.Logger;
+import org.openide.awt.HtmlBrowser;
 
 /**
  * Settings panel for managing Claude Code connection profiles.
@@ -173,7 +175,7 @@ public final class ClaudeProfilesPanel extends JPanel {
         int row = 0;
 
         // --- Profiles directory ---
-        mainPanel.add(new JLabel("Profiles directory:"), gbc(0, row, false));
+        mainPanel.add(new JLabel("New Profiles Directory:"), gbc(0, row, false));
         profilesDirField = new JTextField(40);
         profilesDirField.setEditable(false);
         profilesDirField.setToolTipText("Base directory for per-profile CLAUDE_CONFIG_DIR");
@@ -209,7 +211,7 @@ public final class ClaudeProfilesPanel extends JPanel {
         row++;
 
         // --- Config directory (read-only) ---
-        mainPanel.add(new JLabel("Config directory:"), gbc(0, row, false));
+        mainPanel.add(new JLabel("Profile Storage Directory:"), gbc(0, row, false));
         configDirField = new JTextField(40);
         configDirField.setEditable(false);
         GridBagConstraints cfgGbc = gbcFill(1, row);
@@ -290,19 +292,21 @@ public final class ClaudeProfilesPanel extends JPanel {
         rbMgdGbc.insets = new Insets(2, 0, 2, 0);
         grid.add(rbManaged, rbMgdGbc);
 
-        // row 1: rbSubscription + Token label + tokenField + [Show]
+        // row 1: rbSubscription + Token label + tokenField + [Show] + [claude.ai]
         grid.add(rbSubscription, inlineRbGbc(0, 1));
         grid.add(new JLabel("Token:"), inlineLblGbc(1, 1));
         grid.add(tokenField, inlineFieldGbc(2, 1));
         tokenShowBtn = buildShowHideButton(tokenField);
         grid.add(tokenShowBtn, inlineBtnGbc(3, 1));
+        grid.add(buildLinkButton("claude.ai", "https://claude.ai"), inlineBtnGbc(4, 1));
 
-        // row 2: rbClaudeApi + API Key label + apiKeyField + [Show]
+        // row 2: rbClaudeApi + API Key label + apiKeyField + [Show] + [console.anthropic.com]
         grid.add(rbClaudeApi, inlineRbGbc(0, 2));
         grid.add(new JLabel("API Key:"), inlineLblGbc(1, 2));
         grid.add(apiKeyField, inlineFieldGbc(2, 2));
         apiKeyShowBtn = buildShowHideButton(apiKeyField);
         grid.add(apiKeyShowBtn, inlineBtnGbc(3, 2));
+        grid.add(buildLinkButton("console.anthropic.com", "https://console.anthropic.com"), inlineBtnGbc(4, 2));
 
         // row 3: rbOtherApi + Base URL label + baseUrlField + [Custom Models…]
         grid.add(rbOtherApi, inlineRbGbc(0, 3));
@@ -872,6 +876,23 @@ public final class ClaudeProfilesPanel extends JPanel {
         c.anchor = GridBagConstraints.NORTHWEST;
         c.insets = new Insets(2, 0, 2, 4);
         return c;
+    }
+
+    private static JButton buildLinkButton(String label, String url) {
+        JButton btn = new JButton("<html><a href=''>" + label + "</a></html>");
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setOpaque(false);
+        btn.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+        btn.setToolTipText(url);
+        btn.addActionListener(e -> {
+            try {
+                HtmlBrowser.URLDisplayer.getDefault().showURL(new URI(url).toURL());
+            } catch (Exception ex) {
+                LOG.warning("Could not open URL: " + url + " — " + ex.getMessage());
+            }
+        });
+        return btn;
     }
 
     private static GridBagConstraints inlineBtnGbc(int col, int row) {

@@ -93,8 +93,8 @@ public final class ClaudeCodeOptionsPanel extends JPanel {
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("General", buildGeneralPanel());
-        tabs.addTab("Profiles", profilesPanel);
         tabs.addTab("Favorites", favoritesPanel);
+        tabs.addTab("Profiles", profilesPanel);
         add(tabs, BorderLayout.CENTER);
     }
 

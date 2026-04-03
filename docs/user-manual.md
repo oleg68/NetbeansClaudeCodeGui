@@ -348,11 +348,11 @@ The **Default** profile is always present and cannot be renamed or deleted. Name
 
 ### Profiles directory
 
-Named profiles are stored under a common base directory (default: `~/.netbeans/claude-profiles/`). Each profile occupies a subdirectory named after the profile.
+Named profiles are stored under a common base directory (default: `~/.netbeans/claude-plugin/profiles/`). Each profile occupies a subdirectory named after the profile.
 
-The base directory only affects newly created profiles. To move existing profiles to a new location, manually move their subdirectories to the new location first, then update the directory via the **Profiles directory** field (click **Change…**).
+The base directory only affects newly created profiles. To move existing profiles to a new location, manually move their subdirectories to the new location first, then update the directory via the **New Profiles Directory** field (click **Change…**).
 
-The read-only **Config directory** field shows the storage path for the selected profile. For the Default profile it shows `~/.claude (not overridden)`.
+The read-only **Profile Storage Directory** field shows the storage path for the selected profile. For the Default profile it shows `~/.claude (not overridden)`.
 
 ### Managing profiles
 
@@ -362,7 +362,7 @@ The read-only **Config directory** field shows the storage path for the selected
 | **Copy** | Duplicate the currently selected profile |
 | **Rename** | Rename the currently selected profile |
 | **Delete** | Delete the currently selected profile |
-| **Change…** | Change the profile Config directory |
+| **Change…** | Change the profile storage directory |
 
 ### Authentication
 
@@ -401,7 +401,9 @@ Fill in only the aliases for models you plan to use and whose IDs do not start w
 
 ### Extra environment variables
 
-Arbitrary `KEY=VALUE` pairs injected into the Claude process environment. Applied last — they override all other profile variables. Use this for provider-specific configuration. <!-- TODO: add links to Claude Code env vars documentation and list of compatible providers -->
+Arbitrary `KEY=VALUE` pairs injected into the Claude process environment. Applied last — they override all other profile variables. Use this for provider-specific configuration.
+
+See the [Claude Code environment variables reference](https://code.claude.com/docs/en/env-vars) for the full list of supported variables, and [third-party integrations](https://code.claude.com/docs/en/third-party-integrations) for compatible API providers (Amazon Bedrock, Google Vertex AI, Microsoft Foundry, and others).
 
 ### Per-project profile assignment
 

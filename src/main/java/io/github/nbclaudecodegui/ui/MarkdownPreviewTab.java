@@ -2,6 +2,8 @@ package io.github.nbclaudecodegui.ui;
 
 import io.github.nbclaudecodegui.ui.common.MarkdownRenderer;
 import java.awt.BorderLayout;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import org.openide.awt.HtmlBrowser;
 import java.awt.Dimension;
 import java.awt.Point;
@@ -363,6 +365,14 @@ public class MarkdownPreviewTab extends TopComponent {
         }
     }
 
+    private void copyUrlToClipboard(String href) {
+        if (href == null) return;
+        File resolved = resolveLink(href);
+        String text = resolved != null ? resolved.getAbsolutePath() : href;
+        Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new StringSelection(text), null);
+    }
+
     private static void openInBrowser(String href) {
         try {
             HtmlBrowser.URLDisplayer.getDefault().showURL(new URI(href).toURL());
@@ -389,6 +399,7 @@ public class MarkdownPreviewTab extends TopComponent {
         JMenuItem openSame = new JMenuItem("Open in Same Tab");
         JMenuItem openNew  = new JMenuItem("Open in New Tab");
         JMenuItem openBrowser = new JMenuItem("Open in Browser");
+        JMenuItem copyUrl = new JMenuItem("Copy URL");
         JPopupMenu.Separator linkSep = new JPopupMenu.Separator();
 
         JMenuItem back    = new JMenuItem("\u2190 Back");
@@ -410,10 +421,12 @@ public class MarkdownPreviewTab extends TopComponent {
         openSame.addActionListener(e -> openLinkInSameTab(menuHref));
         openNew.addActionListener(e -> openLinkInNewTab(menuHref));
         openBrowser.addActionListener(e -> openInBrowser(menuHref));
+        copyUrl.addActionListener(e -> copyUrlToClipboard(menuHref));
 
         menu.add(openSame);
         menu.add(openNew);
         menu.add(openBrowser);
+        menu.add(copyUrl);
         menu.add(linkSep);
         menu.add(back);
         menu.add(forward);
@@ -431,10 +444,12 @@ public class MarkdownPreviewTab extends TopComponent {
                 openSame.setVisible(hasLink);
                 openNew.setVisible(hasLink);
                 openBrowser.setVisible(hasLink);
+                copyUrl.setVisible(hasLink);
                 linkSep.setVisible(hasLink);
                 openSame.setEnabled(isLocalMd);
                 openNew.setEnabled(isLocalMd);
                 openBrowser.setEnabled(isExternal);
+                copyUrl.setEnabled(hasLink);
                 back.setEnabled(canGoBack());
                 forward.setEnabled(canGoForward());
                 copy.setEnabled(pane != null

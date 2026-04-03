@@ -121,39 +121,14 @@
 
     Enter to select · Tab/Arrow keys to navigate · Esc to cancel                                                                                                                                                                                             
     ```
+- [x] Markdown Preview: добавить пункт контекстного меню Copy Url при наведении на гиперссылку. Для md-файлов - абсолютный путь, для внешних ссылок - url
+- [x] Настройки: переставить местами Profiles и Favorites
+- [x] Настройки профилей: добавить гиперссылки на сайты для получения токенов/ключей рядом с полями в табе настройки профиля (claude.ai для Subscription, console.anthropic.com для Claude API)
+- [x] User manual: найти и вставить URL на документацию Claude Code по env vars и список совместимых провайдеров (для раздела Extra environment variables в профилях)
+- [x] Profiles: поменять дефолтную директорию профилей с ~/.netbeans/claude-profiles/ на ~/.netbeans/claude-plugin/profiles/
+- [x] Profiles: переименовать лейблы — "Profiles directory:" → "New Profiles Directory:", "Config directory:" → "Profile Storage Directory:", кнопку "Change…" → синхронизировать с новым названием поля; после этого обновить user-manual.md
+- [x] Diff panel: кнопка должна называться "Accept All" (два слова), сейчас "AcceptAll"
 
-- [ ] Не распозналось меню
-    ```
-    ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-    ←  ☒ Релизы  ✔ Submit  →
-
-    Review your answers
-
-     ● Для каких релизов актуально обновление netty до 4.2.12.Final?
-       → 2026.1, 2025.2, 2026.2
-
-    Ready to submit your answers?
-
-    ❯ 1. Submit answers
-      2. Cancel
-    ```
-- [ ] pin preview не отслеживает изменение в файле
-- [ ] Не распозналось меню
-    ```
-    …………………█ █   █ █………………………………………………………………………………………………………………
-
-
-     Claude Code can be used with your Claude subscription or billed based on API usage through your Console account.
-
-     Select login method:
-
-     ❯ 1. Claude account with subscription · Pro, Max, Team, or Enterprise
-
-       2. Anthropic Console account · API usage billing
-
-       3. 3rd-party platform · Amazon Bedrock, Microsoft Foundry, or Vertex AI
-    ```
 # Features
 
 - [x] Возможность подключения md-вьюера в FileDiff
@@ -183,16 +158,9 @@
     Enter to select · ↑/↓ to navigate · Esc to cancel
     ```
     Отправлять ответ так: сначала выбранные цмфры, потом стрелку вправо.
-- [ ] Markdown Preview: добавить пункт контекстного меню Copy Url при наведении на гиперссылку. Для md-файлов - абсолютный путь, для внешних ссылок - url
-- [ ] Настройки: переставить местами Profiles и Favorites
-- [ ] Настройки профилей: добавить гиперссылки на сайты для получения токенов/ключей рядом с полями в табе настройки профиля (claude.ai для Subscription, console.anthropic.com для Claude API)
-- [ ] User manual: найти и вставить URL на документацию Claude Code по env vars и список совместимых провайдеров (для раздела Extra environment variables в профилях)
-- [ ] MCP Tools: добиться работоспособности MCP инструментов (get_open_editors, get_current_selection и др. не вызываются Claude автоматически), после чего написать раздел в user-manual.md с примерами промптов
 
+- [ ] MCP Tools: добиться работоспособности MCP инструментов (get_open_editors, get_current_selection и др. не вызываются Claude автоматически), после чего написать раздел в user-manual.md с примерами промптов
 - [ ] Profiles: добавить алиас "custom" для кастомной модели (Claude Code поддерживает ANTHROPIC_DEFAULT_CUSTOM_MODEL)
-- [ ] Profiles: поменять дефолтную директорию профилей с ~/.netbeans/claude-profiles/ на ~/.netbeans/claude-plugin/profiles/
-- [ ] Profiles: переименовать лейблы — "Profiles directory:" → "New Profiles Directory:", "Config directory:" → "Profile Storage Directory:", кнопку "Change…" → синхронизировать с новым названием поля; после этого обновить user-manual.md
 - [ ] History dialog: кнопка "Clear older…" должна удалять записи до даты выбранного элемента, а не запрашивать дату вручную
-- [ ] Diff panel: кнопка должна называться "Accept All" (два слова), сейчас "AcceptAll"
 - [ ] Session startup: если `claude` не найден (или процесс упал при старте), выводить внятное сообщение об ошибке; не оставлять сессию-зомби (сейчас таб открывается, но остаётся пустым)
 - [ ] MCP server: выяснить, как проявляется ошибка запуска MCP-сервера (порт занят и т.п.) — в UI или только в логе; добавить внятную диагностику и вернуть пункт в Troubleshooting

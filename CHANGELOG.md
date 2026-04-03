@@ -1,3 +1,9 @@
+- Added "Copy URL" context menu item in Markdown Preview when hovering over a hyperlink (copies absolute path for .md links, URL for external links)
+- Added hyperlinks to claude.ai and console.anthropic.com next to token/API key fields in profile settings
+- Changed default profiles directory from ~/.netbeans/claude-profiles/ to ~/.netbeans/claude-plugin/profiles/
+- Renamed labels in Profiles settings: "Profiles directory" → "New Profiles Directory", "Config directory" → "Profile Storage Directory"
+- Fixed "Accept All" button label in diff panel (was "AcceptAll")
+- Reordered settings tabs: Favorites now appears before Profiles
 - Changed plugin display name in Tools → Plugins to "Claude Code GUI"
 - Fixed Markdown Preview tabs not restoring after IDE restart; tabs now reopen with correct content and scroll position
 - Added hyperlink navigation in Markdown Preview: click to open in same tab, right-click for same tab / new tab / browser; back and forward navigation

@@ -243,9 +243,9 @@ public final class ClaudeCodePreferences {
     /**
      * Returns the configured profiles base directory, or the platform default.
      *
-     * <p>Default: {@code parent(Places.getUserDirectory()) / claude-profiles/}.
+     * <p>Default: {@code parent(Places.getUserDirectory()) / claude-plugin/profiles/}.
      * For example, if {@code getUserDirectory()} is {@code ~/.netbeans/21/},
-     * the default is {@code ~/.netbeans/claude-profiles/}.
+     * the default is {@code ~/.netbeans/claude-plugin/profiles/}.
      *
      * @return absolute path to the profiles base directory
      */
@@ -270,7 +270,7 @@ public final class ClaudeCodePreferences {
 
     /**
      * Computes the default profiles directory as
-     * {@code parent(Places.getUserDirectory())/claude-profiles/}.
+     * {@code parent(Places.getUserDirectory())/claude-plugin/profiles/}.
      *
      * @return default profiles directory path
      */
@@ -280,14 +280,14 @@ public final class ClaudeCodePreferences {
             if (userDir != null) {
                 Path parent = userDir.toPath().getParent();
                 if (parent != null) {
-                    return parent.resolve("claude-profiles");
+                    return parent.resolve("claude-plugin/profiles");
                 }
             }
         } catch (Exception e) {
             LOG.warning("Could not resolve Places.getUserDirectory(): " + e.getMessage());
         }
-        // Fallback: ~/claude-profiles
-        return Path.of(System.getProperty("user.home"), "claude-profiles");
+        // Fallback: ~/.netbeans/claude-plugin/profiles
+        return Path.of(System.getProperty("user.home"), ".netbeans", "claude-plugin", "profiles");
     }
 
     // -------------------------------------------------------------------------
