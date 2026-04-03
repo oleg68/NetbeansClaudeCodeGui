@@ -18,6 +18,10 @@ The `claude` executable must be on your system `PATH` **or** its absolute path m
 
 Download the latest `.nbm` file from the [Releases page](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest).
 
+### Intermediate builds
+
+Builds between releases are available as artifacts on the [Actions](https://github.com/oleg68/NetbeansClaudeCodeGui/actions) page — open the latest successful workflow run and download the `nbm` artifact (delivered as a zip file; extract the `.nbm` before installing).
+
 ### Install into NetBeans
 
 1. Open NetBeans → **Tools → Plugins**
@@ -25,6 +29,15 @@ Download the latest `.nbm` file from the [Releases page](https://github.com/oleg
 3. Click **Add Plugins…** and select the `.nbm` file
 4. Click **Install** and follow the wizard
 5. Restart NetBeans when prompted
+
+### Uninstall
+
+1. Open NetBeans → **Tools → Plugins**
+2. Switch to the **Installed** tab
+3. Make sure **Show details** is checked — otherwise only group entries are shown and individual plugins cannot be selected
+4. Check the checkbox next to **Claude Code GUI** in the **Select** column
+5. Click **Uninstall**
+6. Restart NetBeans when prompted
 
 ---
 

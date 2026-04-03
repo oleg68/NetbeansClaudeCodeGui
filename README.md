@@ -6,9 +6,22 @@
 
 > **Alpha:** The plugin is under active development. Some features may not work correctly.
 
-A NetBeans IDE plugin that embeds the [Claude Code](https://claude.ai/code) CLI as a PTY-based terminal session directly inside the IDE. Each session runs in its own dockable window with a full JediTerm terminal widget — Claude's TUI renders natively including permission prompts and progress indicators.
+NetBeans Claude Code GUI is a NetBeans IDE plugin that embeds the Claude Code CLI as a full interactive terminal session directly inside the IDE. You type prompts in a dedicated session tab, Claude reads and edits your project files, and the plugin provides:
+
+- a graphical file diff (using NetBeans' built-in diff viewer) before any change is written to disk
+- a graphical panel for responding to Claude's interactive questions
+
+IDE integration (open editors, diagnostics, current selection) is exposed to Claude via the MCP protocol so that Claude always has full context about your work.
 
 The plugin code was written entirely by [Claude Code](https://claude.ai/code) using **Claude Sonnet 4.6**, with the author acting as architect and reviewer.
+
+---
+
+## Download
+
+Download the latest `.nbm` file from [GitHub Releases](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest).
+
+Intermediate builds between releases are available as artifacts on the [Actions](https://github.com/oleg68/NetbeansClaudeCodeGui/actions) page — open the latest successful workflow run and download the `nbm` artifact (delivered as a zip file; extract the `.nbm` before installing).
 
 ---
 
@@ -18,64 +31,7 @@ See [Installation & Build](docs/installation.md) for requirements, installation 
 
 ## Usage
 
-### Opening a session
-
-**From the toolbar:** click the Claude Code button in the Build toolbar. If no free session window exists a new one is created.
-
-**From the context menu:** right-click any project node in the Projects Explorer → **Open with Claude Code**. A session window bound to that project's root directory opens (or is focused if already open).
-
-### Directory selector
-
-Each session window has a directory bar at the top:
-
-- The drop-down lists all currently open projects for quick selection.
-- The **Browse…** button opens a directory chooser.
-- Once confirmed (**Open**), the bar locks and the window title updates to the project name or directory basename.
-- The **⚙** button opens the plugin settings (Tools → Options → Claude Code).
-
-### Interactive prompts
-
-When Claude asks a question (permission request, choice, confirmation), a `PromptResponsePanel` appears between the terminal and the input bar. Click a button or press **ESC** / **Cancel** to dismiss.
-
-### File-change permissions
-
-When Claude wants to edit a file, the plugin can intercept the request and show a diff view before allowing it. A permission bar at the bottom of the diff tab lets you:
-
-- **✓ Accept** — allow the change
-- **✗ Reject** — deny the change (with an optional reason sent to Claude)
-- **Cancel** — deny and interrupt Claude's running prompt (sends Ctrl+C to the PTY)
-- **× (close tab)** — treated as Reject
-
-This works via two integration paths that share the same UI (`FileDiffTab` + `PermissionPanel`):
-1. **PreToolUse HTTP hook** — Claude calls the plugin's endpoint before each write.
-2. **`permission_prompt` MCP tool** — Claude invokes the tool directly.
-
-After any action, the Claude session window is re-activated automatically.
-
-### Profiles
-
-Multiple **named profiles** can be configured in Tools → Options → Claude Code → **Profiles**. Each profile has:
-
-- **Connection type** — Claude managed (no extra vars), Subscription (`CLAUDE_CODE_OAUTH_TOKEN`), Claude API (`ANTHROPIC_API_KEY`), or Other API (`ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL`).
-- **Proxy settings** — inherit system env, force no proxy, or supply custom `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` values.
-- **Extra env vars** — arbitrary key/value pairs for Bedrock, Vertex, etc.
-- **Isolated config dir** — each non-Default profile gets its own `CLAUDE_CONFIG_DIR` under the configured profiles directory (default: `~/.netbeans/claude-profiles/<name>/`), so history, settings, and credentials are fully separated.
-
-Profiles can be assigned per-project via **right-click → Properties → Claude Code**, or selected per-session in the control bar combo before clicking **Open**.
-
-### Prompt history & favorites
-
-The input bar maintains a persistent prompt history per project:
-- **Ctrl+Up / Ctrl+Down** — navigate history entries in the input field
-- **History** button (or Ctrl+H) — open the history popup: select an entry to load into the input bar, star it as a favorite, or delete it
-
-**Favorites** can be global or per-project:
-- **Favorites** button — open the favorites panel: Send, Move (global ↔ per-project), Rename, Reorder (↑↓), Delete
-- Assign a keyboard shortcut to any favorite via **right-click → Assign shortcut…**
-
-### Closing sessions
-
-Closing a session window while a PTY process is running shows a confirmation dialog. Confirmed close stops the process. PTY processes are children of the IDE JVM — they receive SIGHUP automatically if the IDE exits unexpectedly.
+See the [User Manual](docs/user-manual.md) for full documentation of all plugin features.
 
 ---
 

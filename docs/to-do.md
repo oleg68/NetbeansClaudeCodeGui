@@ -183,4 +183,16 @@
     Enter to select · ↑/↓ to navigate · Esc to cancel
     ```
     Отправлять ответ так: сначала выбранные цмфры, потом стрелку вправо.
-- [ ] Настройки профилей: Claude: добавить url страниц, где можно взять ключи, как у jedict
+- [ ] Markdown Preview: добавить пункт контекстного меню Copy Url при наведении на гиперссылку. Для md-файлов - абсолютный путь, для внешних ссылок - url
+- [ ] Настройки: переставить местами Profiles и Favorites
+- [ ] Настройки профилей: добавить гиперссылки на сайты для получения токенов/ключей рядом с полями в табе настройки профиля (claude.ai для Subscription, console.anthropic.com для Claude API)
+- [ ] User manual: найти и вставить URL на документацию Claude Code по env vars и список совместимых провайдеров (для раздела Extra environment variables в профилях)
+- [ ] MCP Tools: добиться работоспособности MCP инструментов (get_open_editors, get_current_selection и др. не вызываются Claude автоматически), после чего написать раздел в user-manual.md с примерами промптов
+
+- [ ] Profiles: добавить алиас "custom" для кастомной модели (Claude Code поддерживает ANTHROPIC_DEFAULT_CUSTOM_MODEL)
+- [ ] Profiles: поменять дефолтную директорию профилей с ~/.netbeans/claude-profiles/ на ~/.netbeans/claude-plugin/profiles/
+- [ ] Profiles: переименовать лейблы — "Profiles directory:" → "New Profiles Directory:", "Config directory:" → "Profile Storage Directory:", кнопку "Change…" → синхронизировать с новым названием поля; после этого обновить user-manual.md
+- [ ] History dialog: кнопка "Clear older…" должна удалять записи до даты выбранного элемента, а не запрашивать дату вручную
+- [ ] Diff panel: кнопка должна называться "Accept All" (два слова), сейчас "AcceptAll"
+- [ ] Session startup: если `claude` не найден (или процесс упал при старте), выводить внятное сообщение об ошибке; не оставлять сессию-зомби (сейчас таб открывается, но остаётся пустым)
+- [ ] MCP server: выяснить, как проявляется ошибка запуска MCP-сервера (порт занят и т.п.) — в UI или только в логе; добавить внятную диагностику и вернуть пункт в Troubleshooting

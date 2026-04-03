@@ -9,21 +9,26 @@
 3. [Quick Start](#3-quick-start)
 4. [Session Window](#4-session-window)
 5. [Sending Prompts](#5-sending-prompts)
-6. [File Attachments](#6-file-attachments)
+6. [Favorites](#6-favorites)
 7. [Prompt History](#7-prompt-history)
-8. [Favorites](#8-favorites)
-9. [File-Change Permissions (Diff Panel)](#9-file-change-permissions-diff-panel)
-10. [Interactive Prompts (Choice Menu)](#10-interactive-prompts-choice-menu)
+8. [File Attachments](#8-file-attachments)
+9. [Interactive Prompts (Choice Menu)](#9-interactive-prompts-choice-menu)
+10. [File-Change Permissions (Diff Panel)](#10-file-change-permissions-diff-panel)
 11. [Settings (Tools → Options → Claude Code)](#11-settings)
-12. [Keyboard Shortcuts Reference](#12-keyboard-shortcuts-reference)
-13. [MCP Tools Reference](#13-mcp-tools-reference)
-14. [Troubleshooting](#14-troubleshooting)
+12. [Profiles](#12-profiles)
+13. [Troubleshooting](#13-troubleshooting)
+
 
 ---
 
 ## 1. Overview
 
-NetBeans Claude Code GUI is a NetBeans IDE plugin that embeds the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) as a full interactive terminal session directly inside the IDE. You type prompts in a dedicated panel, Claude reads and edits your project files, and the plugin intercepts file-change requests to show you a diff before any change is applied. IDE integration (open editors, diagnostics, current selection) is exposed to Claude via the MCP protocol so that Claude always has full context about your work.
+NetBeans Claude Code GUI is a NetBeans IDE plugin that embeds the Claude Code CLI as a full interactive terminal session directly inside the IDE. You type prompts in a dedicated session tab, Claude reads and edits your project files, and the plugin provides:
+
+- a graphical file diff (using NetBeans' built-in diff viewer) before any change is written to disk
+- a graphical panel for responding to Claude's interactive questions
+
+IDE integration (open editors, diagnostics, current selection) is exposed to Claude via the MCP protocol so that Claude always has full context about your work.
 
 ---
 
@@ -35,9 +40,9 @@ See [Installation & Build](installation.md) for requirements, installation steps
 
 ## 3. Quick Start
 
-1. Open the Claude Code session: click the **Claude Code** button in the toolbar (or **Window → Claude Code**).
-2. In the session tab, click the **directory bar** at the top and select (or type) the working directory — typically your project root.
-3. Claude Code starts. Wait for the terminal area to show the Claude Code prompt.
+1. Right-click your project in the **Projects** window → **Open with Claude Code**.
+2. A session tab opens and Claude Code starts. Wait for the Claude Code prompt to appear in the terminal.
+3. If this is the first time running Claude Code (or the first time for this project), answer Claude's initial setup questions in the terminal or the choice panel.
 4. Type your first prompt in the input area at the bottom (e.g., `Explain what this project does`).
 5. Press **Ctrl+Enter** (default) to send. Claude's response appears in the terminal.
 
@@ -49,69 +54,101 @@ See [Installation & Build](installation.md) for requirements, installation steps
 
 <!-- TODO: screenshot: annotated session window -->
 
-The session tab contains three main areas:
-
-### Directory bar (top)
-Shows the current working directory. Click it to change the directory before starting or after stopping a session. The working directory is passed to Claude as the project root.
+The session tab contains the following areas:
 
 ### Terminal area (center)
-A full PTY-backed terminal that renders the Claude Code TUI natively, including colors, cursor movement, and interactive menus.
+Displays Claude Code output. You can also click into the terminal and interact with Claude Code directly — as if it were running in a standalone terminal. Use this when the plugin fails to detect Claude's state correctly, for example if an interactive choice panel was not shown.
 
 ### Prompt panel (bottom)
-Contains the input area, Send/Cancel buttons, and History/Favorites buttons.
+Contains the input area, **▶ Send** / **✖ Cancel** buttons, and **☰ History** / **★ Favorites** buttons.
 
-### Session state
-The **Send** button is enabled only when Claude is idle (ready to accept input). The **Cancel** button is enabled only when Claude is working. The current state is also reflected by whether Claude's terminal shows a blinking prompt cursor.
+### Status bar (below the prompt panel, visible during an active session)
+Shows the current **edit mode** selector and the **model** selector.
 
 ---
 
 ## 5. Sending Prompts
 
 ### Input area
-A multi-line text area. Wrap long prompts naturally — newlines are preserved. `@path` tokens are highlighted in blue (see [File Attachments](#7-file-attachments)).
+A multi-line text area. Wrap long prompts naturally — newlines are preserved. `@path` tokens are highlighted in blue (see [File Attachments](#8-file-attachments)).
 
 ### Sending
 Press the configured **send key** (default: **Ctrl+Enter**) or click the **▶ Send** button. The input area is cleared after sending.
 
-You can change the send key in **Tools → Options → Claude Code → General** (choices: Enter, Shift+Enter, Ctrl+Enter, Alt+Enter). The **insert newline** key is automatically set to a different combination to avoid conflicts.
+You can change the send key in **Tools → Options → Claude Code → General** (choices: Enter, Shift+Enter, Ctrl+Enter, Alt+Enter).
 
 ### Cancelling
-While Claude is working:
-- Press **Escape** in the input area, or
-- Click the **✖ Cancel** button.
+Press **Escape** in the input area, or click the **✖ Cancel** button to interrupt Claude's running task.
 
-Either action sends Ctrl+C (SIGINT) to the Claude process, interrupting the running task.
+### Edit mode
+Press **Shift+Tab** anywhere in the prompt panel to cycle Claude Code's edit mode. The current mode is shown in the status bar.
 
-### Edit mode cycling
-Press **Shift+Tab** anywhere in the prompt panel to cycle Claude Code's edit mode (e.g., between *auto*, *accept-edits*, etc.). This is equivalent to pressing Shift+Tab in the Claude TUI.
+### Button states
+- **▶ Send** is active only when Claude is idle and ready to accept input.
+- **✖ Cancel** is active only when Claude is working.
+
+If the states appear out of sync:
+- Send is inactive but Claude is ready — click **✖ Cancel** to reset the state.
+- Cancel is inactive but Claude is working — click into the terminal area and interact directly.
+
+### Context menu (right-click in the input area)
+
+| Item | Description |
+|------|-------------|
+| Cut / Copy / Paste / Select All / Clear | Standard text editing actions |
+| **Add to Favorites** | Saves the current input text as a project favorite (active only when the input is non-empty and a working directory is set) |
+| **Favorites...** | Opens the Favorites dialog |
 
 ---
 
-## 6. File Attachments
+## 6. Favorites
 
-You can attach files to a prompt as `@path` tokens. Claude Code interprets these as file references.
+Favorites are saved prompts you can reuse with a button click or a keyboard shortcut.
 
-### @-completion popup
+### Scope
+- **Global favorites** — available in every project. Managed in **Tools → Options → Claude Code → Favorites**.
+- **Project favorites** — available only for a specific working directory.
 
-Type `@` anywhere in the input area. A popup appears listing files relative to the working directory.
+### Adding a favorite
+Right-click the input area → **Add to Favorites**. This always adds to **project** favorites. To promote a project favorite to global, use the **To Global** button in the Favorites dialog.
 
-<!-- TODO: screenshot: @-completion popup -->
+### Favorites dialog
 
-| Action | Key |
-|--------|-----|
-| Filter | Continue typing after `@` |
-| Navigate | Up / Down arrow keys |
-| Insert selected | Enter or Tab |
-| Dismiss | Escape |
-| Insert (mouse) | Double-click the entry |
+Click **★ Favorites** in the prompt panel to open the dialog.
 
-The inserted token is a relative path (e.g., `@src/Main.java`) when the file is inside the working directory, or an absolute path otherwise.
+<!-- TODO: screenshot: Favorites dialog -->
 
-### Drag-and-drop
-Drag one or more files from the OS file manager or the NetBeans Projects tree and drop them onto the input area. Each file is inserted as an `@path` token at the drop position.
+The dialog shows a table with the following columns:
 
-### Paste (Ctrl+V)
-If the clipboard contains file paths (e.g., copied from a file manager), paste them with Ctrl+V — they are inserted as `@path` tokens. Plain text is pasted normally.
+| Column | Description |
+|--------|-------------|
+| ☐ | Checkbox for multi-select |
+| **Text** | Prompt text (truncated to 100 characters) |
+| **Shortcut** | Assigned keyboard shortcut, if any |
+| **Scope** | `PROJECT` or `GLOBAL` |
+
+**Buttons:**
+
+| Button | Effect |
+|--------|--------|
+| **Send** | Loads the selected favorite into the input area and closes the dialog (also triggered by double-click) |
+| **Edit** | Edit the text of the selected favorite |
+| **To Global** | Move selected PROJECT favorite(s) to global scope |
+| **Assign Shortcut** | Assign a keyboard shortcut to the selected favorite |
+| **↑ / ↓** | Change the display order of favorites |
+| **Delete** | Delete selected favorite(s) (PROJECT only — global favorites can only be deleted via **Tools → Options → Claude Code → Favorites**) |
+
+The search field filters entries by text.
+
+### Assigning keyboard shortcuts
+
+Click **Assign Shortcut** to open the shortcut capture dialog. Press the desired key combination(s) — they are displayed in the field. Multiple key combos can be chained (e.g., `Ctrl+K Ctrl+F`).
+
+If the combination is already used by another favorite, a conflict warning is shown and **OK** is disabled.
+
+**Note:** All key presses are captured as shortcut input — to close the dialog use the **OK**, **Clear**, or **Cancel** buttons with the mouse.
+
+Shortcut conflicts with other NetBeans IDE actions are not checked automatically. If a shortcut does not work, check for conflicts in **Tools → Keymap** (search "Claude Favorite").
 
 ---
 
@@ -130,22 +167,28 @@ These keys work inside the input area. At the most-recent position, Ctrl+Down cl
 
 ### History dialog
 
-Click the **☰ History** button or press **Ctrl+H** to open the History dialog.
+Click the **☰ History** button to open the History dialog.
 
 <!-- TODO: screenshot: History dialog -->
 
-The dialog shows a table with columns:
+The dialog shows history for the current working directory. The table has the following columns:
 
 | Column | Description |
 |--------|-------------|
-| Timestamp | When the prompt was sent |
-| Text | The prompt text (truncated) |
-| Working directory | The directory associated with this entry |
+| ☐ | Checkbox for multi-select |
+| **Prompt** | Prompt text (truncated to 120 characters) |
+| **Time** | Date and time the prompt was sent (`yyyy-MM-dd HH:mm`) |
 
-**Actions:**
-- Select a row and click **Use** (or double-click) to load the prompt into the input area.
-- Click **Delete** to remove entries.
-- The search field filters entries by text.
+**Buttons:**
+
+| Button | Effect |
+|--------|--------|
+| **Send** | Loads the selected entry into the input area and closes the dialog (also triggered by double-click) |
+| **To Favorites** | Saves selected entries as project favorites |
+| **Delete** | Deletes selected entries |
+| **Clear older…** | Opens a date input dialog (`yyyy-MM-dd`); deletes all entries from that date and older (with confirmation) |
+
+The search field filters entries by prompt text.
 
 ### History settings
 
@@ -153,92 +196,103 @@ Configure in **Tools → Options → Claude Code → General**:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| History max depth | 200 | Maximum entries kept per project |
+| History max depth | 200 | Maximum entries kept per working directory |
 | History TTL (days) | 0 (forever) | Entries older than this are purged automatically |
 
 ---
 
-## 8. Favorites
+## 8. File Attachments
 
-Favorites are saved prompts you can reuse with a button click or a keyboard shortcut.
+You can attach files to a prompt as `@path` tokens. Claude Code interprets these as file references.
 
-### Scope
-- **Global favorites** — available in every project. Managed in **Tools → Options → Claude Code → Favorites**.
-- **Project favorites** — available only for a specific working directory. Managed via the **★ Favorites** dialog in the session.
+### @-completion popup
 
-### Adding a favorite
-1. Type (or load from history) the prompt text in the input area.
-2. Right-click the input area → **Add to Favorites** — choose Global or Project scope.
+Type `@` anywhere in the input area. A popup appears listing the contents of the current directory level. Hidden files (starting with `.`) are not shown. `..` is always present for navigating up.
 
-### Using favorites
-Click **★ Favorites** in the prompt panel to open the Favorites dialog. Select an entry and click **Send** (or double-click) to send it immediately, or **Use** to load it into the input area for editing.
+<!-- TODO: screenshot: @-completion popup -->
 
-<!-- TODO: screenshot: Favorites dialog -->
+| Key | Action |
+|-----|--------|
+| Up / Down | Navigate the list |
+| Enter or Tab | File: insert and close popup. Directory: navigate into it. |
+| Space | Insert the current item as-is (even if it is a directory) and close the popup |
+| Escape | Dismiss the popup |
+| Double-click | Same as Enter |
 
-### Assigning keyboard shortcuts
-1. Open **Tools → Options → Claude Code → Favorites** (for global) or the **★ Favorites** dialog (for project).
-2. Select a favorite and click **Assign Shortcut**.
-3. Press the desired key combination in the shortcut capture dialog and click **OK**.
+### Drag-and-drop and paste
 
-Once assigned, the shortcut can also be managed via NetBeans' standard **Tools → Keymap** dialog (search for "Claude Favorite").
+You can drag items from the OS file manager or the NetBeans **Projects** tree and drop them onto the input area, or paste them via **Ctrl+V**, **Shift+Ins**, or **Paste** from the context menu.
 
-### Reordering favorites
-Use the **↑** / **↓** buttons in the Favorites tab or dialog to reorder entries.
+Three types of content are supported:
+
+| Content type | What is inserted |
+|-------------|-----------------|
+| **File** inside the working directory (from OS or Projects tree) | Relative path without `@` (e.g. `src/Main.java`) |
+| **File** outside the working directory | `@/absolute/path` |
+| **Package directory** (under a source root such as `src/main/java/`) | Fully-qualified package name (e.g. `com.example.util`) |
+| **Directory** inside the working directory (not a source root) | Relative path without `@` |
+| **Directory** outside the working directory | `@/absolute/path` |
+| **Image** from clipboard | Saved as a temporary PNG file; `@/tmp/....png` inserted |
+| **Plain text** | Inserted as-is |
 
 ---
 
-## 9. File-Change Permissions (Diff Panel)
+## 9. Interactive Prompts (Choice Menu)
+
+Claude Code sometimes presents interactive prompts (Yes/No or multiple choice). The plugin detects these and shows a **Choice Menu** panel **in place of** the prompt input area.
+
+<!-- TODO: screenshot: choice menu panel -->
+
+**Yes / No options** appear as buttons. Clicking one sends the answer immediately and closes the panel.
+
+**Other options** appear as radio buttons. Some options may include a text field for additional input. Click the desired option (and optionally fill in the text field), then press **Enter** or click **Send** to submit. Press **Escape** to cancel.
+
+After submitting or cancelling, the input area is restored automatically.
+
+**Note:** If the choice panel does not appear when Claude asks a question, or appears unexpectedly without a question — click into the terminal area and interact with Claude directly. The panel will disappear automatically once Claude's state changes.
+
+---
+
+## 10. File-Change Permissions (Diff Panel)
 
 When Claude Code is about to edit or create a file, the plugin intercepts the operation and shows a diff panel **before** the change is written to disk.
 
+The diff panel appears either **embedded in the session tab** (replacing the input area) or in a **separate IDE tab**, depending on the setting in **Tools → Options → Claude Code → General → Open diff in a separate tab**.
+
 <!-- TODO: screenshot: diff panel with permission bar -->
 
-### Layout
-The diff panel shows a side-by-side (or inline) diff of the current file content vs. the proposed content. Below the diff is the permission bar:
+### Permission bar
 
 ```
-[✓✓ AcceptAll]  [✓ Accept]   [_Decline reason (Optional)_]  [✗ Decline]   [Cancel]
+[✓✓ Accept All]  [✓ Accept]   [_Decline reason (Optional)_]  [✗ Decline]   [Cancel]
 ```
-
-### Actions
 
 | Button | Effect |
 |--------|--------|
-| **✓✓ AcceptAll** | Accept this change **and** switch Claude's edit mode to "Accept on Edit" — all subsequent edits in this session are accepted automatically without showing a diff |
+| **✓✓ Accept All** | Accept this change **and** switch Claude's edit mode to "Accept on Edit" for this session — all subsequent edits are accepted automatically without showing a diff |
 | **✓ Accept** | Allow this single change; Claude continues |
 | **✗ Decline** | Reject this change; optionally send a reason to Claude (type it in the text field first) |
-| **Cancel** | Reject this change **and** interrupt Claude's current task (sends Ctrl+C) |
-| Close tab (×) | Treated as Decline; Claude's built-in permission dialog may appear as a fallback |
+| **Cancel** | Reject this change **and** interrupt Claude's current task |
+| Close tab (×) | Treated as Decline without a reason |
 
 ### Decline reason
 Type a reason in the text field between the Accept and Decline buttons. When you click Decline, the reason is sent to Claude. Pressing Enter in a non-empty reason field automatically clicks Decline.
 
 If you type a decline reason but click Accept, a confirmation dialog warns you that the reason will not be sent.
 
-### Keyboard navigation in the diff panel
-Tab / Shift+Tab cycles focus between: AcceptAll → Accept → reason field → Decline → Cancel.
-Press Escape to click Cancel (if enabled).
-
-### Diff location
-By default the diff appears embedded inside the session tab. To open diffs in a separate IDE tab, enable **Tools → Options → Claude Code → General → Open diff in a separate tab**.
+### Keyboard navigation
+Tab / Shift+Tab cycles focus between: Accept All → Accept → reason field → Decline → Cancel.
+Press Escape to click Cancel.
 
 ### Markdown preview
-For `.md` files, a rendered markdown preview is shown alongside the raw diff. Disable it in **Tools → Options → Claude Code → General → Show markdown preview for .md files in diff**.
 
----
+For `.md` files, a rendered markdown preview is shown alongside the raw diff. Toggle it via **right-click on the diff → Preview Markdown** (checkbox). The default state is configured in **Tools → Options → Claude Code → General → Show markdown preview for .md files in diff**. Toggling in the context menu does not change the global setting.
 
-## 10. Interactive Prompts (Choice Menu)
+**Pin Preview** — opens the rendered markdown (proposed content) in a separate IDE tab that remains open after the diff is closed.
 
-Claude Code sometimes presents interactive prompts (Yes/No, multiple choice, or free-form input). The plugin detects these and shows a **Choice Menu** panel above the prompt input area.
+Both features are especially useful in Claude's plan mode: they let you read the formatted plan before deciding whether to accept it.
 
-<!-- TODO: screenshot: choice menu panel -->
-
-| Prompt type | How it appears | How to respond |
-|-------------|---------------|----------------|
-| Yes/No | Two buttons: **Yes** / **No** | Click the button |
-| Multiple choice | Numbered buttons for each option | Click an option, or type its number and press Enter |
-| Free-form | Text field | Type your answer and press Enter |
-| Cancel any prompt | — | Press **Ctrl+C** or click Cancel |
+If the file being edited is outside the current project directory, a warning ⚠ is shown in the diff panel.
 
 ---
 
@@ -255,139 +309,123 @@ Open **Tools → Options → Claude Code** in NetBeans.
 | History max depth | 200 | Maximum number of history entries kept per working directory. |
 | History TTL (days) | 0 | Number of days after which history entries expire. 0 = keep forever. |
 | Send prompt key | Ctrl+Enter | Key combination that sends the prompt from the input area. |
-| Insert newline key | Enter | Key combination that inserts a newline in the input area. |
+| Insert newline key | Enter | Key combination that inserts a newline in the input area. The send and newline keys are configured independently but cannot be set to the same value. |
 | Debug mode | Off | Enables verbose logging of all Claude I/O to the NetBeans log file and the Output window. |
 | Open diff in a separate tab | Off | Opens the diff panel in a new IDE tab instead of embedding it in the session tab. |
 | Show markdown preview for .md files in diff | On | Shows a rendered markdown preview alongside the raw diff for `.md` files. |
 
-### Profiles tab
+### Favorites tab
 
-Profiles allow you to run Claude Code with different API keys, authentication methods, proxy settings, and model aliases. Each profile gets an isolated `CLAUDE_CONFIG_DIR` so that authentication and configuration do not interfere with each other.
+Manages global favorites — prompts available in every project.
+
+The table shows all global favorites with columns: ☐ (checkbox for multi-select), **Text**, **Shortcut**.
+
+**Buttons:**
+
+| Button | Effect |
+|--------|--------|
+| **Add** | Add a new global favorite (enter text in the dialog) |
+| **Edit** | Edit the text of the selected favorite |
+| **Assign Shortcut** | Assign a keyboard shortcut to the selected favorite |
+| **↑ / ↓** | Change the display order |
+| **Delete** | Delete selected favorite(s) |
+
+The search field filters entries by text.
+
+---
+
+## 12. Profiles
+
+Profiles allow you to run Claude Code under different accounts for different projects. Each profile has an isolated `CLAUDE_CONFIG_DIR` so that authentication and settings do not interfere with each other.
 
 <!-- TODO: screenshot: Profiles tab -->
 
-#### Built-in Default profile
-Always present. Uses Claude's own managed authentication (OAuth). No extra environment variables are injected. Uses `~/.claude/` as the config directory.
+Open **Tools → Options → Claude Code → Profiles**.
 
-#### Creating a named profile
-Click **Add** in the Profiles tab, enter a name (no spaces or special characters), then configure the following fields:
+The **Default** profile is always present and cannot be renamed or deleted. Named profiles can be freely created, copied, renamed, and deleted.
 
-**Connection type** (derived automatically from the fields you fill in):
+### Profiles directory
 
-| Type | What to fill in | Environment variable injected |
-|------|----------------|-------------------------------|
-| Claude Managed | Nothing | none |
-| Subscription | OAuth token | `CLAUDE_CODE_OAUTH_TOKEN` |
-| Claude API | API key | `ANTHROPIC_API_KEY` |
-| Other API | API key + Base URL | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` |
+Named profiles are stored under a common base directory (default: `~/.netbeans/claude-profiles/`). Each profile occupies a subdirectory named after the profile.
 
-**Proxy settings:**
+The base directory only affects newly created profiles. To move existing profiles to a new location, manually move their subdirectories to the new location first, then update the directory via the **Profiles directory** field (click **Change…**).
 
-| Mode | Effect |
-|------|--------|
-| System managed (default) | Inherits `HTTP_PROXY`/`HTTPS_PROXY` from the IDE environment |
-| No proxy | Clears `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` |
-| Custom | Sets `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` to your specified values |
+The read-only **Config directory** field shows the storage path for the selected profile. For the Default profile it shows `~/.claude (not overridden)`.
 
-**Model aliases:** Map alias names (`sonnet`, `opus`, `haiku`) to specific model IDs. These are set as `ANTHROPIC_DEFAULT_SONNET_MODEL` etc. environment variables.
+### Managing profiles
 
-**Extra environment variables:** Add any additional `KEY=VALUE` pairs to inject into the Claude process environment.
+| Button | Effect |
+|--------|--------|
+| **New** | Create a new named profile |
+| **Copy** | Duplicate the currently selected profile |
+| **Rename** | Rename the currently selected profile |
+| **Delete** | Delete the currently selected profile |
+| **Change…** | Change the profile Config directory |
 
-#### Config directory
-Named profiles store their `CLAUDE_CONFIG_DIR` under:
-```
-~/.netbeans/claude-profiles/<profile-name>/
-```
-The base directory can be changed in the General tab (Profiles dir field, if shown).
+### Authentication
+
+Select the authentication type using the radio buttons:
+
+| Type | Fields to fill in | How to authenticate |
+|------|------------------|-------------------|
+| **Claude Managed** | None | Claude manages authentication itself. Run `claude` in a terminal once to set it up, or Claude will prompt you on first launch. Use `/login` in the session terminal to re-authenticate. |
+| **Subscription** | OAuth token | Obtain the token at [claude.ai](https://claude.ai) (requires Pro, Max, Team, or Enterprise subscription). **Note:** OAuth tokens expire periodically and must be regenerated and re-entered manually. For a smoother experience, prefer **Claude Managed** instead. |
+| **Claude API** | API key | Obtain the key at [console.anthropic.com](https://console.anthropic.com) (requires an Anthropic Console account with API access). |
+| **Other API** | API key + Base URL | Use the API key and base URL provided by your third-party provider. |
+
+### Model aliases (Other API only)
+
+If your provider names models differently from Anthropic's standard names, the plugin cannot match them to the `sonnet`, `opus`, and `haiku` aliases used by Claude Code. In that case, set the alias to the actual model ID used by your provider (for example, with an `anthropic/` prefix).
+
+Fill in only the aliases for models you plan to use and whose IDs do not start with the standard name (`sonnet`, `opus`, or `haiku`). If no matching models are found and no aliases are set, model selection will be unavailable.
+
+### Proxy settings
+
+| Mode | Description |
+|------|-------------|
+| **System managed** (default) | Claude Code inherits proxy settings from the IDE environment. Use this when a proxy is already configured in the system. |
+| **No proxy** | Forces Claude Code to connect directly, bypassing any system proxy. |
+| **Custom** | Specify proxy settings manually. Use this when Claude Code needs a proxy different from the system default. |
+
+**Custom proxy fields:**
+
+| Field | Syntax | Example |
+|-------|--------|---------|
+| **HTTP Proxy** | `http://host:port` | `http://proxy.example.com:8080` |
+| **HTTPS Proxy** | `http://host:port` | `http://proxy.example.com:8080` |
+| **NO_PROXY** | Empty or a comma-separated list of host patterns | `localhost,127.0.0.1,.example.com` |
+
+**Note:** Claude Code communicates with the plugin via `localhost`. External proxies are not aware of this. If you fill in the **NO_PROXY** field, make sure it includes `localhost` — otherwise the plugin integration will stop working. If you leave the field empty, the plugin adds `localhost` automatically.
+
+### Extra environment variables
+
+Arbitrary `KEY=VALUE` pairs injected into the Claude process environment. Applied last — they override all other profile variables. Use this for provider-specific configuration. <!-- TODO: add links to Claude Code env vars documentation and list of compatible providers -->
 
 ### Per-project profile assignment
 
-To assign a specific profile to a project:
+By default, Claude Code sessions use the **Default** profile.
+
+#### Persistent profile for a project (recommended)
+
+To permanently assign a profile to a project:
 1. Right-click the project in the **Projects** window → **Properties**.
 2. Go to the **Claude Code** category.
-3. Select the desired profile from the drop-down.
+3. Select the desired profile from the **Profile** drop-down and click **OK**.
 
-When a session is started in that project's directory, the selected profile's settings are applied automatically.
+The selected profile is used automatically when a session is started for that project via **Open with Claude Code**. Selecting **Default** removes any project-specific assignment.
 
----
+If the assigned profile no longer exists, the plugin falls back to the Default profile automatically.
 
-## 12. Keyboard Shortcuts Reference
+#### Temporary profile for one session
 
-### In the prompt input area
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+Enter *(default)* | Send prompt |
-| Enter *(default)* | Insert newline |
-| Ctrl+Up | Navigate to previous (older) prompt in history |
-| Ctrl+Down | Navigate to next (newer) prompt in history |
-| Escape | Cancel (when Claude is working) |
-| Shift+Tab | Cycle Claude Code edit mode |
-| @ | Trigger @-completion popup |
-
-The send and newline keys are configurable in **Tools → Options → Claude Code → General**.
-
-### In the @-completion popup
-
-| Shortcut | Action |
-|----------|--------|
-| Up / Down | Navigate the file list |
-| Enter or Tab | Insert selected path |
-| Escape | Dismiss popup |
-| Double-click | Insert selected path |
-
-### History dialog
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+H | Open History dialog |
-| Enter / Double-click | Load selected prompt into input area |
-
-### Diff permission panel
-
-| Shortcut | Action |
-|----------|--------|
-| Tab / Shift+Tab | Cycle focus between buttons |
-| Enter (in reason field) | Click Decline (if reason is non-empty) |
-| Escape | Click Cancel |
-
-### Global (configurable via Tools → Keymap)
-
-| Action | Default shortcut |
-|--------|-----------------|
-| Send a saved favorite | Assigned per favorite (none by default) |
+Click the **Claude Code** button in the toolbar to open the session selector. In the selector bar, choose a project or a working directory and select a profile from the **Profile** combo, then click **Open**. The selected profile is used for that session only and does not affect project settings.
 
 ---
 
-## 13. MCP Tools Reference
-
-The plugin exposes the following tools to Claude Code via the MCP protocol. Claude calls these automatically — you do not need to invoke them manually. This table is for power users and troubleshooting.
-
-| Tool name | Description |
-|-----------|-------------|
-| `get_workspace_folders` | Returns the open project root paths |
-| `get_open_editors` | Lists currently open editor tabs with file paths |
-| `get_current_selection` | Returns the selected text and cursor position in the active editor |
-| `get_diagnostics` | Returns IDE error and warning markers for a file |
-| `open_file` | Opens a file in the IDE editor at a given line |
-| `open_diff` | Shows a diff panel for two content strings |
-| `permission_prompt` | Asks the user to accept or decline a proposed file change (alternative to the PreToolUse hook) |
-| `check_document_dirty` | Checks whether a file has unsaved changes |
-| `save_document` | Saves a file in the IDE |
-| `close_tab` | Closes a specific editor tab |
-| `close_all_diff_tabs` | Closes all open diff tabs |
-| `selection_changed` *(notification)* | Pushed to Claude automatically on every cursor move |
-
-The plugin also installs a **PreToolUse HTTP hook** that fires before every `Edit`, `Write`, and `MultiEdit` tool call, triggering the diff permission panel.
-
----
-
-## 14. Troubleshooting
+## 13. Troubleshooting
 
 ### Enable debug mode
-Go to **Tools → Options → Claude Code → General** and check **Debug mode**. This writes detailed logs of all Claude I/O (PTY bytes, MCP messages, hook calls) to:
-- The **Output** window inside the IDE (if the Claude Code output tab is open).
-- The NetBeans log file.
+Go to **Tools → Options → Claude Code → General** and check **Debug mode**. This writes detailed logs of all Claude I/O (PTY bytes, MCP messages, hook calls) to the NetBeans log file.
 
 ### Log file location
 ```
@@ -399,11 +437,12 @@ For example: `~/.netbeans/28/var/log/messages.log`
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| Session tab opens but terminal stays blank | `claude` not found on PATH | Set the full path in **Tools → Options → Claude Code → General → Claude CLI path** |
-| "MCP server failed to start" in the log | Port 28991 already in use | Change the MCP port in **Tools → Options → Claude Code → General** and restart the IDE |
+| Session tab does not open | `claude` not found on PATH | Set the full path in **Tools → Options → Claude Code → General → Claude CLI path** |
 | Diff panel shows but Accept/Decline have no effect | Claude timed out waiting for the hook response (600 s limit) | Respond to the diff panel within ~9 minutes; if this happens regularly, check for blocking processes |
-| OAuth login prompt not appearing | The `claude` process cannot open a browser | Run `claude` manually in a terminal once to complete authentication, then restart the session |
-| Profile not applied to a project | Project properties not saved | Re-open the project properties, select the profile, and click OK |
+| Claude asked a question but the Choice Menu panel did not appear | The plugin did not recognise the prompt format | Switch to the terminal area and answer directly by typing |
+| Choice Menu appeared but Claude did not ask anything (false trigger) | The plugin mis-detected a numbered list as a menu | Dismiss the panel with **Esc** or ignore it; Claude will continue on its own |
+| OAuth login prompt not appearing | The `claude` process cannot open a browser, or proxy settings mismatch | Run `claude` manually in a terminal once to complete authentication, then restart the session. If you use a proxy, make sure the proxy settings in the plugin profile match the system/browser proxy settings. |
+| Profile not applied to a project | Project properties not saved | Re-open the project properties, select the profile, and click OK. Alternatively, open the session via the toolbar and select the profile explicitly in the session selector. |
 | Favorites shortcut not working | Shortcut conflicts with another IDE action | Re-assign the shortcut in **Tools → Keymap** (search "Claude Favorite") |
 
 ### Reporting bugs

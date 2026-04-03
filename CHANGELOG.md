@@ -5,7 +5,7 @@
 - Fixed markdown pin preview tab — scroll position now preserved on updates; file-change tracking no longer lost on re-activation
 - Added alpha-status notice to README
 - Moved Requirements and Installation/Build instructions to docs/installation.md; README and user manual now link to it
-- Added user manual draft covering all plugin features (docs/user-manual.md)
+- Added user manual covering all plugin features (docs/user-manual.md)
 - README: updated Requirements with links, clarified Claude CLI PATH setup, recommended download from GitHub Releases, added note that plugin is written by Claude Code
 
 # 0.17
