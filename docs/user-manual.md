@@ -1,6 +1,6 @@
 # NetBeans Claude Code GUI — User Manual
 
-<!-- TODO: screenshot: plugin overview with session tab open -->
+![Plugin overview: session tab open in NetBeans](screenshots/overview.png)
 
 ## Table of Contents
 
@@ -46,13 +46,13 @@ See [Installation & Build](installation.md) for requirements, installation steps
 4. Type your first prompt in the input area at the bottom (e.g., `Explain what this project does`).
 5. Press **Ctrl+Enter** (default) to send. Claude's response appears in the terminal.
 
-<!-- TODO: screenshot: session tab with first prompt -->
+![Session tab after first prompt](screenshots/quick-start.png)
 
 ---
 
 ## 4. Session Window
 
-<!-- TODO: screenshot: annotated session window -->
+![Session window layout](screenshots/session-window.png)
 
 The session tab contains the following areas:
 
@@ -116,7 +116,7 @@ Right-click the input area → **Add to Favorites**. This always adds to **proje
 
 Click **★ Favorites** in the prompt panel to open the dialog.
 
-<!-- TODO: screenshot: Favorites dialog -->
+![Favorites dialog](screenshots/favorites-dialog.png)
 
 The dialog shows a table with the following columns:
 
@@ -169,7 +169,7 @@ These keys work inside the input area. At the most-recent position, Ctrl+Down cl
 
 Click the **☰ History** button to open the History dialog.
 
-<!-- TODO: screenshot: History dialog -->
+![Prompt History dialog](screenshots/history-dialog.png)
 
 The dialog shows history for the current working directory. The table has the following columns:
 
@@ -209,7 +209,7 @@ You can attach files to a prompt as `@path` tokens. Claude Code interprets these
 
 Type `@` anywhere in the input area. A popup appears listing the contents of the current directory level. Hidden files (starting with `.`) are not shown. `..` is always present for navigating up.
 
-<!-- TODO: screenshot: @-completion popup -->
+![@ path completion popup](screenshots/at-completion.png)
 
 | Key | Action |
 |-----|--------|
@@ -241,7 +241,9 @@ Three types of content are supported:
 
 Claude Code sometimes presents interactive prompts (Yes/No or multiple choice). The plugin detects these and shows a **Choice Menu** panel **in place of** the prompt input area.
 
-<!-- TODO: screenshot: choice menu panel -->
+![Choice Menu panel with numbered options](screenshots/choice-menu.png)
+
+![Choice Menu panel with Yes/No question](screenshots/choice-menu-yesno.png)
 
 **Yes / No options** appear as buttons. Clicking one sends the answer immediately and closes the panel.
 
@@ -259,7 +261,7 @@ When Claude Code is about to edit or create a file, the plugin intercepts the op
 
 The diff panel appears either **embedded in the session tab** (replacing the input area) or in a **separate IDE tab**, depending on the setting in **Tools → Options → Claude Code → General → Open diff in a separate tab**.
 
-<!-- TODO: screenshot: diff panel with permission bar -->
+![Diff panel with permission bar](screenshots/diff-panel.png)
 
 ### Permission bar
 
@@ -338,7 +340,7 @@ The search field filters entries by text.
 
 Profiles allow you to run Claude Code under different accounts for different projects. Each profile has an isolated `CLAUDE_CONFIG_DIR` so that authentication and settings do not interfere with each other.
 
-<!-- TODO: screenshot: Profiles tab -->
+![Profiles tab in Tools → Options → Claude Code](screenshots/profiles-tab.png)
 
 Open **Tools → Options → Claude Code → Profiles**.
 
