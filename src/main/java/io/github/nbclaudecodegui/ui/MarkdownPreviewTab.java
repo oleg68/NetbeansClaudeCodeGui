@@ -94,6 +94,10 @@ public class MarkdownPreviewTab extends TopComponent {
     /** Scroll ratio saved by writeExternal; applied in componentOpened() after IDE restart. */
     double savedScrollRatio = 0.0;
 
+    /** Creates a new empty tab instance; content and title are configured by factory methods. */
+    MarkdownPreviewTab() {
+    }
+
     /**
      * Opens (or re-activates) a live-updating markdown preview tab for {@code filePath}.
      *

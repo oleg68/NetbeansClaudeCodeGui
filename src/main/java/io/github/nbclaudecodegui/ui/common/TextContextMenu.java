@@ -28,6 +28,9 @@ import javax.swing.text.JTextComponent;
  */
 public final class TextContextMenu extends BasicTextContextMenu {
 
+    /** Not instantiable — all methods are static. */
+    private TextContextMenu() {}
+
     /**
      * Creates a JPopupMenu with standard editing actions plus Add to Favorites and
      * Favorites browser items. Both favorites items are enabled only when

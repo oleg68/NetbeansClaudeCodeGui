@@ -42,7 +42,12 @@ public final class PromptFavoritesStore {
     private final Path         globalFile;
     private final ObjectMapper mapper;
 
-    /** Visible for tests — use {@link #getInstance(Path)} in production code. */
+    /**
+     * Visible for tests — use {@link #getInstance(Path)} in production code.
+     *
+     * @param projectFile path to the project-scoped favorites JSON file
+     * @param globalFile  path to the global favorites JSON file
+     */
     public PromptFavoritesStore(Path projectFile, Path globalFile) {
         this.projectFile = projectFile;
         this.globalFile  = globalFile;

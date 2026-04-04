@@ -53,6 +53,7 @@ public final class MarkdownRenderer {
      * <p>The pane is non-editable, uses {@link HTMLEditorKit}, and has a
      * stylesheet suitable for markdown-rendered content.
      *
+     * @param html  initial HTML content to display in the pane
      * @return a ready-to-use output pane
      */
     public static JEditorPane createOutputPane(String html) {
@@ -61,6 +62,11 @@ public final class MarkdownRenderer {
         return pane;
     }
 
+    /**
+     * Creates and configures a {@link JEditorPane} for rendering chat output with no initial content.
+     *
+     * @return a ready-to-use output pane
+     */
     public static JEditorPane createOutputPane() {
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet ss = kit.getStyleSheet();

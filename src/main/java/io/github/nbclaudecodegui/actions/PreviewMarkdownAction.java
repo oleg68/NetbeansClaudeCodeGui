@@ -36,6 +36,7 @@ import org.openide.util.actions.Presenter;
 public final class PreviewMarkdownAction extends AbstractAction
         implements ContextAwareAction, Presenter.Popup {
 
+    /** Creates the global (non-context-aware) action instance. */
     public PreviewMarkdownAction() {
         super("Preview Markdown");
     }
