@@ -86,15 +86,29 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           cache: maven
+      - name: Install pandoc
+        run: sudo apt-get install -y pandoc
       - name: Set version
         run: mvn versions:set -DnewVersion=${{ needs.calc_ver.outputs.project_ver }} --batch-mode
       - name: Build
         # xvfb-run provides a virtual display so Swing UI tests don't throw HeadlessException
         run: xvfb-run mvn package --batch-mode
+      - name: Build documentation
+        run: |
+          VERSION=${{ needs.calc_ver.outputs.project_ver }}
+          pandoc \
+            --metadata title="Claude Code GUI for NetBeans — User Manual" \
+            --embed-resources --standalone \
+            --resource-path=docs \
+            -o "target/netbeans-claude-code-gui-${VERSION}-docs.html" \
+            docs/installation.md \
+            docs/user-manual.md
       - name: Upload artifact and release asset
         uses: nanoufo/action-upload-artifacts-and-release-assets@v2
         with:
-          path: target/*.nbm
+          path: |
+            target/*.nbm
+            target/*-docs.html
           upload-release-files: ${{ needs.calc_ver.outputs.release_flag == 'ON' }}
           release-upload-url: ${{ needs.calc_ver.outputs.release_upload_url }}
 

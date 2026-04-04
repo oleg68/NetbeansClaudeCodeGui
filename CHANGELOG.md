@@ -1,3 +1,4 @@
+- Added documentation artifact (`*-docs.html`) to build and release outputs — user manual and installation guide bundled as a single self-contained HTML file with screenshots
 - Added "Copy URL" context menu item in Markdown Preview when hovering over a hyperlink (copies absolute path for .md links, URL for external links)
 - Added hyperlinks to claude.ai and console.anthropic.com next to token/API key fields in profile settings
 - Changed default profiles directory from ~/.netbeans/claude-profiles/ to ~/.netbeans/claude-plugin/profiles/
