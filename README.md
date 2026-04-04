@@ -57,8 +57,8 @@ See the [User Manual](docs/user-manual.md) for full documentation of all plugin 
 | 15 | File attachments: @path token insertion, DnD + Ctrl+V, @-completion popup, blue token highlight, `ui/common/` shared components | ✅ |
 | 16 | FileDiff location config: inline panel or separate tab (boolean preference) | ✅ |
 | 17 | GitHub CI/CD + NBM publishing | ✅ |
-| 18 | Help + user documentation | planned |
-| 19 | Choice menu improvements + Markdown preview | 🔧 |
+| 18 | User manual, installation guide, docs HTML artifact | ✅ |
+| 19 | Choice menu improvements (checkbox menus, detection fixes) | 🔧 |
 
 ---
 

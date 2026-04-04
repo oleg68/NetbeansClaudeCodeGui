@@ -498,28 +498,27 @@ Extra environment variables
 
 ---
 
-### Stage 18 — Help + user documentation (planned)
+### Stage 18 — Help + user documentation ✅ (v0.18)
 
 **Goal:** built-in help and end-user documentation.
 
-**What to add:**
-- NetBeans Help integration (JavaHelp)
-- `docs/user-guide.md` or GitHub Wiki: installation, profiles, history, favorites, keyboard shortcuts
-- External announcements on releases: posts in NetBeans community forum and Anthropic/Claude community (manual)
+**Implemented:**
+- `docs/user-manual.md` — full user manual covering all plugin features (sessions, profiles, history, favorites, file attachments, diff viewer, settings)
+- `docs/installation.md` — requirements, installation steps, and build instructions; README links to it
+- Documentation artifact (`*-docs.html`) added to CI build and GitHub Release outputs — user manual and installation guide bundled as a single self-contained HTML file with screenshots
+- Alpha-status notice added to README
 
 ---
 
-### Stage 19 — Choice menu & Markdown preview improvements (v0.18.0-SNAPSHOT) 🔧
+### Stage 19 — Choice menu improvements (planned)
 
-**Goal:** fix outstanding choice menu detection bugs; fix pin preview not tracking file changes; support checkbox menus.
+**Goal:** fix outstanding choice menu detection bugs; support checkbox menus.
 
 **Bug fixes:**
 - Two unreproduced choice menu non-detection cases (screenshots in to-do.md)
-- Pin preview doesn't track file changes
 
 **New features:**
 - Checkbox menus (`[ ] option` multi-select) — send selected numbers then `→`
-- Profiles settings: add links to API key pages
 
 ---
 
