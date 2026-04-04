@@ -41,9 +41,9 @@ Implemented in `build-scripts/autotag.sh` and `.github/workflows/build.yml`.
 
 ### CHANGELOG.md rules
 
-The heading `# MAJOR.MINOR` is the CI release signal — **only add it when finishing a release**.
+The heading `# MAJOR.MINOR (YYYY-MM-DD)` is the CI release signal — **only add it when finishing a release**. Always include the release date in parentheses (e.g. `# 0.18 (2026-04-04)`).
 
-During development, add bullet lines at the **very top** of `CHANGELOG.md` (above any existing heading), with no section heading. When finishing a release, add the `# MAJOR.MINOR` heading above those bullets.
+During development, add bullet lines at the **very top** of `CHANGELOG.md` (above any existing heading), with no section heading. When finishing a release, add the `# MAJOR.MINOR (YYYY-MM-DD)` heading above those bullets.
 
 Every user-visible change **must** add a new bullet at the **top** of the list (reverse chronological order — newest entries first). "User-visible" means: new feature, changed behavior, bug fix, UI change, new setting, README update. Internal refactors, test-only changes, and CI changes do not require an entry.
 
