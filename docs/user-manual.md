@@ -277,6 +277,14 @@ The diff panel appears either **embedded in the session tab** (replacing the inp
 | **Cancel** | Reject this change **and** interrupt Claude's current task |
 | Close tab (×) | Treated as Decline without a reason |
 
+### When to use each action
+
+| Situation | Action |
+|-----------|--------|
+| You **agree** with all the proposed changes | Click **✓ Accept** (or **✓✓ Accept All** to skip diffs for all further edits in this session) |
+| You **disagree completely** — the change should not be made at all | Click **✗ Decline** (optionally explain why in the reason field) |
+| You **partially agree** — the change is on the right track but needs adjustment | Type what needs to be different in the reason field, then press **Enter** or click **✗ Decline**. Claude will receive your feedback and try again. |
+
 ### Decline reason
 Type a reason in the text field between the Accept and Decline buttons. When you click Decline, the reason is sent to Claude. Pressing Enter in a non-empty reason field automatically clicks Decline.
 
