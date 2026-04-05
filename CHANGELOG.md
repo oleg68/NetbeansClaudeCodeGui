@@ -1,3 +1,9 @@
+- Documented status bar in user manual: edit mode selector with all modes, model selector, and right-side labels (session state, active plan, Claude version)
+- Added support for multiple custom models in the model combo: models assigned the "custom" alias in Model Aliases appear in the dropdown and are switched via `/model <id>` command
+- Added Refresh context menu item to Markdown Preview tab (re-reads file from disk, restores scroll position)
+- Improved process launch error display: shows the attempted command and error message in a dedicated panel with a Back button and copyable text fields
+- Fixed "Clear Older" in history dialog to include the selected entry in deletion and to show exact date and time in the confirmation prompt
+
 # 0.18 (2026-04-04)
 
 - Added documentation artifact (`*-docs.html`) to build and release outputs — user manual and installation guide bundled as a single self-contained HTML file with screenshots

@@ -63,7 +63,24 @@ Displays Claude Code output. You can also click into the terminal and interact w
 Contains the input area, **▶ Send** / **✖ Cancel** buttons, and **☰ History** / **★ Favorites** buttons.
 
 ### Status bar (below the prompt panel, visible during an active session)
-Shows the current **edit mode** selector and the **model** selector.
+
+**Edit mode selector** — controls how Claude handles file edits:
+
+| Label | Internal value | Description |
+|-------|---------------|-------------|
+| Plan Mode | `plan` | Claude can discuss and plan but cannot edit files |
+| Ask on Edit | `default` | Claude asks for permission before each edit (default) |
+| Accept on Edit | `acceptEdits` | Claude applies edits automatically without asking |
+
+Press **Shift+Tab** anywhere in the prompt panel to cycle through modes.
+
+**Model selector** — lists the models available in the current session. Standard entries (`sonnet`, `opus`, `haiku`) are discovered by opening the `/model` menu. For **Other API** profiles, any models assigned the `custom` alias in **Model Aliases** also appear here, shown by their full provider ID. Selecting a model switches to it immediately.
+
+On the right side of the status bar:
+
+- **Session state** — `Starting` while the process is initializing, `Ready` when Claude is waiting for input, `Working` while a task is in progress.
+- **Active plan** — name of the current plan file, if any (shown when Claude is operating in plan mode with a saved plan).
+- **Claude version** — the version of the `claude` CLI detected at session start.
 
 ---
 
@@ -387,7 +404,35 @@ Select the authentication type using the radio buttons:
 
 If your provider names models differently from Anthropic's standard names, the plugin cannot match them to the `sonnet`, `opus`, and `haiku` aliases used by Claude Code. In that case, set the alias to the actual model ID used by your provider (for example, with an `anthropic/` prefix).
 
-Fill in only the aliases for models you plan to use and whose IDs do not start with the standard name (`sonnet`, `opus`, or `haiku`). If no matching models are found and no aliases are set, model selection will be unavailable.
+Click **Model Aliases…** to open the Model Aliases dialog.
+
+The dialog shows a table with three columns:
+
+| Column | Description |
+|--------|-------------|
+| **ID** | The model identifier as returned by the provider |
+| **Available** | ✓ if the model was found at the endpoint during the last Fetch; ✗ otherwise |
+| **Alias** | The standard alias to map this model to: `sonnet`, `opus`, `haiku`, `custom`, or blank (no alias) |
+
+**Buttons:**
+
+| Button | Effect |
+|--------|--------|
+| **Fetch** | Queries the provider's models endpoint using the configured API key, fills the table with discovered model IDs, and marks each as available (✓) or unavailable (✗) |
+| **↑ / ↓** | Reorder rows — the order determines how models appear in the status bar model selector |
+| **Delete** | Remove the selected row |
+| **Prune** | Remove all rows marked as unavailable (✗) |
+
+**How to configure aliases:**
+
+1. Click **Fetch** to populate the table with models available at your endpoint.
+2. For each model you want to use as a standard model (`sonnet`, `opus`, or `haiku`), set the corresponding alias. You can skip this step if the model ID already starts with `sonnet`, `opus`, or `haiku` — those are matched automatically.
+3. For each additional model you want to appear in the model selector, set its alias to `custom`. You can assign `custom` to as many models as you like — each will appear as a separate entry in the selector.
+4. Leave models you do not plan to use with a blank alias, or remove them with **Delete** / **Prune**.
+
+**The `custom` alias:** Unlike the other aliases, `custom` is not unique — multiple models can share it. All models with the `custom` alias appear as individual entries in the **model selector** in the status bar, identified by their full provider ID. Selecting one sends `/model <id>` to Claude.
+
+> **Note:** Not all third-party models are compatible with Claude Code. Using an incompatible model may cause errors or unexpected behavior during the session.
 
 ### Proxy settings
 
