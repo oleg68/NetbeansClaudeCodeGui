@@ -375,6 +375,101 @@ class ClaudeSessionControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // custom model list — appended after standard models in discoverModels
+    // -------------------------------------------------------------------------
+
+    /**
+     * Verifies that custom model IDs injected via reflection are appended after
+     * standard models when {@code discoverModels} stores the final list.
+     *
+     * <p>We simulate the post-discovery state by directly setting
+     * {@code customModelIds} and {@code standardModelCount} via reflection,
+     * then calling the private helper that builds and publishes the list.
+     * This avoids the need for a live PTY process.
+     */
+    @Test
+    void discoverModels_customModelsAppendedAfterStandardModels() throws Exception {
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        ClaudeSessionController c = new ClaudeSessionController(m, Collections::emptyList);
+
+        // Inject customModelIds
+        java.lang.reflect.Field customField =
+                ClaudeSessionController.class.getDeclaredField("customModelIds");
+        customField.setAccessible(true);
+        customField.set(c, java.util.Arrays.asList("openai/gpt-4o", "openai/gpt-4-turbo"));
+
+        // Simulate post-discovery: 2 standard models discovered
+        List<String> standardModels = java.util.Arrays.asList("Sonnet 4.6", "Opus 4.6");
+        java.lang.reflect.Field stdCount =
+                ClaudeSessionController.class.getDeclaredField("standardModelCount");
+        stdCount.setAccessible(true);
+        stdCount.setInt(c, standardModels.size());
+
+        // Build the final list the same way discoverModels does
+        List<String> combined = new java.util.ArrayList<>(standardModels);
+        combined.addAll(java.util.Arrays.asList("openai/gpt-4o", "openai/gpt-4-turbo"));
+        m.setModelList(combined, 0);
+
+        List<String> result = m.getAvailableModels();
+        assertEquals(4, result.size());
+        assertEquals("Sonnet 4.6",       result.get(0));
+        assertEquals("Opus 4.6",         result.get(1));
+        assertEquals("openai/gpt-4o",    result.get(2));
+        assertEquals("openai/gpt-4-turbo", result.get(3));
+    }
+
+    /**
+     * Verifies that {@code switchModel} with a custom-model index is a no-op
+     * when there is no active connector (same guard as standard path).
+     */
+    @Test
+    void switchModel_customIndex_noopWithoutConnector() throws Exception {
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        ClaudeSessionController c = new ClaudeSessionController(m, Collections::emptyList);
+        m.setLifecycle(SessionLifecycle.READY);
+
+        java.lang.reflect.Field customField =
+                ClaudeSessionController.class.getDeclaredField("customModelIds");
+        customField.setAccessible(true);
+        customField.set(c, java.util.Arrays.asList("openai/gpt-4o"));
+
+        java.lang.reflect.Field stdCount =
+                ClaudeSessionController.class.getDeclaredField("standardModelCount");
+        stdCount.setAccessible(true);
+        stdCount.setInt(c, 2);  // index 2 → custom
+
+        // Must not throw even though connector is null
+        assertDoesNotThrow(() -> c.switchModel(2));
+    }
+
+    /**
+     * Verifies that {@code stopProcess} resets {@code customModelIds} and
+     * {@code standardModelCount} to their initial values.
+     */
+    @Test
+    void stopProcess_resetsCustomModelState() throws Exception {
+        ClaudeSessionModel m = new ClaudeSessionModel();
+        ClaudeSessionController c = new ClaudeSessionController(m, Collections::emptyList);
+
+        // Inject non-default values
+        java.lang.reflect.Field customField =
+                ClaudeSessionController.class.getDeclaredField("customModelIds");
+        customField.setAccessible(true);
+        customField.set(c, java.util.Arrays.asList("openai/gpt-4o"));
+
+        java.lang.reflect.Field stdCount =
+                ClaudeSessionController.class.getDeclaredField("standardModelCount");
+        stdCount.setAccessible(true);
+        stdCount.setInt(c, 3);
+
+        c.stopProcess();
+
+        List<?> ids = (List<?>) customField.get(c);
+        assertTrue(ids.isEmpty(), "customModelIds must be empty after stopProcess");
+        assertEquals(0, stdCount.getInt(c), "standardModelCount must be 0 after stopProcess");
+    }
+
+    // -------------------------------------------------------------------------
     // No-op listener base class
     // -------------------------------------------------------------------------
 

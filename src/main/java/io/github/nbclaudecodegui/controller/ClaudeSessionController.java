@@ -109,6 +109,12 @@ public final class ClaudeSessionController {
     /** Number of model-discovery attempts made since the last session start. */
     private int modelDiscoveryAttempts = 0;
 
+    /** Custom model IDs from the active profile; appended to the model combo after standard models. */
+    private List<String> customModelIds = List.of();
+
+    /** Number of standard (CC-discovered) models; used to distinguish custom-model indices in {@link #switchModel}. */
+    private int standardModelCount = 0;
+
     /**
      * Rolling buffer of the last {@link #PTY_LINE_BUFFER_SIZE} stripped PTY lines.
      * Used as a fallback for prompt detection when the JediTerm screen buffer is
@@ -168,6 +174,7 @@ public final class ClaudeSessionController {
         String tag = "[" + dir.getName() + "] ";
         claudeProcess = new ClaudeProcess();
         ClaudeProfile profile = ClaudeProfileStore.findByName(profileName);
+        customModelIds = profile != null ? new ArrayList<>(profile.getCustomModels()) : List.of();
         PtyProcess process = claudeProcess.start(dir.getAbsolutePath(), profile);
 
         connector = new PtyTtyConnector(process);
@@ -228,6 +235,9 @@ public final class ClaudeSessionController {
      *
      * <p>Does <em>not</em> close the terminal widget — the View handles that.
      */
+    /** Returns the last command attempted to start the process. */
+    public String getLastAttemptedCommand() { return claudeProcess.getLastCommand(); }
+
     public void stopProcess() {
         if (statusTimer != null) {
             statusTimer.stop();
@@ -245,6 +255,8 @@ public final class ClaudeSessionController {
         modelComboPopulated = false;
         modelDiscoveryInProgress = false;
         modelDiscoveryAttempts = 0;
+        customModelIds = List.of();
+        standardModelCount = 0;
         synchronized (recentPtyLines) { recentPtyLines.clear(); }
 
         model.setModelList(List.of(), -1);
@@ -338,6 +350,25 @@ public final class ClaudeSessionController {
             if (answer == null) {
                 LOG.fine("[PTY write] \\x1b (Cancel/ESC)");
                 sendCancelToPty(new byte[]{0x1b});
+            } else if (answer.startsWith("MULTI:")) {
+                String[] digits = answer.substring(6).split(",");
+                LOG.fine("[PTY write] multi-select digits=" + java.util.Arrays.toString(digits));
+                Thread t = new Thread(() -> {
+                    try {
+                        for (String digit : digits) {
+                            connector.write(digit.strip());
+                            Thread.sleep(100);
+                        }
+                        // Right arrow to submit the selection
+                        connector.write(new byte[]{0x1b, '[', 'C'});
+                    } catch (IOException ex) {
+                        LOG.warning("writePtyAnswer MULTI write failed: " + ex.getMessage());
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, "pty-multiselect");
+                t.setDaemon(true);
+                t.start();
             } else if (answer.startsWith("TYPE:")) {
                 int sep = answer.indexOf(':', 5);
                 String digit = answer.substring(5, sep);
@@ -469,20 +500,39 @@ public final class ClaudeSessionController {
         if (model.getLifecycle() != SessionLifecycle.READY) return;
 
         modelDiscoveryInProgress = true;
-        Thread t = new Thread(() -> {
-            try {
-                openModelMenu();
-                connector.write(String.valueOf(index + 1));
-                Thread.sleep(500);
-            } catch (IOException | InterruptedException ex) {
-                LOG.warning("model switch failed: " + ex.getMessage());
-            } finally {
-                try { Thread.sleep(600); } catch (InterruptedException ignored) {}
-                SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
-            }
-        }, "claude-model-switch");
-        t.setDaemon(true);
-        t.start();
+        if (index >= standardModelCount && !customModelIds.isEmpty()) {
+            // Custom model: switch via /model <id>\r
+            String customId = customModelIds.get(index - standardModelCount);
+            Thread t = new Thread(() -> {
+                try {
+                    connector.write("/model " + customId + "\r");
+                    Thread.sleep(500);
+                } catch (IOException | InterruptedException ex) {
+                    LOG.warning("model switch failed: " + ex.getMessage());
+                } finally {
+                    try { Thread.sleep(600); } catch (InterruptedException ignored) {}
+                    SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
+                }
+            }, "claude-model-switch");
+            t.setDaemon(true);
+            t.start();
+        } else {
+            // Standard model: open /model menu and send 1-based digit
+            Thread t = new Thread(() -> {
+                try {
+                    openModelMenu();
+                    connector.write(String.valueOf(index + 1));
+                    Thread.sleep(500);
+                } catch (IOException | InterruptedException ex) {
+                    LOG.warning("model switch failed: " + ex.getMessage());
+                } finally {
+                    try { Thread.sleep(600); } catch (InterruptedException ignored) {}
+                    SwingUtilities.invokeLater(() -> modelDiscoveryInProgress = false);
+                }
+            }, "claude-model-switch");
+            t.setDaemon(true);
+            t.start();
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -534,6 +584,12 @@ public final class ClaudeSessionController {
                 }
 
                 connector.write(new byte[]{0x1b});  // Esc — dismiss model menu
+
+                standardModelCount = models.size();
+                if (!customModelIds.isEmpty()) {
+                    models = new ArrayList<>(models);
+                    models.addAll(customModelIds);
+                }
 
                 final List<String> finalModels = models;
                 final int finalSelIdx = selIdx;

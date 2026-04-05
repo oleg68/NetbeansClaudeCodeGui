@@ -1,0 +1,6 @@
+Select features to enable:
+ ❯ 1. [ ] Linting
+   2. [x] Formatting
+   3. [ ] Type checking
+   4. [x] Auto-import
+Enter to select · ↑/↓ to navigate · → to submit

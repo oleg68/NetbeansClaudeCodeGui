@@ -703,10 +703,13 @@ public final class ClaudeProfilesPanel extends JPanel {
         flushFormToCurrentProfile();
         ClaudeProfile p = currentFormProfile;
         if (p == null) return;
-        // Reconstruct display list from stored alias map (alias→id)
+        // Reconstruct display list from stored alias map (sonnet/opus/haiku) and custom list
         java.util.List<ModelAlias> existing = new ArrayList<>();
         for (java.util.Map.Entry<String, String> e : p.getModelAliases().entrySet()) {
             existing.add(new ModelAlias(e.getValue(), null, e.getKey()));
+        }
+        for (String id : p.getCustomModels()) {
+            existing.add(new ModelAlias(id, null, "custom"));
         }
         ModelAliasesDialog dlg = new ModelAliasesDialog(
                 this,
@@ -717,12 +720,16 @@ public final class ClaudeProfilesPanel extends JPanel {
         java.util.List<ModelAlias> chosen = dlg.getModels();
         if (chosen != null) {
             java.util.Map<String, String> aliasMap = new java.util.LinkedHashMap<>();
+            java.util.List<String> customList = new ArrayList<>();
             for (ModelAlias m : chosen) {
-                if (m.alias() != null && !m.alias().isBlank()) {
+                if ("custom".equals(m.alias())) {
+                    customList.add(m.id());
+                } else if (m.alias() != null && !m.alias().isBlank()) {
                     aliasMap.put(m.alias(), m.id());
                 }
             }
             p.setModelAliases(aliasMap);
+            p.setCustomModels(customList);
         }
     }
 

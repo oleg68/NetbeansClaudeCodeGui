@@ -7,8 +7,11 @@ import java.awt.datatransfer.StringSelection;
 import org.openide.awt.HtmlBrowser;
 import java.awt.Dimension;
 import java.awt.Point;
+import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import javax.swing.AbstractAction;
+import javax.swing.JComponent;
 import java.io.File;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -141,6 +144,7 @@ public class MarkdownPreviewTab extends TopComponent {
 
         // Attach hyperlink listener and context menu
         tab.attachHyperlinkListener();
+        tab.bindRefreshKey(tab.pane);
         tab.pane.setComponentPopupMenu(tab.buildContextMenu());
 
         if (fo != null) {
@@ -411,6 +415,10 @@ public class MarkdownPreviewTab extends TopComponent {
         back.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, InputEvent.ALT_DOWN_MASK));
         forward.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, InputEvent.ALT_DOWN_MASK));
 
+        JMenuItem refresh = new JMenuItem("Refresh");
+        refresh.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
+        refresh.addActionListener(e -> doRefresh());
+
         JMenuItem selectAll = new JMenuItem("Select All");
         selectAll.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK));
         selectAll.addActionListener(e -> { if (pane != null) pane.selectAll(); });
@@ -434,6 +442,7 @@ public class MarkdownPreviewTab extends TopComponent {
         menu.add(linkSep);
         menu.add(back);
         menu.add(forward);
+        menu.add(refresh);
         menu.addSeparator();
         menu.add(selectAll);
         menu.add(copy);
@@ -456,6 +465,7 @@ public class MarkdownPreviewTab extends TopComponent {
                 copyUrl.setEnabled(hasLink);
                 back.setEnabled(canGoBack());
                 forward.setEnabled(canGoForward());
+                refresh.setVisible(fileObject != null);
                 copy.setEnabled(pane != null
                         && pane.getSelectionStart() != pane.getSelectionEnd());
             }
@@ -467,6 +477,24 @@ public class MarkdownPreviewTab extends TopComponent {
         forward.addActionListener(e -> navigateForward());
 
         return menu;
+    }
+
+    private void bindRefreshKey(JEditorPane p) {
+        KeyStroke f5 = KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0);
+        p.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(f5, "md-refresh");
+        p.getActionMap().put("md-refresh", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { doRefresh(); }
+        });
+    }
+
+    void doRefresh() {
+        if (fileObject == null) return;
+        try {
+            fileObject.refresh(false);
+            updateContent(fileObject.asText());
+        } catch (IOException e) {
+            // silently ignore
+        }
     }
 
     @Override
@@ -517,6 +545,7 @@ public class MarkdownPreviewTab extends TopComponent {
             scrollPane = new JScrollPane(pane);
             add(scrollPane, BorderLayout.CENTER);
             attachHyperlinkListener();
+            bindRefreshKey(pane);
             pane.setComponentPopupMenu(buildContextMenu());
         }
 

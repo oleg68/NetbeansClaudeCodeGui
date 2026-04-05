@@ -244,8 +244,15 @@ public final class ScreenContentDetector {
             }
         }
 
-        LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
-        return Optional.of(new ChoiceMenuModel(question, options, 0));
+        // Determine menu type: if any option has a checkbox marker → MULTI_SELECT
+        boolean isMultiSelect = options.stream().anyMatch(ChoiceMenuModel.Option::checked);
+        ChoiceMenuModel.MenuType menuType = isMultiSelect
+                ? ChoiceMenuModel.MenuType.MULTI_SELECT
+                : ChoiceMenuModel.MenuType.SINGLE_SELECT;
+
+        LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options
+                + " menuType=" + menuType);
+        return Optional.of(new ChoiceMenuModel(question, options, 0, menuType));
     }
 
     // -------------------------------------------------------------------------
@@ -427,12 +434,20 @@ public final class ScreenContentDetector {
             num = index;
         }
         String afterDot = working.substring(dotPos + 1).strip();
+        // Detect checkbox prefix: [ ], [x], [X], [✓]
+        boolean checked = false;
+        if (afterDot.startsWith("[ ]")) {
+            afterDot = afterDot.substring(3).stripLeading();
+        } else if (afterDot.startsWith("[x]") || afterDot.startsWith("[X]") || afterDot.startsWith("[✓]")) {
+            checked = true;
+            afterDot = afterDot.substring(3).stripLeading();
+        }
         // Remove trailing parenthetical hint like "(shift+tab)"
         int parenPos = afterDot.lastIndexOf('(');
         if (parenPos > 0 && afterDot.endsWith(")")) {
             afterDot = afterDot.substring(0, parenPos).stripTrailing();
         }
-        return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num));
+        return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num), null, checked);
     }
 
     /**

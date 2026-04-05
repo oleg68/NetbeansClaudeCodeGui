@@ -18,6 +18,7 @@ import org.openide.modules.ModuleInstall;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.util.lookup.ServiceProvider;
+import org.openide.awt.NotificationDisplayer;
 import org.openbeans.claude.netbeans.ClaudeCodeStatusService;
 
 /**
@@ -119,7 +120,14 @@ public class ClaudeCodeInstaller extends ModuleInstall implements PropertyChange
                 if (mcpServer.start(port)) {
                     LOGGER.log(Level.INFO, "Claude Code MCP server started on port {0}", port);
                 } else {
-                    LOGGER.severe("Port " + port + " is busy. Change MCP port in Tools → Options → Claude Code.");
+                    String msg = "Port " + port + " is busy. Change MCP port in Tools \u2192 Options \u2192 Claude Code.";
+                    LOGGER.severe(msg);
+                    NotificationDisplayer.getDefault().notify(
+                            "Claude Code MCP server",
+                            NotificationDisplayer.Priority.HIGH.getIcon(),
+                            msg,
+                            null,
+                            NotificationDisplayer.Priority.HIGH);
                 }
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Error starting Claude Code MCP server", e);

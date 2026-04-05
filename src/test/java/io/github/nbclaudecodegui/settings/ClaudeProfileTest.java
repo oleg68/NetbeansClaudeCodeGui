@@ -280,4 +280,46 @@ class ClaudeProfileTest {
         var list = p.getExtraEnvVars();
         assertThrows(UnsupportedOperationException.class, () -> list.add(new String[]{"X", "Y"}));
     }
+
+    // -------------------------------------------------------------------------
+    // customModels
+    // -------------------------------------------------------------------------
+
+    @Test
+    void getCustomModels_defaultEmpty() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        assertTrue(p.getCustomModels().isEmpty());
+    }
+
+    @Test
+    void setCustomModels_roundTrip() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setCustomModels(List.of("openai/gpt-4o", "openai/gpt-4-turbo"));
+        assertEquals(List.of("openai/gpt-4o", "openai/gpt-4-turbo"), p.getCustomModels());
+    }
+
+    @Test
+    void setCustomModels_null_clearsList() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setCustomModels(List.of("model-x"));
+        p.setCustomModels(null);
+        assertTrue(p.getCustomModels().isEmpty());
+    }
+
+    @Test
+    void getCustomModels_returnsUnmodifiableView() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setCustomModels(List.of("model-x"));
+        assertThrows(UnsupportedOperationException.class,
+                () -> p.getCustomModels().add("model-y"));
+    }
+
+    @Test
+    void toEnvVars_customModels_noEnvVarEmitted() {
+        // Custom models must NOT produce any ANTHROPIC_DEFAULT_CUSTOM_MODEL env var
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setCustomModels(List.of("openai/gpt-4o"));
+        Map<String, String> env = p.toEnvVars();
+        assertFalse(env.containsKey("ANTHROPIC_DEFAULT_CUSTOM_MODEL"));
+    }
 }

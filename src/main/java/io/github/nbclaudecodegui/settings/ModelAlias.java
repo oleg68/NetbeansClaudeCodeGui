@@ -42,6 +42,10 @@ public record ModelAlias(String id, Boolean available, String alias) {
     /**
      * Validates alias uniqueness across a list of model aliases.
      *
+     * <p>The {@code "custom"} alias is exempt: multiple models may share it,
+     * since they are stored in a separate list and injected into the model combo
+     * without an env var.
+     *
      * @param models the list of model aliases to validate
      * @return {@code null} if valid, or an error message naming the duplicate alias
      */
@@ -49,7 +53,7 @@ public record ModelAlias(String id, Boolean available, String alias) {
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (ModelAlias m : models) {
             String a = m.alias();
-            if (a != null && !a.isBlank()) {
+            if (a != null && !a.isBlank() && !"custom".equals(a)) {
                 if (!seen.add(a)) {
                     return "Alias '" + a + "' is assigned to more than one model";
                 }

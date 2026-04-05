@@ -38,7 +38,7 @@ public final class ModelAliasesDialog extends JDialog {
     private static final Logger LOG =
             Logger.getLogger(ModelAliasesDialog.class.getName());
 
-    private static final String[] ALIASES = {"", "sonnet", "opus", "haiku"};
+    private static final String[] ALIASES = {"", "sonnet", "opus", "haiku", "custom"};
 
     /** The base URL of the Other API endpoint, used when fetching available models. */
     private final String baseUrl;

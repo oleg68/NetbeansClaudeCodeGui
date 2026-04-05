@@ -4,6 +4,7 @@ import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import io.github.nbclaudecodegui.controller.ClaudeSessionController;
+import io.github.nbclaudecodegui.ui.common.BasicTextContextMenu;
 import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import io.github.nbclaudecodegui.model.ClaudeSessionModel;
 import io.github.nbclaudecodegui.model.SessionLifecycle;
@@ -24,10 +25,13 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -138,6 +142,7 @@ public class ClaudeSessionTab extends TopComponent
 
     private JediTermWidget  terminalWidget;
     private JSplitPane      splitPane;
+    private JPanel          errorPanel;
     private JPanel          southCard;
     private CardLayout      southCardLayout;
     private String          activeCard;
@@ -571,8 +576,9 @@ public class ClaudeSessionTab extends TopComponent
         try {
             controller.startProcess(dir, profileName, widget);
         } catch (IOException ex) {
-            selectorPanel.showError("Failed to start claude: " + ex.getMessage());
-            selectorPanel.unlock();
+            String command = controller.getLastAttemptedCommand();
+            String errorMsg = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
+            showStartError(command, errorMsg);
         }
     }
 
@@ -651,6 +657,83 @@ public class ClaudeSessionTab extends TopComponent
         revalidate();
         repaint();
         widget.requestFocusInWindow();
+    }
+
+    private void showSelectorLayout() {
+        if (splitPane != null) {
+            remove(splitPane);
+            splitPane = null;
+        }
+        if (errorPanel != null) {
+            remove(errorPanel);
+            errorPanel = null;
+        }
+        add(placeholderLabel, BorderLayout.CENTER);
+        selectorPanel.setVisible(true);
+        revalidate();
+        repaint();
+    }
+
+    private void showStartError(String command, String error) {
+        if (splitPane != null) {
+            remove(splitPane);
+            splitPane = null;
+        }
+
+        JTextArea cmdArea = new JTextArea(command, 2, 0);
+        cmdArea.setEditable(false);
+        cmdArea.setLineWrap(true);
+        cmdArea.setWrapStyleWord(true);
+        BasicTextContextMenu.attach(cmdArea, BasicTextContextMenu.createReadOnly(cmdArea));
+
+        JTextArea errArea = new JTextArea(error, 3, 0);
+        errArea.setEditable(false);
+        errArea.setLineWrap(true);
+        errArea.setWrapStyleWord(true);
+        BasicTextContextMenu.attach(errArea, BasicTextContextMenu.createReadOnly(errArea));
+
+        JButton backBtn = new JButton("\u2190 Back");
+        backBtn.addActionListener(e -> {
+            showSelectorLayout();
+            selectorPanel.unlock();
+        });
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+
+        JLabel titleLabel = new JLabel("Failed to start Claude Code");
+        titleLabel.setForeground(java.awt.Color.RED);
+        titleLabel.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(titleLabel);
+        panel.add(Box.createVerticalStrut(12));
+
+        JLabel cmdLabel = new JLabel("Command:");
+        cmdLabel.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(cmdLabel);
+        panel.add(Box.createVerticalStrut(4));
+        JScrollPane cmdScroll = new JScrollPane(cmdArea);
+        cmdScroll.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(cmdScroll);
+        panel.add(Box.createVerticalStrut(12));
+
+        JLabel errLabel = new JLabel("Error:");
+        errLabel.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(errLabel);
+        panel.add(Box.createVerticalStrut(4));
+        JScrollPane errScroll = new JScrollPane(errArea);
+        errScroll.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(errScroll);
+        panel.add(Box.createVerticalStrut(16));
+
+        backBtn.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(backBtn);
+
+        errorPanel = panel;
+        remove(placeholderLabel);
+        add(errorPanel, BorderLayout.CENTER);
+        revalidate();
+        repaint();
     }
 
     /**

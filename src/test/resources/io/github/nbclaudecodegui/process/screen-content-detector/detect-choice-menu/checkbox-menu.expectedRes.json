@@ -1,0 +1,11 @@
+{
+  "text": "Select features to enable:",
+  "options": [
+    {"display": "Linting", "response": "1"},
+    {"display": "Formatting", "response": "2", "checked": true},
+    {"display": "Type checking", "response": "3"},
+    {"display": "Auto-import", "response": "4", "checked": true}
+  ],
+  "defaultOptionIndex": 0,
+  "menuType": "MULTI_SELECT"
+}

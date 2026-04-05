@@ -63,6 +63,7 @@ public final class ClaudeProcess {
     public ClaudeProcess() {}
 
     private volatile PtyProcess ptyProcess;
+    private String lastCommand = "";
 
     /** Working directory of the current session; {@code null} when stopped. */
     private volatile String workingDir;
@@ -133,6 +134,7 @@ public final class ClaudeProcess {
             }
         }
 
+        lastCommand = String.join(" ", cmd);
         PtyProcessBuilder builder = new PtyProcessBuilder(cmd.toArray(new String[0]))
                 .setEnvironment(env)
                 .setDirectory(workingDir)
@@ -146,6 +148,9 @@ public final class ClaudeProcess {
         LOG.fine("Claude PTY started, pid=" + p.pid());
         return p;
     }
+
+    /** Returns the last command attempted to start, as a space-joined string. */
+    public String getLastCommand() { return lastCommand; }
 
     /**
      * Stops the current PTY process and cleans up {@code settings.local.json}.

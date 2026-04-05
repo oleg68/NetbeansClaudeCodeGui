@@ -158,25 +158,22 @@ public final class HistoryDialog extends JDialog {
         }
 
         private void doClearOlder() {
-            // Ask user for a date cutoff
-            String input = JOptionPane.showInputDialog(HistoryDialog.this,
-                    "Delete all entries from this date and older (yyyy-MM-dd):",
-                    "Clear Older", JOptionPane.QUESTION_MESSAGE);
-            if (input == null || input.isBlank()) return;
-            try {
-                java.time.LocalDate date = java.time.LocalDate.parse(input.trim());
-                java.time.Instant cutoff = date.plusDays(1)
-                        .atStartOfDay(ZoneId.systemDefault()).toInstant();
-                int confirm = JOptionPane.showConfirmDialog(HistoryDialog.this,
-                        "Delete all entries from " + input.trim() + " and older?",
-                        "Confirm", JOptionPane.OK_CANCEL_OPTION);
-                if (confirm == JOptionPane.OK_OPTION) {
-                    historyStore.deleteOlderThan(cutoff);
-                    refreshTable();
-                }
-            } catch (Exception ex) {
+            int row = table.getSelectedRow();
+            if (row < 0) {
                 JOptionPane.showMessageDialog(HistoryDialog.this,
-                        "Invalid date format. Use yyyy-MM-dd.", "Error", JOptionPane.ERROR_MESSAGE);
+                        "Select a row first.", "No selection", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            java.time.Instant entryTime = currentEntries.get(row).getTime();
+            String timeStr = entryTime.atZone(ZoneId.systemDefault())
+                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            int confirm = JOptionPane.showConfirmDialog(HistoryDialog.this,
+                    "Delete all entries from " + timeStr + " and older?",
+                    "Confirm", JOptionPane.OK_CANCEL_OPTION);
+            if (confirm == JOptionPane.OK_OPTION) {
+                java.time.Instant cutoff = entryTime.plusNanos(1);
+                historyStore.deleteOlderThan(cutoff);
+                refreshTable();
             }
         }
     }

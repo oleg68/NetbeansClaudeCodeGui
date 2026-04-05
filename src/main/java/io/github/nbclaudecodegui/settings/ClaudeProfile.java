@@ -138,6 +138,12 @@ public final class ClaudeProfile {
      */
     private Map<String, String> modelAliases;
 
+    /**
+     * Model IDs assigned the {@code "custom"} alias — injected into the model combo
+     * as-is. Multiple entries are allowed. No env var is emitted for these.
+     */
+    private List<String> customModels;
+
     // -------------------------------------------------------------------------
     // No-arg constructor (Jackson)
     // -------------------------------------------------------------------------
@@ -155,6 +161,7 @@ public final class ClaudeProfile {
         this.noProxy      = "";
         this.extraEnvVars = new ArrayList<>();
         this.modelAliases = new HashMap<>();
+        this.customModels = new ArrayList<>();
     }
 
     // -------------------------------------------------------------------------
@@ -496,6 +503,25 @@ public final class ClaudeProfile {
      */
     public void setModelAliases(Map<String, String> modelAliases) {
         this.modelAliases = modelAliases != null ? new HashMap<>(modelAliases) : new HashMap<>();
+    }
+
+    /**
+     * Returns an unmodifiable view of the custom model ID list.
+     * These are displayed in the model combo and switched via {@code /model <id>}.
+     *
+     * @return unmodifiable list; never {@code null}
+     */
+    public List<String> getCustomModels() {
+        return customModels != null ? Collections.unmodifiableList(customModels) : List.of();
+    }
+
+    /**
+     * Replaces the custom model ID list.
+     *
+     * @param ids list of model IDs; {@code null} clears the list
+     */
+    public void setCustomModels(List<String> ids) {
+        this.customModels = ids != null ? new ArrayList<>(ids) : new ArrayList<>();
     }
 
     // -------------------------------------------------------------------------

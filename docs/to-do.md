@@ -128,6 +128,38 @@
 - [x] Profiles: поменять дефолтную директорию профилей с ~/.netbeans/claude-profiles/ на ~/.netbeans/claude-plugin/profiles/
 - [x] Profiles: переименовать лейблы — "Profiles directory:" → "New Profiles Directory:", "Config directory:" → "Profile Storage Directory:", кнопку "Change…" → синхронизировать с новым названием поля; после этого обновить user-manual.md
 - [x] Diff panel: кнопка должна называться "Accept All" (два слова), сейчас "AcceptAll"
+- [ ] Улучшить определение моделей: Из списка
+    ```
+    ❯ /model                                                                                                                                                                                                                                              
+
+    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+      Select model
+      Switch between Claude models. Applies to this session and future Claude Code sessions. For other/previous model names, specify with --model.
+
+      ❯ 1. Default (recommended) ✔  Sonnet 4.6 · Best for everyday tasks
+        2. Opus                     Opus 4.6 · Most capable for complex work
+        3. Haiku                    Haiku 4.5 · Fastest for quick answers
+
+      ○ Low effort ← → to adjust
+
+      Enter to confirm · Esc to exit
+    ```
+    должно выбираться [ "Sonnet 4.6", "Opus 4.6", "Haiku 4.5" ], а из списка
+```
+
+```
+- [ ] Добавить контекстное меню "Copy URL" и "Open in Browser" на url в Options->Profiles. 
+    Дизейблить эти url если выбран неподходящий Connection Type.
+- [x] Кастомная модель "codex/openai/gpt5.4" не выбирается в /model. Проверить на питоновском тесте.
+- [ ] При невозможности стартовать процесс
+    - Показывается "Exec_tty error:Unknown reason". Можно ли показывать более детальное сообщение, или хотя-бы exit code?
+    - В заголовке окна нет имени проекта
+    - И командная строка, и сообщение - растянуты по высоте на пол окна.
+    Завести панель ошибок из трёх строк: Error running Claude Code, Command Line: <>, Error Message: <message> которую показывать в центре таба, растягивая только по горизонтали.
+- [ ] Улучшить определение Working/Ready
+```
+
+```
 
 # Features
 
