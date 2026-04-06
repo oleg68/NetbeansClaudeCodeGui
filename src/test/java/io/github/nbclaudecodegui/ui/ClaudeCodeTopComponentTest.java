@@ -45,6 +45,30 @@ class ClaudeCodeTopComponentTest {
     }
 
     @Test
+    void testTabTooltipSetImmediatelyOnStartSession() throws IOException {
+        // Regression: tab tooltip (and title in project dirs) must reflect the selected directory
+        // even when startProcess throws IOException (e.g. `claude` binary not found).
+        // updateDisplayName sets toolTipText to dir.getAbsolutePath() for non-null dir.
+        File tmpDir = Files.createTempDirectory("claude-starterr-test").toFile();
+        tmpDir.deleteOnExit();
+        try {
+            ClaudeSessionTab tc = new ClaudeSessionTab();
+            // Default tooltip for null dir is "New Claude Code session"
+            String defaultTooltip = tc.getToolTipText();
+            // autoStart → startSession → startProcess throws IOException (no claude binary),
+            // but updateDisplayName(dir) must be called before startProcess.
+            tc.autoStart(tmpDir, "default");
+            String newTooltip = tc.getToolTipText();
+            assertEquals(tmpDir.getAbsolutePath(), newTooltip,
+                    "Tooltip must be set to dir path immediately, before startProcess is called");
+            assertNotEquals(defaultTooltip, newTooltip,
+                    "Tooltip must change from the default when a directory is selected");
+        } finally {
+            tmpDir.delete();
+        }
+    }
+
+    @Test
     void testCanCloseWithNoActiveSession() {
         ClaudeSessionTab tc = new ClaudeSessionTab();
         // No process running — canClose() must return true without prompting

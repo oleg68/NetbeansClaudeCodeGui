@@ -32,6 +32,11 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import org.netbeans.api.options.OptionsDisplayer;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -570,6 +575,7 @@ public class ClaudeSessionTab extends TopComponent
     }
 
     private void startSession(File dir, String profileName) {
+        updateDisplayName(dir);
         sessionTag = "[" + dir.getName() + "] ";
         JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
         showChatLayout(widget);
@@ -680,56 +686,55 @@ public class ClaudeSessionTab extends TopComponent
             splitPane = null;
         }
 
-        JTextArea cmdArea = new JTextArea(command, 2, 0);
-        cmdArea.setEditable(false);
-        cmdArea.setLineWrap(true);
-        cmdArea.setWrapStyleWord(true);
-        BasicTextContextMenu.attach(cmdArea, BasicTextContextMenu.createReadOnly(cmdArea));
+        JTextField cmdField = new JTextField(command);
+        cmdField.setEditable(false);
+        BasicTextContextMenu.attach(cmdField, BasicTextContextMenu.createReadOnly(cmdField));
 
-        JTextArea errArea = new JTextArea(error, 3, 0);
-        errArea.setEditable(false);
-        errArea.setLineWrap(true);
-        errArea.setWrapStyleWord(true);
-        BasicTextContextMenu.attach(errArea, BasicTextContextMenu.createReadOnly(errArea));
+        JTextField errField = new JTextField(error);
+        errField.setEditable(false);
+        BasicTextContextMenu.attach(errField, BasicTextContextMenu.createReadOnly(errField));
 
-        JButton backBtn = new JButton("\u2190 Back");
-        backBtn.addActionListener(e -> {
-            showSelectorLayout();
-            selectorPanel.unlock();
-        });
+        JButton settingsBtn = new JButton("Settings...");
+        settingsBtn.addActionListener(e -> OptionsDisplayer.getDefault().open("ClaudeCodeGUI"));
+
+        JPanel fieldsPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridx = 0; gbc.gridy = 0; gbc.insets = new Insets(4, 0, 4, 8); gbc.anchor = GridBagConstraints.WEST;
+        fieldsPanel.add(new JLabel("Command:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        fieldsPanel.add(cmdField, gbc);
+        gbc.gridx = 0; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        fieldsPanel.add(new JLabel("Error:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        fieldsPanel.add(errField, gbc);
+
+        JPanel btnPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 0, 0));
+        btnPanel.add(settingsBtn);
 
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
 
         JLabel titleLabel = new JLabel("Failed to start Claude Code");
-        titleLabel.setForeground(java.awt.Color.RED);
+        titleLabel.setForeground(Color.RED);
         titleLabel.setAlignmentX(LEFT_ALIGNMENT);
         panel.add(titleLabel);
-        panel.add(Box.createVerticalStrut(12));
 
-        JLabel cmdLabel = new JLabel("Command:");
-        cmdLabel.setAlignmentX(LEFT_ALIGNMENT);
-        panel.add(cmdLabel);
-        panel.add(Box.createVerticalStrut(4));
-        JScrollPane cmdScroll = new JScrollPane(cmdArea);
-        cmdScroll.setAlignmentX(LEFT_ALIGNMENT);
-        panel.add(cmdScroll);
-        panel.add(Box.createVerticalStrut(12));
+        fieldsPanel.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(fieldsPanel);
 
-        JLabel errLabel = new JLabel("Error:");
-        errLabel.setAlignmentX(LEFT_ALIGNMENT);
-        panel.add(errLabel);
-        panel.add(Box.createVerticalStrut(4));
-        JScrollPane errScroll = new JScrollPane(errArea);
-        errScroll.setAlignmentX(LEFT_ALIGNMENT);
-        panel.add(errScroll);
-        panel.add(Box.createVerticalStrut(16));
+        btnPanel.setAlignmentX(LEFT_ALIGNMENT);
+        panel.add(btnPanel);
 
-        backBtn.setAlignmentX(LEFT_ALIGNMENT);
-        panel.add(backBtn);
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, panel.getPreferredSize().height));
 
-        errorPanel = panel;
+        JPanel wrapper = new JPanel();
+        wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.Y_AXIS));
+        wrapper.add(Box.createVerticalGlue());
+        wrapper.add(panel);
+        wrapper.add(Box.createVerticalGlue());
+
+        errorPanel = wrapper;
         remove(placeholderLabel);
         add(errorPanel, BorderLayout.CENTER);
         revalidate();

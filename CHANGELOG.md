@@ -1,3 +1,4 @@
+- Improved process launch error panel
 - Documented status bar in user manual: edit mode selector with all modes, model selector, and right-side labels (session state, active plan, Claude version)
 - Added support for multiple custom models in the model combo: models assigned the "custom" alias in Model Aliases appear in the dropdown and are switched via `/model <id>` command
 - Added Refresh context menu item to Markdown Preview tab (re-reads file from disk, restores scroll position)

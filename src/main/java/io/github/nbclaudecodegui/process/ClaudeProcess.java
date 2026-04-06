@@ -143,7 +143,24 @@ public final class ClaudeProcess {
                 .setConsole(false)
                 .setRedirectErrorStream(true);
 
-        PtyProcess p = builder.start();
+        PtyProcess p;
+        try {
+            p = builder.start();
+        } catch (IOException ptyEx) {
+            // pty4j's exec_pty() often yields "Exec_tty error:Unknown reason" even for
+            // mundane failures (binary not found, no execute permission). Run the same
+            // command via plain ProcessBuilder — purely to get a meaningful errno message
+            // from the JVM — then rethrow that exception instead.
+            try {
+                new ProcessBuilder(cmd.toArray(new String[0]))
+                        .directory(new java.io.File(workingDir))
+                        .start()
+                        .destroyForcibly();
+            } catch (IOException betterEx) {
+                throw betterEx;
+            }
+            throw ptyEx;
+        }
         ptyProcess = p;
         LOG.fine("Claude PTY started, pid=" + p.pid());
         return p;
