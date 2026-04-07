@@ -1,3 +1,6 @@
+- Fixed terminal scrolling to the beginning when a choice menu or diff panel appears; the terminal now stays scrolled to the bottom
+- Improved JediTerm terminal colors to match the current NetBeans Look &amp; Feel theme (background, foreground, selection color, and empty terminal area)
+- Improved Markdown Preview colors to adapt to the current IDE theme (dark/light), including code blocks, tables, and blockquote highlights
 - Fixed second choice menu not appearing after the first one is submitted
 - Added support for multi-select menus (AskUserQuestion with multiSelect: true): checkboxes now appear instead of radio buttons
 - Improved process launch error panel

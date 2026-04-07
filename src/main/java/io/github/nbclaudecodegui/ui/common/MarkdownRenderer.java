@@ -1,11 +1,13 @@
 package io.github.nbclaudecodegui.ui.common;
 
+import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.JEditorPane;
+import javax.swing.UIManager;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
@@ -68,37 +70,78 @@ public final class MarkdownRenderer {
      * @return a ready-to-use output pane
      */
     public static JEditorPane createOutputPane() {
+        // Detect dark theme by checking panel background brightness
+        Color bg = UIManager.getColor("Panel.background");
+        Color fg = UIManager.getColor("Panel.foreground");
+        if (bg == null) bg = Color.WHITE;
+        if (fg == null) fg = Color.BLACK;
+        boolean dark = brightness(bg) < 0.5;
+
+        // Derive theme-adaptive colors
+        String codeBg    = dark ? blend(bg, Color.WHITE, 0.10) : blend(bg, Color.BLACK, 0.06);
+        String codeInBg  = dark ? blend(bg, Color.WHITE, 0.07) : blend(bg, Color.BLACK, 0.04);
+        String borderCol = dark ? blend(bg, Color.WHITE, 0.20) : blend(bg, Color.BLACK, 0.20);
+        String thBg      = dark ? blend(bg, Color.WHITE, 0.13) : blend(bg, Color.BLACK, 0.08);
+        String quoteFg   = dark ? blend(fg, bg, 0.35) : blend(fg, bg, 0.40);
+        String fgStr     = toHex(fg);
+        String linkCol   = dark ? "#5aabff" : "#0066cc";
+        String userCol   = dark ? "#70b8ff" : "#0064b4";
+        String infoCol   = dark ? blend(fg, bg, 0.45) : blend(fg, bg, 0.55);
+
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet ss = kit.getStyleSheet();
         ss.addRule("body   { font-family: sans-serif; font-size: 13pt;"
-                + "         margin: 6px; padding: 0; }");
+                + "         color: " + fgStr + "; margin: 6px; padding: 0; }");
         ss.addRule("p      { margin-top: 2px; margin-bottom: 4px; }");
-        ss.addRule("pre    { background-color: #ebebeb; padding: 6px;"
+        ss.addRule("pre    { background-color: " + codeBg + "; padding: 6px;"
                 + "         font-family: monospace; font-size: 12pt;"
                 + "         white-space: pre-wrap; margin: 4px 0; }");
-        ss.addRule("code   { background-color: #f0f0f0;"
+        ss.addRule("code   { background-color: " + codeInBg + ";"
                 + "         font-family: monospace; font-size: 12pt; }");
         ss.addRule("table  { border-collapse: collapse; margin: 4px 0; }");
-        ss.addRule("th, td { border: 1px solid #bbb; padding: 3px 8px; }");
-        ss.addRule("th     { background-color: #e0e0e0; font-weight: bold; }");
-        ss.addRule("blockquote { color: #555; font-style: italic;"
-                + "             border-left: 3px solid #ccc;"
+        ss.addRule("th, td { border: 1px solid " + borderCol + "; padding: 3px 8px; }");
+        ss.addRule("th     { background-color: " + thBg + "; font-weight: bold; }");
+        ss.addRule("blockquote { color: " + quoteFg + "; font-style: italic;"
+                + "             border-left: 3px solid " + borderCol + ";"
                 + "             margin-left: 8px; padding-left: 8px; }");
         ss.addRule("h1 { font-size: 16pt; margin: 6px 0 2px; }");
         ss.addRule("h2 { font-size: 14pt; margin: 6px 0 2px; }");
         ss.addRule("h3 { font-size: 13pt; margin: 4px 0 2px; }");
-        ss.addRule(".user-label { color: #0064b4; font-weight: bold; }");
-        ss.addRule(".info  { color: #888; font-size: 11pt; }");
-        ss.addRule("a { cursor: pointer; color: #0066cc; }");
+        ss.addRule(".user-label { color: " + userCol + "; font-weight: bold; }");
+        ss.addRule(".info  { color: " + infoCol + "; font-size: 11pt; }");
+        ss.addRule("a { cursor: pointer; color: " + linkCol + "; }");
 
         JEditorPane pane = new JEditorPane();
         pane.setEditorKit(kit);
         pane.setDocument(kit.createDefaultDocument());
         pane.setEditable(false);
+        pane.setBackground(bg);
+        pane.setForeground(fg);
         pane.setCursor(java.awt.Cursor.getPredefinedCursor(
                 java.awt.Cursor.TEXT_CURSOR));
         BasicTextContextMenu.attach(pane, BasicTextContextMenu.createReadOnly(pane));
         return pane;
+    }
+
+    /** Returns the perceived brightness of a color in [0,1]. */
+    private static double brightness(Color c) {
+        return (0.299 * c.getRed() + 0.587 * c.getGreen() + 0.114 * c.getBlue()) / 255.0;
+    }
+
+    /** Blends color {@code a} toward color {@code b} by fraction {@code t}. Returns CSS hex. */
+    private static String blend(Color a, Color b, double t) {
+        int r = (int) Math.round(a.getRed()   + (b.getRed()   - a.getRed())   * t);
+        int g = (int) Math.round(a.getGreen() + (b.getGreen() - a.getGreen()) * t);
+        int bl= (int) Math.round(a.getBlue()  + (b.getBlue()  - a.getBlue())  * t);
+        return String.format("#%02x%02x%02x", clamp(r), clamp(g), clamp(bl));
+    }
+
+    private static String toHex(Color c) {
+        return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
+    }
+
+    private static int clamp(int v) {
+        return Math.max(0, Math.min(255, v));
     }
 
     // -------------------------------------------------------------------------

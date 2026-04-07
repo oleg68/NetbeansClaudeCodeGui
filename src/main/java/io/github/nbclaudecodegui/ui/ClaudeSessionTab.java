@@ -2,7 +2,6 @@ package io.github.nbclaudecodegui.ui;
 
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
-import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import io.github.nbclaudecodegui.controller.ClaudeSessionController;
 import io.github.nbclaudecodegui.ui.common.BasicTextContextMenu;
 import io.github.nbclaudecodegui.model.ChoiceMenuModel;
@@ -577,7 +576,13 @@ public class ClaudeSessionTab extends TopComponent
     private void startSession(File dir, String profileName) {
         updateDisplayName(dir);
         sessionTag = "[" + dir.getName() + "] ";
-        JediTermWidget widget = new JediTermWidget(new DefaultSettingsProvider());
+        JediTermWidget widget = new JediTermWidget(new NetBeansSettingsProvider());
+        Color termBg = UIManager.getColor("EditorPane.background");
+        if (termBg == null) termBg = UIManager.getColor("Panel.background");
+        if (termBg != null) {
+            widget.setBackground(termBg);
+            widget.getTerminalPanel().setBackground(termBg);
+        }
         showChatLayout(widget);
         try {
             controller.startProcess(dir, profileName, widget);
@@ -787,6 +792,11 @@ public class ClaudeSessionTab extends TopComponent
         }
         southCard.revalidate();
         southCard.repaint();
+        // Keep the terminal scrolled to the bottom after layout changes
+        if (terminalWidget != null) {
+            SwingUtilities.invokeLater(
+                    () -> terminalWidget.getTerminalPanel().scrollToShowAllOutput());
+        }
     }
 
     private void stopProcess() {
