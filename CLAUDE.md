@@ -45,7 +45,9 @@ The heading `# MAJOR.MINOR (YYYY-MM-DD)` is the CI release signal — **only add
 
 During development, add bullet lines at the **very top** of `CHANGELOG.md` (above any existing heading), with no section heading. When finishing a release, add the `# MAJOR.MINOR (YYYY-MM-DD)` heading above those bullets.
 
-Every user-visible change **must** add a new bullet at the **top** of the list (reverse chronological order — newest entries first). "User-visible" means: new feature, changed behavior, bug fix, UI change, new setting, README update. Internal refactors, test-only changes, and CI changes do not require an entry.
+The changelog within a release is **cumulative**: if a feature was added and later refined or fixed within the same release cycle, **update the existing bullet** rather than adding a new one. Do not add separate "Fixed" entries for bugs in functionality that was introduced in the current (unreleased) version — only the final user-visible state matters.
+
+Every user-visible change **must** add or update a bullet at the **top** of the list (reverse chronological order — newest entries first). "User-visible" means: new feature, changed behavior, bug fix (in a previously released version), UI change, new setting, README update. Internal refactors, test-only changes, CI changes, and fixes to features not yet released do not require an entry.
 
 Entries must describe the change from the **user's perspective** — what the user experiences, not how it was implemented. Implementation details belong in the commit message body.
 
