@@ -16,7 +16,8 @@
 10. [File-Change Permissions (Diff Panel)](#10-file-change-permissions-diff-panel)
 11. [Settings (Tools → Options → Claude Code)](#11-settings)
 12. [Profiles](#12-profiles)
-13. [Troubleshooting](#13-troubleshooting)
+13. [IDE Tools (MCP)](#13-ide-tools-mcp)
+14. [Troubleshooting](#14-troubleshooting)
 
 
 ---
@@ -479,7 +480,57 @@ Click the **Claude Code** button in the toolbar to open the session selector. In
 
 ---
 
-## 13. Troubleshooting
+## 13. IDE Tools (MCP)
+
+The plugin exposes a set of IDE tools to Claude via an MCP (Model Context Protocol) server that runs in the background. These tools give Claude real-time access to your IDE state — open projects, open files, current selection, diagnostics — so it can give more relevant answers and take actions directly in the editor.
+
+### Available tools
+
+| Tool | What it does |
+|------|-------------|
+| `getWorkspaceFolders` | Lists all open projects with their paths |
+| `getOpenEditors` | Lists all currently open editor tabs |
+| `getCurrentSelection` | Returns the selected text and cursor position in the active editor |
+| `getDiagnostics` | Returns errors and warnings for specified files |
+| `openFile` | Opens a file in the editor |
+| `close_tab` | Closes an open editor tab |
+| `checkDocumentDirty` | Checks whether a file has unsaved changes |
+| `saveDocument` | Saves a file to disk |
+| `openDiff` | Shows a git diff for a file in the diff viewer |
+| `closeAllDiffTabs` | Closes all open diff viewer tabs |
+| `permission_prompt` | Shows proposed file changes in the diff panel and waits for your approval |
+
+### Prompts that work well with IDE tools
+
+**Project and file context:**
+- "What projects are currently open?"
+- "List all files I have open right now."
+- "Open the test file for this class."
+
+**Current selection** (select code first, then send the prompt):
+- "Explain this code."
+- "Write a unit test for this method."
+- "What does this do and how can it be improved?"
+
+**Diagnostics:**
+- "Fix all errors in this project."
+- "What warnings are in `src/main/java/com/example/Foo.java`?"
+- "There are compile errors in the open files — fix them."
+
+### Selection change notifications
+
+As you move the cursor or change the selection in any open editor, the plugin automatically notifies Claude of the current file and position. Claude always knows what you are looking at without you needing to mention it in the prompt.
+
+### Troubleshooting MCP tools
+
+If Claude says a tool is unavailable (e.g. "I don't have access to `getWorkspaceFolders`"):
+
+1. Check that no other application is using the MCP server port (**Tools → Options → Claude Code → General → MCP server port**, default: 28991). Change the port if needed and restart the IDE.
+2. Enable **Debug mode** and check the log file (`~/.netbeans/<version>/var/log/messages.log`) for `MCP SSE server started on port`.
+
+---
+
+## 14. Troubleshooting
 
 ### Enable debug mode
 Go to **Tools → Options → Claude Code → General** and check **Debug mode**. This writes detailed logs of all Claude I/O (PTY bytes, MCP messages, hook calls) to the NetBeans log file.

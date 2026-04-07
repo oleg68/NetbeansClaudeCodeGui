@@ -132,6 +132,7 @@ public final class ClaudeProcess {
             // mcpServers from settings.local.json; --mcp-config works in TUI mode).
             cmd.add("--mcp-config");
             cmd.add(buildMcpConfigJson(port));
+            LOG.info("Passing --mcp-config with netbeans SSE server on port " + port);
             try {
                 writeSettingsLocalJson(workingDir, port);
             } catch (IOException e) {
@@ -140,6 +141,7 @@ public final class ClaudeProcess {
         }
 
         lastCommand = String.join(" ", cmd);
+        LOG.info("Claude command: " + lastCommand);
         PtyProcessBuilder builder = new PtyProcessBuilder(cmd.toArray(new String[0]))
                 .setEnvironment(env)
                 .setDirectory(workingDir)
@@ -298,6 +300,15 @@ public final class ClaudeProcess {
                     ? MAPPER.createObjectNode()
                     : (ObjectNode) MAPPER.readTree(existingJson);
 
+            // Remove stale mcpServers.netbeans written by plugin < 0.19.22
+            if (root.has("mcpServers")) {
+                ObjectNode mcpServers = (ObjectNode) root.get("mcpServers");
+                mcpServers.remove(OUR_MCP_KEY);
+                if (mcpServers.isEmpty()) {
+                    root.remove("mcpServers");
+                }
+            }
+
             // --- hooks.PreToolUse ---
             ObjectNode hooks = root.has("hooks")
                     ? (ObjectNode) root.get("hooks")
@@ -419,6 +430,15 @@ public final class ClaudeProcess {
     static String cleanedSettingsJson(String existingJson) {
         try {
             ObjectNode root = (ObjectNode) MAPPER.readTree(existingJson);
+
+            // Remove stale mcpServers.netbeans (backward compat with plugin < 0.19.22)
+            if (root.has("mcpServers")) {
+                ObjectNode mcpServers = (ObjectNode) root.get("mcpServers");
+                mcpServers.remove(OUR_MCP_KEY);
+                if (mcpServers.isEmpty()) {
+                    root.remove("mcpServers");
+                }
+            }
 
             // Remove our hook entries
             if (root.has("hooks")) {

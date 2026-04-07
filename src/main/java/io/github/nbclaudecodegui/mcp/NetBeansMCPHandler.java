@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.openide.cookies.EditorCookie;
@@ -78,7 +79,7 @@ public class NetBeansMCPHandler {
     private static final Logger LOGGER = Logger.getLogger(NetBeansMCPHandler.class.getName());
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final MCPResponseBuilder responseBuilder;
-    private volatile BlockingQueue<String> sseQueue;
+    private volatile Consumer<String> broadcaster;
 
     // Selection tracking
     private final Map<JTextComponent, CaretListener> selectionListeners = new WeakHashMap<>();
@@ -117,10 +118,11 @@ public class NetBeansMCPHandler {
     /**
      * Handles incoming MCP messages and routes them to appropriate handlers.
      *
-     * @param message the JSON-RPC message
+     * @param message      the JSON-RPC message
+     * @param sessionQueue the per-session queue for sending async responses back
      * @return response JSON string, or null if no response needed
      */
-    public String handleMessage(JsonNode message) {
+    public String handleMessage(JsonNode message, BlockingQueue<String> sessionQueue) {
         try {
             String method = message.get("method").asText();
             JsonNode params = message.get("params");
@@ -148,7 +150,7 @@ public class NetBeansMCPHandler {
                     break;
 
                 case "tools/call":
-                    JsonNode toolResult = handleToolsCall(params, id);
+                    JsonNode toolResult = handleToolsCall(params, id, sessionQueue);
                     if (toolResult == null) {
                         // Async tool - no immediate response
                         return null;
@@ -255,11 +257,13 @@ public class NetBeansMCPHandler {
 
     /**
      * Handles tool call requests.
-     * @param params Tool call parameters
-     * @param requestId Request ID for async response handling
+     * @param params       Tool call parameters
+     * @param requestId    Request ID for async response handling
+     * @param sessionQueue Per-session queue for routing async responses
      * @return JsonNode result for sync tools, null for async tools
      */
-    private JsonNode handleToolsCall(JsonNode params, Integer requestId) {
+    private JsonNode handleToolsCall(JsonNode params, Integer requestId,
+                                     BlockingQueue<String> sessionQueue) {
         String toolName = params.get("name").asText();
         JsonNode arguments = params.get("arguments");
 
@@ -323,7 +327,7 @@ public class NetBeansMCPHandler {
                 asyncResponse.setHandler(new AsyncHandler() {
                     @Override
                     public void sendResponse(Object finalResult) {
-                        sendAsyncToolResponse(requestId, finalResult);
+                        sendAsyncToolResponse(requestId, finalResult, sessionQueue);
                     }
                 });
                 return null; // No immediate response
@@ -340,17 +344,22 @@ public class NetBeansMCPHandler {
     }
 
     /**
-     * Sends an async tool response via SSE.
-     * @param requestId The original request ID
-     * @param result The tool result to send
+     * Sends an async tool response directly to the originating session's queue.
+     * @param requestId    The original request ID
+     * @param result       The tool result to send
+     * @param sessionQueue The session queue that originated this tool call
      */
-    private void sendAsyncToolResponse(Integer requestId, Object result) {
+    private void sendAsyncToolResponse(Integer requestId, Object result,
+                                       BlockingQueue<String> sessionQueue) {
         try {
             ObjectNode response = responseBuilder.objectNode();
             response.put("jsonrpc", "2.0");
             response.put("id", requestId);
             response.set("result", responseBuilder.createToolResponse(result));
-            sendViaSse(objectMapper.writeValueAsString(response));
+            String json = objectMapper.writeValueAsString(response);
+            if (!sessionQueue.offer(json)) {
+                LOGGER.warning("SSE session queue full; async tool response dropped");
+            }
             LOGGER.log(Level.INFO, "Sent async tool response for request ID: {0}", requestId);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error sending async tool response", e);
@@ -689,19 +698,17 @@ public class NetBeansMCPHandler {
     }
 
     /**
-     * Enqueues a JSON-RPC message for delivery via the SSE stream.
+     * Broadcasts a JSON-RPC notification to all active SSE sessions.
      *
-     * @param json the serialised JSON-RPC object
+     * @param json the serialised JSON-RPC notification
      */
     private void sendViaSse(String json) {
-        BlockingQueue<String> q = sseQueue;
-        if (q == null) {
-            LOGGER.fine("SSE queue not set; message dropped: " + json);
+        Consumer<String> bc = broadcaster;
+        if (bc == null) {
+            LOGGER.fine("Broadcaster not set; notification dropped: " + json);
             return;
         }
-        if (!q.offer(json)) {
-            LOGGER.warning("SSE queue full; message dropped");
-        }
+        bc.accept(json);
     }
 
     private ObjectNode createToolDefinition(String toolName, String description, String schemaFileName) {
@@ -745,14 +752,14 @@ public class NetBeansMCPHandler {
     }
 
     /**
-     * Called by {@link MCPSseServer} to give this handler a reference to the
-     * SSE queue.  All server-initiated messages (responses, notifications)
-     * are placed on this queue and streamed to the client.
+     * Called by {@link MCPSseServer} to wire in the broadcast function.
+     * Notifications (selection_changed, notifications/initialized) that should
+     * reach all connected sessions are delivered via this broadcaster.
      *
-     * @param queue the shared SSE queue, never {@code null}
+     * @param broadcaster function that enqueues a message to every active session
      */
-    public void setSseQueue(BlockingQueue<String> queue) {
-        this.sseQueue = queue;
+    public void setBroadcaster(Consumer<String> broadcaster) {
+        this.broadcaster = broadcaster;
         startSelectionTracking();
         startDiffTabTracking();
     }
@@ -908,7 +915,7 @@ public class NetBeansMCPHandler {
      */
     private void sendSelectionChangeEvent(JTextComponent textComponent, Node node) {
         try {
-            if (sseQueue == null) {
+            if (broadcaster == null) {
                 return;
             }
 

@@ -18,10 +18,13 @@ import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -52,10 +55,12 @@ public class MCPSseServer {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * Shared queue: items placed here are written to the active SSE stream.
-     * Capacity 1 000 avoids unbounded growth when no SSE client is connected.
+     * Per-session queues keyed by sessionId (UUID).
+     * Each SSE client gets its own queue so responses are never stolen by
+     * a concurrent session.
      */
-    private final BlockingQueue<String> sseQueue = new LinkedBlockingQueue<>(1000);
+    private final ConcurrentHashMap<String, BlockingQueue<String>> sessionQueues =
+            new ConcurrentHashMap<>();
 
     /**
      * Creates a new MCPSseServer backed by the given MCP handler.
@@ -100,7 +105,7 @@ public class MCPSseServer {
             server.setHandler(ctx);
             server.start();
 
-            mcpHandler.setSseQueue(sseQueue);
+            mcpHandler.setBroadcaster(this::broadcast);
 
             LOGGER.log(Level.INFO, "MCP SSE server started on port {0}", port);
             return true;
@@ -136,6 +141,22 @@ public class MCPSseServer {
      * @return {@code true} if the server is currently started
      */
     public boolean isRunning() { return server != null && server.isStarted(); }
+
+    /** Returns the number of currently active SSE sessions (for testing). */
+    int getSessionCount() { return sessionQueues.size(); }
+
+    /**
+     * Broadcasts {@code msg} to every active SSE session.
+     * Used for notifications (selection_changed, notifications/initialized)
+     * that are relevant to all connected Claude processes.
+     */
+    void broadcast(String msg) {
+        for (BlockingQueue<String> q : sessionQueues.values()) {
+            if (!q.offer(msg)) {
+                LOGGER.warning("SSE session queue full; broadcast message dropped");
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // POST /hook  (PreToolUse HTTP hook)
@@ -237,7 +258,7 @@ public class MCPSseServer {
      * <ol>
      *   <li>Sends {@code event:endpoint\ndata:/messages\n\n} so Claude knows
      *       where to POST JSON-RPC requests.</li>
-     *   <li>Blocks on {@link #sseQueue}, writing each item as a
+     *   <li>Blocks on the per-session queue, writing each item as a
      *       {@code data:} frame until the client disconnects.</li>
      * </ol>
      */
@@ -253,14 +274,19 @@ public class MCPSseServer {
             resp.setHeader("Connection", "keep-alive");
             resp.flushBuffer();
 
-            PrintWriter writer = resp.getWriter();
-            writeEvent(writer, "endpoint", "/messages");
+            String sessionId = UUID.randomUUID().toString();
+            BlockingQueue<String> myQueue = new LinkedBlockingQueue<>(1000);
+            sessionQueues.put(sessionId, myQueue);
 
-            LOGGER.log(Level.INFO, "SSE client connected from {0}", req.getRemoteAddr());
+            PrintWriter writer = resp.getWriter();
+            writeEvent(writer, "endpoint", "/messages?sessionId=" + sessionId);
+
+            LOGGER.log(Level.INFO, "SSE client connected from {0}, sessionId={1}",
+                    new Object[]{req.getRemoteAddr(), sessionId});
 
             try {
                 while (!writer.checkError()) {
-                    String msg = sseQueue.poll(5, TimeUnit.SECONDS);
+                    String msg = myQueue.poll(5, TimeUnit.SECONDS);
                     if (msg == null) {
                         writer.write(": ping\n\n");
                         writer.flush();
@@ -271,7 +297,8 @@ public class MCPSseServer {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
-                LOGGER.info("SSE client disconnected");
+                sessionQueues.remove(sessionId);
+                LOGGER.log(Level.INFO, "SSE client disconnected, sessionId={0}", sessionId);
             }
         }
 
@@ -299,17 +326,29 @@ public class MCPSseServer {
         protected void doPost(HttpServletRequest req, HttpServletResponse resp)
                 throws IOException {
 
+            String sessionId = req.getParameter("sessionId");
+            BlockingQueue<String> sessionQueue = sessionId != null
+                    ? sessionQueues.get(sessionId) : null;
+
+            if (sessionQueue == null) {
+                LOGGER.warning("MCP POST with unknown sessionId: " + sessionId);
+                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                resp.flushBuffer();
+                return;
+            }
+
             resp.setStatus(HttpServletResponse.SC_ACCEPTED);
             resp.flushBuffer();
 
             try {
                 JsonNode message = objectMapper.readTree(req.getInputStream());
-                LOGGER.log(Level.FINE, "MCP request: {0}", message);
+                LOGGER.log(Level.FINE, "MCP request (session {0}): {1}",
+                        new Object[]{sessionId, message});
 
-                String response = mcpHandler.handleMessage(message);
+                String response = mcpHandler.handleMessage(message, sessionQueue);
                 if (response != null) {
-                    if (!sseQueue.offer(response)) {
-                        LOGGER.warning("SSE queue full; MCP response dropped");
+                    if (!sessionQueue.offer(response)) {
+                        LOGGER.warning("SSE session queue full; MCP response dropped");
                     }
                 }
             } catch (Exception e) {

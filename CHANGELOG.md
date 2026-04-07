@@ -1,4 +1,5 @@
-- Fixed MCP tools not available in Claude Code 2.x: the plugin now passes the MCP server via `--mcp-config` CLI argument instead of `settings.local.json`, which is no longer read for MCP server discovery
+- Added IDE Tools (MCP) section to the user manual with a full tool reference and example prompts
+- Fixed MCP server connection failures that prevented Claude from using IDE tools (affected both Claude Code 2.x and multiple simultaneous sessions)
 - Fixed terminal scrolling to the beginning when a choice menu or diff panel appears; the terminal now stays scrolled to the bottom
 - Improved JediTerm terminal colors to match the current NetBeans Look &amp; Feel theme (background, foreground, selection color, and empty terminal area)
 - Improved Markdown Preview colors to adapt to the current IDE theme (dark/light), including code blocks, tables, and blockquote highlights

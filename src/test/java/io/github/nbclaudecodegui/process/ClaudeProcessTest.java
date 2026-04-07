@@ -162,9 +162,48 @@ class ClaudeProcessTest {
         assertTrue(result.contains("localhost:9999/hook"), "hook URL should be updated");
     }
 
+    @Test
+    void testMergeRemovesStaleNetbeansEntry() {
+        // Simulate a file left by old plugin (< 0.19.22) that has mcpServers.netbeans
+        String stale = "{\"mcpServers\":{\"netbeans\":{\"type\":\"sse\",\"url\":\"http://localhost:8888/sse\"}}}";
+        String result = ClaudeProcess.mergeSettingsJson(stale, 9000);
+        assertFalse(result.contains("\"netbeans\""), "stale mcpServers.netbeans should be removed on merge");
+        assertFalse(result.contains("mcpServers"), "mcpServers should be gone if netbeans was the only entry");
+    }
+
+    @Test
+    void testMergeRemovesStaleNetbeansButKeepsOtherMcpServers() {
+        String stale = "{\"mcpServers\":{"
+                + "\"netbeans\":{\"type\":\"sse\",\"url\":\"http://localhost:8888/sse\"},"
+                + "\"other\":{\"type\":\"stdio\",\"command\":\"foo\"}}}";
+        String result = ClaudeProcess.mergeSettingsJson(stale, 9000);
+        assertFalse(result.contains("\"netbeans\""), "stale netbeans entry should be removed");
+        assertTrue(result.contains("\"other\""), "other mcpServers entries should be preserved");
+    }
+
     // -------------------------------------------------------------------------
     // cleanedSettingsJson
     // -------------------------------------------------------------------------
+
+    @Test
+    void testCleanupRemovesStaleNetbeansEntry() {
+        // File has stale mcpServers.netbeans from old plugin + our hooks
+        String stale = "{\"mcpServers\":{\"netbeans\":{\"type\":\"sse\",\"url\":\"http://localhost:8888/sse\"}},"
+                + "\"hooks\":{\"Stop\":[{\"matcher\":\".*\",\"hooks\":[]}]}}";
+        String cleaned = ClaudeProcess.cleanedSettingsJson(stale);
+        assertNull(cleaned, "should delete file — only plugin-owned content after cleanup");
+    }
+
+    @Test
+    void testCleanupRemovesStaleNetbeansButKeepsUserMcpServers() {
+        String stale = "{\"mcpServers\":{"
+                + "\"netbeans\":{\"type\":\"sse\",\"url\":\"http://localhost:8888/sse\"},"
+                + "\"user-server\":{\"type\":\"stdio\",\"command\":\"bar\"}}}";
+        String cleaned = ClaudeProcess.cleanedSettingsJson(stale);
+        assertNotNull(cleaned, "should keep file — user-server remains");
+        assertFalse(cleaned.contains("\"netbeans\""), "stale netbeans entry should be removed");
+        assertTrue(cleaned.contains("\"user-server\""), "user server should be preserved");
+    }
 
     @Test
     void testCleanupReturnsNullWhenOnlyOurEntries() {
