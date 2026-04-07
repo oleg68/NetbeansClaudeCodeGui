@@ -95,8 +95,8 @@ class ClaudeProcessTest {
     @Test
     void testMergeEmptyFileAddsOurEntries() {
         String result = ClaudeProcess.mergeSettingsJson("{}", 8990);
-        assertTrue(result.contains("\"netbeans\""), "should add mcpServers.netbeans");
-        assertTrue(result.contains("http://localhost:8990/sse"), "should contain SSE URL");
+        assertFalse(result.contains("\"netbeans\""), "mcpServers.netbeans should NOT appear in settings.local.json");
+        assertFalse(result.contains("/sse"), "SSE URL should NOT appear in settings.local.json");
         assertTrue(result.contains("PreToolUse"), "should add PreToolUse hook");
         assertTrue(result.contains("http://localhost:8990/hook"), "should contain hook URL");
         assertTrue(result.contains("Edit|Write|MultiEdit"), "should contain matcher");
@@ -104,20 +104,40 @@ class ClaudeProcessTest {
 
     @Test
     void testMergePreservesOtherMcpServers() {
+        // mcpServers in settings.local.json should be left untouched (not added to by plugin)
         String existing = "{\"mcpServers\":{\"other-server\":{\"type\":\"stdio\",\"command\":\"foo\"}}}";
         String result = ClaudeProcess.mergeSettingsJson(existing, 9000);
-        assertTrue(result.contains("\"other-server\""), "should preserve other MCP server");
-        assertTrue(result.contains("\"netbeans\""), "should add netbeans server");
+        assertTrue(result.contains("\"other-server\""), "should preserve user-provided MCP server");
+        assertFalse(result.contains("\"netbeans\""), "netbeans should NOT be written to settings.local.json");
     }
 
     @Test
     void testMergeUpdatesPortWhenAlreadyPresent() {
         String existing = ClaudeProcess.mergeSettingsJson("{}", 8888);
         String result = ClaudeProcess.mergeSettingsJson(existing, 9999);
-        assertTrue(result.contains("localhost:9999"), "should update to new port");
+        assertTrue(result.contains("localhost:9999/hook"), "hook URL should use new port");
         assertFalse(result.contains("localhost:8888"), "should not keep old port");
-        // Only one netbeans entry
-        assertEquals(1, countOccurrences(result, "\"netbeans\""));
+        assertEquals(1, countOccurrences(result, "Edit|Write|MultiEdit"));
+    }
+
+    // -------------------------------------------------------------------------
+    // buildMcpConfigJson
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testBuildMcpConfigJsonContainsNetbeans() {
+        String json = ClaudeProcess.buildMcpConfigJson(9000);
+        assertTrue(json.contains("\"netbeans\""), "should contain netbeans key");
+        assertTrue(json.contains("http://localhost:9000/sse"), "should contain SSE URL");
+        assertTrue(json.contains("\"type\":\"sse\""), "should be SSE type");
+    }
+
+    @Test
+    void testBuildMcpConfigJsonPort() {
+        String json1 = ClaudeProcess.buildMcpConfigJson(28991);
+        String json2 = ClaudeProcess.buildMcpConfigJson(12345);
+        assertTrue(json1.contains(":28991/"), "should use correct port");
+        assertTrue(json2.contains(":12345/"), "should use correct port");
     }
 
     @Test

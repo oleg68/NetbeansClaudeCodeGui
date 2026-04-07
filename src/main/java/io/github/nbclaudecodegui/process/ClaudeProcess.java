@@ -127,8 +127,13 @@ public final class ClaudeProcess {
                 + ", running=" + (mcp != null && mcp.isServerRunning())
                 + ", port=" + (mcp != null ? mcp.getServerPort() : -1));
         if (mcp != null && mcp.isServerRunning()) {
+            int port = mcp.getServerPort();
+            // Pass MCP server config via --mcp-config (Claude 2.x no longer reads
+            // mcpServers from settings.local.json; --mcp-config works in TUI mode).
+            cmd.add("--mcp-config");
+            cmd.add(buildMcpConfigJson(port));
             try {
-                writeSettingsLocalJson(workingDir, mcp.getServerPort());
+                writeSettingsLocalJson(workingDir, port);
             } catch (IOException e) {
                 LOG.warning("Could not write .claude/settings.local.json: " + e.getMessage());
             }
@@ -293,16 +298,6 @@ public final class ClaudeProcess {
                     ? MAPPER.createObjectNode()
                     : (ObjectNode) MAPPER.readTree(existingJson);
 
-            // --- mcpServers.netbeans ---
-            ObjectNode mcpServers = root.has("mcpServers")
-                    ? (ObjectNode) root.get("mcpServers")
-                    : MAPPER.createObjectNode();
-            ObjectNode netbeans = MAPPER.createObjectNode();
-            netbeans.put("type", "sse");
-            netbeans.put("url", "http://localhost:" + port + "/sse");
-            mcpServers.set(OUR_MCP_KEY, netbeans);
-            root.set("mcpServers", mcpServers);
-
             // --- hooks.PreToolUse ---
             ObjectNode hooks = root.has("hooks")
                     ? (ObjectNode) root.get("hooks")
@@ -425,15 +420,6 @@ public final class ClaudeProcess {
         try {
             ObjectNode root = (ObjectNode) MAPPER.readTree(existingJson);
 
-            // Remove mcpServers.netbeans
-            if (root.has("mcpServers")) {
-                ObjectNode mcpServers = (ObjectNode) root.get("mcpServers");
-                mcpServers.remove(OUR_MCP_KEY);
-                if (mcpServers.isEmpty()) {
-                    root.remove("mcpServers");
-                }
-            }
-
             // Remove our hook entries
             if (root.has("hooks")) {
                 ObjectNode hooks = (ObjectNode) root.get("hooks");
@@ -518,9 +504,15 @@ public final class ClaudeProcess {
      * Builds a minimal {@code settings.local.json} from scratch for the given port.
      * Used as a fallback when the existing file cannot be parsed.
      */
+    /**
+     * Builds the JSON string to pass as {@code --mcp-config} to the Claude CLI.
+     */
+    static String buildMcpConfigJson(int port) {
+        return "{\"mcpServers\":{\"" + OUR_MCP_KEY + "\":{\"type\":\"sse\",\"url\":\"http://localhost:" + port + "/sse\"}}}";
+    }
+
     private static String buildSettingsLocalJson(int port) {
         return "{"
-                + "\"mcpServers\":{\"netbeans\":{\"type\":\"sse\",\"url\":\"http://localhost:" + port + "/sse\"}},"
                 + "\"hooks\":{"
                 + "\"PreToolUse\":["
                 + "{\"matcher\":\"Edit|Write|MultiEdit\","
