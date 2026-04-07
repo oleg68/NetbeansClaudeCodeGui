@@ -168,8 +168,9 @@ public final class ScreenContentDetector {
                 // indented (> 8 spaces = wrapped continuation of the option text itself).
                 int indent = raw.length() - raw.stripLeading().length();
                 if (indent == 0 || indent > 8) break;
+                ChoiceMenuModel.Option prev = options.get(oi);
                 options.set(oi, new ChoiceMenuModel.Option(
-                        options.get(oi).display(), options.get(oi).response(), line));
+                        prev.display(), prev.response(), line, prev.checked(), prev.hasCheckbox()));
                 break;
             }
         }
@@ -244,15 +245,8 @@ public final class ScreenContentDetector {
             }
         }
 
-        // Determine menu type: if any option has a checkbox marker → MULTI_SELECT
-        boolean isMultiSelect = options.stream().anyMatch(ChoiceMenuModel.Option::checked);
-        ChoiceMenuModel.MenuType menuType = isMultiSelect
-                ? ChoiceMenuModel.MenuType.MULTI_SELECT
-                : ChoiceMenuModel.MenuType.SINGLE_SELECT;
-
-        LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options
-                + " menuType=" + menuType);
-        return Optional.of(new ChoiceMenuModel(question, options, 0, menuType));
+        LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
+        return Optional.of(new ChoiceMenuModel(question, options, 0));
     }
 
     // -------------------------------------------------------------------------
@@ -434,11 +428,14 @@ public final class ScreenContentDetector {
             num = index;
         }
         String afterDot = working.substring(dotPos + 1).strip();
-        // Detect checkbox prefix: [ ], [x], [X], [✓]
+        // Detect checkbox prefix: [ ], [x], [X], [✓], [✔]
         boolean checked = false;
+        boolean hasCheckbox = false;
         if (afterDot.startsWith("[ ]")) {
+            hasCheckbox = true;
             afterDot = afterDot.substring(3).stripLeading();
-        } else if (afterDot.startsWith("[x]") || afterDot.startsWith("[X]") || afterDot.startsWith("[✓]")) {
+        } else if (afterDot.startsWith("[x]") || afterDot.startsWith("[X]") || afterDot.startsWith("[✓]") || afterDot.startsWith("[✔]")) {
+            hasCheckbox = true;
             checked = true;
             afterDot = afterDot.substring(3).stripLeading();
         }
@@ -447,7 +444,7 @@ public final class ScreenContentDetector {
         if (parenPos > 0 && afterDot.endsWith(")")) {
             afterDot = afterDot.substring(0, parenPos).stripTrailing();
         }
-        return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num), null, checked);
+        return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num), null, checked, hasCheckbox);
     }
 
     /**

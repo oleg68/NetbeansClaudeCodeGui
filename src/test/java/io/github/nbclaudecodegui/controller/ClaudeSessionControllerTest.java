@@ -5,9 +5,11 @@ import io.github.nbclaudecodegui.model.SessionLifecycle;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -467,6 +469,69 @@ class ClaudeSessionControllerTest {
         List<?> ids = (List<?>) customField.get(c);
         assertTrue(ids.isEmpty(), "customModelIds must be empty after stopProcess");
         assertEquals(0, stdCount.getInt(c), "standardModelCount must be 0 after stopProcess");
+    }
+
+    // -------------------------------------------------------------------------
+    // computeCheckboxToggles
+    // -------------------------------------------------------------------------
+
+    private static ChoiceMenuModel.Option checkbox(String response, boolean checked) {
+        return new ChoiceMenuModel.Option(response, response, null, checked, true);
+    }
+
+    private static ChoiceMenuModel.Option noCheckbox(String response) {
+        return new ChoiceMenuModel.Option(response, response, null, false, false);
+    }
+
+    @Test
+    void computeToggles_allUnchecked_wantSome() {
+        List<ChoiceMenuModel.Option> opts = List.of(
+                checkbox("1", false), checkbox("2", false), checkbox("3", false));
+        List<String> toggles = ClaudeSessionController.computeCheckboxToggles(Set.of("1", "3"), opts);
+        assertEquals(List.of("1", "3"), toggles);
+    }
+
+    @Test
+    void computeToggles_someAlreadyChecked_wantIncludesThem() {
+        // Option 2 is already checked; user wants {1, 2} — should only toggle 1
+        List<ChoiceMenuModel.Option> opts = List.of(
+                checkbox("1", false), checkbox("2", true));
+        List<String> toggles = ClaudeSessionController.computeCheckboxToggles(Set.of("1", "2"), opts);
+        assertEquals(List.of("1"), toggles);
+    }
+
+    @Test
+    void computeToggles_needToUncheckAndCheck() {
+        // Options 1 and 2 are checked; user wants {2, 3} — toggle 1 (uncheck) and 3 (check)
+        List<ChoiceMenuModel.Option> opts = List.of(
+                checkbox("1", true), checkbox("2", true), checkbox("3", false));
+        List<String> toggles = ClaudeSessionController.computeCheckboxToggles(Set.of("2", "3"), opts);
+        assertEquals(List.of("1", "3"), toggles);
+    }
+
+    @Test
+    void computeToggles_wantNone_returnsEmpty() {
+        List<ChoiceMenuModel.Option> opts = List.of(
+                checkbox("1", false), checkbox("2", false));
+        List<String> toggles = ClaudeSessionController.computeCheckboxToggles(Set.of(), opts);
+        assertEquals(List.of(), toggles);
+    }
+
+    @Test
+    void computeToggles_nonCheckboxOptionsSkipped() {
+        List<ChoiceMenuModel.Option> opts = List.of(
+                checkbox("1", false), noCheckbox("2"), checkbox("3", false));
+        List<String> toggles = ClaudeSessionController.computeCheckboxToggles(Set.of("1", "2"), opts);
+        // Option 2 has no checkbox — ignored; only 1 toggled
+        assertEquals(List.of("1"), toggles);
+    }
+
+    @Test
+    void computeToggles_alreadyMatchingDesired_noToggles() {
+        // Option 1 checked, user wants {1} — nothing to do
+        List<ChoiceMenuModel.Option> opts = List.of(checkbox("1", true), checkbox("2", false));
+        List<String> toggles = ClaudeSessionController.computeCheckboxToggles(Set.of("1"), opts);
+        assertEquals(List.of(), toggles);
     }
 
     // -------------------------------------------------------------------------

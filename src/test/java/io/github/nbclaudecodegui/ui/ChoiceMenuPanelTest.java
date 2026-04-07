@@ -8,6 +8,7 @@ import java.awt.Component;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -442,6 +443,98 @@ class ChoiceMenuPanelTest {
     }
 
     // -------------------------------------------------------------------------
+    // Checkbox option tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testCheckboxOptionRendersAsJCheckBox() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose releases:",
+                    List.of(new Option("Release A", "1", null, false, true),
+                            new Option("Release B", "2", null, false, true)), 0);
+            panel.show(model, answer -> {});
+
+            assertNotNull(findCheckBox(panel, "Release A"), "hasCheckbox=true option must render as JCheckBox");
+            assertNotNull(findCheckBox(panel, "Release B"), "hasCheckbox=true option must render as JCheckBox");
+            assertNull(findRadioButton(panel, "Release A"), "hasCheckbox=true option must NOT render as JRadioButton");
+        });
+    }
+
+    @Test
+    void testNonCheckboxOptionInMixedMenuRendersAsRadio() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Release A", "1", null, false, true),
+                            new Option("Chat about this", "2")), 0);
+            panel.show(model, answer -> {});
+
+            assertNotNull(findCheckBox(panel, "Release A"), "hasCheckbox=true must be JCheckBox");
+            assertNotNull(findRadioButton(panel, "Chat about this"), "hasCheckbox=false must be JRadioButton");
+        });
+    }
+
+    @Test
+    void testCheckboxMenuHasSubmitButton() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose releases:",
+                    List.of(new Option("Release A", "1", null, false, true)), 0);
+            panel.show(model, answer -> {});
+
+            assertNotNull(findButton(panel, "Submit"), "must have Submit button when checkbox options exist");
+            assertNull(findButton(panel, "Send"), "must NOT have Send button when checkbox options exist");
+        });
+    }
+
+    @Test
+    void testSubmitButtonSendsMultiResponse() throws Exception {
+        List<String> captured = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose releases:",
+                    List.of(new Option("Release A", "1", null, false, true),
+                            new Option("Release B", "2", null, false, true)), 0);
+            panel.show(model, captured::add);
+
+            JCheckBox cb = findCheckBox(panel, "Release A");
+            assertNotNull(cb);
+            cb.setSelected(true);
+
+            JButton submit = findButton(panel, "Submit");
+            assertNotNull(submit);
+            submit.doClick();
+        });
+
+        assertEquals(1, captured.size());
+        assertEquals("MULTI:1", captured.get(0), "Submit with one checkbox selected must send MULTI:1");
+    }
+
+    @Test
+    void testRadioInMixedMenuSendsDirectResponse() throws Exception {
+        List<String> captured = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            ChoiceMenuModel model = new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Release A", "1", null, false, true),
+                            new Option("Chat about this", "6")), 0);
+            panel.show(model, captured::add);
+
+            JRadioButton rb = findRadioButton(panel, "Chat about this");
+            assertNotNull(rb, "Chat about this must be a radio button");
+            rb.setSelected(true);
+
+            JButton submit = findButton(panel, "Submit");
+            assertNotNull(submit);
+            submit.doClick();
+        });
+
+        assertEquals(1, captured.size());
+        assertEquals("6", captured.get(0), "Radio selection in mixed menu must send the option response directly");
+    }
+
+    // -------------------------------------------------------------------------
     // Divider / layout tests
     // -------------------------------------------------------------------------
 
@@ -602,6 +695,18 @@ class ChoiceMenuPanelTest {
                 return rb;
             } else if (c instanceof java.awt.Container sub) {
                 JRadioButton found = findRadioButtonByName(sub, name);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static JCheckBox findCheckBox(java.awt.Container container, String label) {
+        for (Component c : container.getComponents()) {
+            if (c instanceof JCheckBox cb && label.equals(cb.getText())) {
+                return cb;
+            } else if (c instanceof java.awt.Container sub) {
+                JCheckBox found = findCheckBox(sub, label);
                 if (found != null) return found;
             }
         }

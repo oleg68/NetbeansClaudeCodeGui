@@ -1,0 +1,10 @@
+{
+  "text": "В какие релизы нужно обновить agnostic до 1.3.2114?",
+  "options": [
+    {"display": "2025.2", "response": "1", "description": "Последний тег: 2025.2.178", "hasCheckbox": true},
+    {"display": "2025.3", "response": "2", "description": "Последний тег: 2025.3.205", "hasCheckbox": true},
+    {"display": "2026.1", "response": "3", "description": "Последний тег: 2026.1.258", "hasCheckbox": true},
+    {"display": "2026.2", "response": "4", "description": "Последний тег: 2026.2.268_RC (master)", "hasCheckbox": true}
+  ],
+  "defaultOptionIndex": 0
+}

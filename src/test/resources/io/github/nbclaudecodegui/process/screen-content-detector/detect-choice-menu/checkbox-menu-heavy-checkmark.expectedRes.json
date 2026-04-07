@@ -1,0 +1,12 @@
+{
+  "text": "Для каких релизов применить обновление agnostic до 1.3.2132?",
+  "options": [
+    {"display": "2026.2", "response": "1", "description": "Целевая ветка: master", "checked": true, "hasCheckbox": true},
+    {"display": "2026.1", "response": "2", "description": "Целевая ветка: release/2026.1", "hasCheckbox": true},
+    {"display": "2025.3", "response": "3", "description": "Целевая ветка: release/2025.3 (нет в origin — создать от тега)", "hasCheckbox": true},
+    {"display": "2025.2", "response": "4", "description": "Целевая ветка: release/2025.2", "hasCheckbox": true},
+    {"display": "Type something", "response": "5", "description": "Submit", "checked": true, "hasCheckbox": true},
+    {"display": "Chat about this", "response": "6"}
+  ],
+  "defaultOptionIndex": 0
+}
