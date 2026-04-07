@@ -65,22 +65,22 @@ public final class ChoiceMenuPanel extends JPanel {
         this.callback = callback;
         removeAll();
 
-        if (model.menuType() == ChoiceMenuModel.MenuType.MULTI_SELECT) {
-            buildCheckboxMenu(model);
-            return;
-        }
-
         final ChoiceMenuModel finalModel = model;
 
         // Split options into Yes/No vs others
+        // Yes/No only applies to options without a checkbox marker
         List<ChoiceMenuModel.Option> yesNoOptions = model.options().stream()
-                .filter(o -> o.display().trim().equalsIgnoreCase("Yes")
-                          || o.display().trim().equalsIgnoreCase("No"))
+                .filter(o -> !o.hasCheckbox() && !isTypeInputOption(o)
+                          && (o.display().trim().equalsIgnoreCase("Yes")
+                           || o.display().trim().equalsIgnoreCase("No")))
                 .toList();
         List<ChoiceMenuModel.Option> otherOptions = model.options().stream()
-                .filter(o -> !o.display().trim().equalsIgnoreCase("Yes")
-                          && !o.display().trim().equalsIgnoreCase("No"))
+                .filter(o -> o.hasCheckbox() || isTypeInputOption(o)
+                          || (!o.display().trim().equalsIgnoreCase("Yes")
+                           && !o.display().trim().equalsIgnoreCase("No")))
                 .toList();
+
+        boolean hasCheckboxOptions = model.options().stream().anyMatch(ChoiceMenuModel.Option::hasCheckbox);
 
         // Track focus targets
         java.util.List<JButton> yesNoBtns = new java.util.ArrayList<>();
@@ -151,34 +151,64 @@ public final class ChoiceMenuPanel extends JPanel {
             leftCol.add(Box.createVerticalStrut(4));
         }
 
-        // Radio buttons for other options (type-input options get an adjacent text field)
+        // Other options: checkbox, radio, or type-input depending on option type
         ButtonGroup group = null;
         JTextField[] typeFields = new JTextField[otherOptions.size()];
+        JCheckBox[] checkBoxes = new JCheckBox[otherOptions.size()];
         if (!otherOptions.isEmpty()) {
             group = new ButtonGroup();
             for (int i = 0; i < otherOptions.size(); i++) {
                 ChoiceMenuModel.Option opt = otherOptions.get(i);
-                JRadioButton rb = new JRadioButton(opt.display().trim());
-                rb.setAlignmentX(Component.LEFT_ALIGNMENT);
-                group.add(rb);
-                radioButtons[i] = rb;
 
-                if (isTypeInputOption(opt)) {
+                if (opt.hasCheckbox() && isTypeInputOption(opt)) {
+                    // Checkbox + text field: field enabled only when checkbox is checked
+                    JCheckBox cb = new JCheckBox(" ", opt.checked());
+                    cb.setName("typeInputCb");
+                    cb.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    checkBoxes[i] = cb;
+
                     DecoratedTextField tf = new DecoratedTextField(workingDirSupplier);
                     tf.setMaximumSize(new java.awt.Dimension(
                             Integer.MAX_VALUE, tf.getPreferredSize().height));
-                    tf.setEnabled(false); // disabled until radio button is selected
+                    tf.setEnabled(opt.checked());
+                    setPlaceholder(tf, opt.display().trim());
+                    cb.addChangeListener(e -> tf.setEnabled(cb.isSelected()));
+                    tf.addFocusListener(new java.awt.event.FocusAdapter() {
+                        @Override public void focusGained(java.awt.event.FocusEvent e) {
+                            cb.setSelected(true);
+                        }
+                    });
+                    typeFields[i] = tf;
+
+                    JPanel typeRow = new JPanel();
+                    typeRow.setName("typeInputRow");
+                    typeRow.setLayout(new BoxLayout(typeRow, BoxLayout.X_AXIS));
+                    typeRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    typeRow.add(cb);
+                    typeRow.add(tf);
+                    leftCol.add(typeRow);
+
+                } else if (isTypeInputOption(opt)) {
+                    // Type-input: radio button + adjacent text field
+                    JRadioButton rb = new JRadioButton(" ");
+                    rb.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    rb.setName("typeInputRb");
+                    group.add(rb);
+                    radioButtons[i] = rb;
+
+                    DecoratedTextField tf = new DecoratedTextField(workingDirSupplier);
+                    tf.setMaximumSize(new java.awt.Dimension(
+                            Integer.MAX_VALUE, tf.getPreferredSize().height));
+                    tf.setEnabled(false);
                     setPlaceholder(tf, opt.display().trim());
                     rb.addChangeListener(e -> tf.setEnabled(rb.isSelected()));
                     tf.addFocusListener(new java.awt.event.FocusAdapter() {
                         @Override public void focusGained(java.awt.event.FocusEvent e) {
-                            rb.setSelected(true); // clicking field also selects this option
+                            rb.setSelected(true);
                         }
                     });
                     typeFields[i] = tf;
-                    // text field inline to the right of the radio button
-                    rb.setText(" "); // placeholder text already shown in the text field
-                    rb.setName("typeInputRb");
+
                     JPanel typeRow = new JPanel();
                     typeRow.setName("typeInputRow");
                     typeRow.setLayout(new BoxLayout(typeRow, BoxLayout.X_AXIS));
@@ -186,11 +216,24 @@ public final class ChoiceMenuPanel extends JPanel {
                     typeRow.add(rb);
                     typeRow.add(tf);
                     leftCol.add(typeRow);
+
+                } else if (opt.hasCheckbox()) {
+                    // Checkbox item (has [ ] or [x] marker)
+                    JCheckBox cb = new JCheckBox(opt.display().trim(), opt.checked());
+                    cb.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    checkBoxes[i] = cb;
+                    leftCol.add(cb);
+
                 } else {
+                    // Plain radio button (no checkbox marker)
+                    JRadioButton rb = new JRadioButton(opt.display().trim());
+                    rb.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    group.add(rb);
+                    radioButtons[i] = rb;
                     leftCol.add(rb);
                 }
 
-                // Description subtitle under the radio button / typeRow
+                // Description subtitle
                 if (opt.description() != null && !opt.description().isBlank()) {
                     JLabel desc = new JLabel("<html><small>" + escapeHtml(opt.description()) + "</small></html>");
                     desc.setForeground(Color.GRAY);
@@ -200,9 +243,11 @@ public final class ChoiceMenuPanel extends JPanel {
 
                 int idx = model.options().indexOf(opt);
                 if (idx == model.defaultOptionIndex()) {
-                    rb.setSelected(true);
-                    defaultRadioBtn = rb;
-                    defaultTypeField = typeFields[i]; // non-null only for type-input options
+                    if (radioButtons[i] != null) {
+                        radioButtons[i].setSelected(true);
+                        defaultRadioBtn = radioButtons[i];
+                        defaultTypeField = typeFields[i];
+                    }
                 }
             }
             leftCol.add(Box.createVerticalStrut(4));
@@ -243,30 +288,38 @@ public final class ChoiceMenuPanel extends JPanel {
         boolean hasSend = !otherOptions.isEmpty() || model.options().isEmpty();
         if (hasSend) {
             final JRadioButton[] finalRadios = radioButtons;
+            final JCheckBox[] finalCheckBoxes = checkBoxes;
             final JTextField[] finalTypeFields = typeFields;
             final JTextField finalField = freeField;
-            sendBtn = new JButton("Send");
+            // Use "Submit" label when there are checkbox options (multi-select), "Send" otherwise
+            sendBtn = new JButton(hasCheckboxOptions ? "Submit" : "Send");
             sendBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-            boolean anySelected = false;
-            for (JRadioButton rb : radioButtons) {
-                if (rb != null && rb.isSelected()) { anySelected = true; break; }
-            }
-            if (!otherOptions.isEmpty()) {
-                sendBtn.setEnabled(anySelected);
-            }
-            final JButton finalSend = sendBtn;
-            for (JRadioButton rb : radioButtons) {
-                if (rb != null) {
-                    rb.addItemListener(ev -> {
-                        boolean sel = false;
-                        for (JRadioButton r : finalRadios) {
-                            if (r != null && r.isSelected()) { sel = true; break; }
-                        }
-                        finalSend.setEnabled(sel);
-                    });
+
+            // Compute initial enabled state
+            java.util.function.BooleanSupplier isActionEnabled = () -> {
+                for (JRadioButton rb : finalRadios) {
+                    if (rb != null && rb.isSelected()) return true;
                 }
+                for (JCheckBox cb : finalCheckBoxes) {
+                    if (cb != null && cb.isSelected()) return true;
+                }
+                return false;
+            };
+            if (!otherOptions.isEmpty()) {
+                sendBtn.setEnabled(isActionEnabled.getAsBoolean());
             }
+
+            final JButton finalSend = sendBtn;
+            java.awt.event.ItemListener enableUpdater = ev -> finalSend.setEnabled(isActionEnabled.getAsBoolean());
+            for (JRadioButton rb : radioButtons) {
+                if (rb != null) rb.addItemListener(enableUpdater);
+            }
+            for (JCheckBox cb : checkBoxes) {
+                if (cb != null) cb.addItemListener(enableUpdater);
+            }
+
             sendBtn.addActionListener(e -> {
+                // Radio selected → single response
                 for (int i = 0; i < finalRadios.length; i++) {
                     JRadioButton rb = finalRadios[i];
                     if (rb != null && rb.isSelected()) {
@@ -286,6 +339,36 @@ public final class ChoiceMenuPanel extends JPanel {
                         }
                         return;
                     }
+                }
+                // Checkbox type-input with text → MULTI_TYPE response
+                for (int i = 0; i < finalCheckBoxes.length; i++) {
+                    JCheckBox cb = finalCheckBoxes[i];
+                    if (cb != null && cb.isSelected() && "typeInputCb".equals(cb.getName())) {
+                        String hint = otherOptions.get(i).display().trim();
+                        String typed = finalTypeFields[i] != null ? finalTypeFields[i].getText().trim() : "";
+                        if (!typed.isEmpty() && !typed.equals(hint)) {
+                            java.util.List<String> otherChecked = new java.util.ArrayList<>();
+                            for (int j = 0; j < finalCheckBoxes.length; j++) {
+                                if (j != i && finalCheckBoxes[j] != null && finalCheckBoxes[j].isSelected()) {
+                                    otherChecked.add(otherOptions.get(j).response());
+                                }
+                            }
+                            int optNum = finalModel.options().indexOf(otherOptions.get(i)) + 1;
+                            submitAnswer("MULTI_TYPE:" + String.join(",", otherChecked) + ":" + optNum + ":" + typed);
+                            return;
+                        }
+                    }
+                }
+                // Checkboxes → MULTI response
+                java.util.List<String> selected = new java.util.ArrayList<>();
+                for (int i = 0; i < finalCheckBoxes.length; i++) {
+                    if (finalCheckBoxes[i] != null && finalCheckBoxes[i].isSelected()) {
+                        selected.add(otherOptions.get(i).response());
+                    }
+                }
+                if (!selected.isEmpty()) {
+                    submitAnswer("MULTI:" + String.join(",", selected));
+                    return;
                 }
                 if (finalField != null) {
                     submitAnswer(finalField.getText().trim());
@@ -405,9 +488,12 @@ public final class ChoiceMenuPanel extends JPanel {
             radioButtons[i].getActionMap().put("next", nextAction);
         }
 
-        // Bug 3: explicit Tab order: Yes/No → radios (+ type-fields) → Send → Cancel
+        // Bug 3: explicit Tab order: Yes/No → checkboxes → radios (+ type-fields) → Submit/Send → Cancel
         java.util.List<java.awt.Component> tabOrder = new java.util.ArrayList<>();
         tabOrder.addAll(yesNoBtns);
+        for (JCheckBox cb : checkBoxes) {
+            if (cb != null) tabOrder.add(cb);
+        }
         for (int i = 0; i < radioButtons.length; i++) {
             if (radioButtons[i] != null) {
                 tabOrder.add(radioButtons[i]);
@@ -451,101 +537,8 @@ public final class ChoiceMenuPanel extends JPanel {
         }
     }
 
-    private void buildCheckboxMenu(ChoiceMenuModel model) {
-        // Question label
-        String questionText = model.text();
-        LOG.info("[ChoiceMenuPanel] question: " + questionText);
-        if (questionText != null && !questionText.isBlank()) {
-            JLabel questionLabel = new JLabel("<html>" + escapeHtml(questionText) + "</html>");
-            questionLabel.setFont(questionLabel.getFont().deriveFont(questionLabel.getFont().getSize() * 1.5f));
-            questionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-            add(questionLabel);
-            add(Box.createVerticalStrut(6));
-        }
 
-        // Checkboxes
-        JCheckBox[] checkBoxes = new JCheckBox[model.options().size()];
-        JPanel leftCol = new JPanel();
-        leftCol.setLayout(new BoxLayout(leftCol, BoxLayout.Y_AXIS));
-        leftCol.setAlignmentY(Component.TOP_ALIGNMENT);
-
-        for (int i = 0; i < model.options().size(); i++) {
-            ChoiceMenuModel.Option opt = model.options().get(i);
-            JCheckBox cb = new JCheckBox(opt.display().trim(), opt.checked());
-            cb.setAlignmentX(Component.LEFT_ALIGNMENT);
-            checkBoxes[i] = cb;
-            leftCol.add(cb);
-        }
-        leftCol.add(Box.createVerticalStrut(4));
-
-        // Submit button
-        JButton submitBtn = new JButton("Submit");
-        submitBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        submitBtn.setEnabled(java.util.Arrays.stream(checkBoxes).anyMatch(JCheckBox::isSelected));
-
-        for (JCheckBox cb : checkBoxes) {
-            cb.addItemListener(ev -> submitBtn.setEnabled(
-                    java.util.Arrays.stream(checkBoxes).anyMatch(JCheckBox::isSelected)));
-        }
-
-        final JCheckBox[] finalCheckBoxes = checkBoxes;
-        submitBtn.addActionListener(e -> {
-            java.util.List<String> selected = new java.util.ArrayList<>();
-            for (int i = 0; i < finalCheckBoxes.length; i++) {
-                if (finalCheckBoxes[i].isSelected()) {
-                    selected.add(model.options().get(i).response());
-                }
-            }
-            submitAnswer("MULTI:" + String.join(",", selected));
-        });
-
-        // Cancel button
-        JButton cancelBtn = new JButton("Cancel");
-        cancelBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
-        cancelBtn.addActionListener(e -> {
-            LOG.info("[ChoiceMenuPanel] Cancel clicked");
-            cancel();
-        });
-
-        JPanel rightCol = new JPanel();
-        rightCol.setName("rightCol");
-        rightCol.setLayout(new BoxLayout(rightCol, BoxLayout.Y_AXIS));
-        rightCol.setAlignmentY(Component.TOP_ALIGNMENT);
-        rightCol.add(cancelBtn);
-        rightCol.add(Box.createVerticalStrut(4));
-        rightCol.add(submitBtn);
-        rightCol.setMaximumSize(new java.awt.Dimension(rightCol.getPreferredSize().width, Integer.MAX_VALUE));
-
-        JPanel mainRow = new JPanel();
-        mainRow.setLayout(new BoxLayout(mainRow, BoxLayout.X_AXIS));
-        mainRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        mainRow.add(leftCol);
-        mainRow.add(Box.createHorizontalGlue());
-        mainRow.add(rightCol);
-        add(mainRow);
-
-        // ESC → cancel
-        getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
-        getActionMap().put("cancel", new AbstractAction() {
-            @Override public void actionPerformed(java.awt.event.ActionEvent e) { cancel(); }
-        });
-
-        // Tab order: checkboxes → Submit → Cancel
-        java.util.List<java.awt.Component> tabOrder = new java.util.ArrayList<>(java.util.Arrays.asList(checkBoxes));
-        tabOrder.add(submitBtn);
-        tabOrder.add(cancelBtn);
-        setFocusTraversalPolicy(new ListFTP(tabOrder));
-        setFocusTraversalPolicyProvider(true);
-
-        revalidate();
-        repaint();
-
-        final JButton finalSubmit = submitBtn;
-        javax.swing.SwingUtilities.invokeLater(finalSubmit::requestFocusInWindow);
-    }
-
-    /** Hides the panel if a prompt is still pending (called when Claude accepted input via terminal). */
+/** Hides the panel if a prompt is still pending (called when Claude accepted input via terminal). */
     public void dismissIfActive() {
         if (callback != null) {
             LOG.info("[ChoiceMenuPanel] dismissing — Claude accepted terminal input");

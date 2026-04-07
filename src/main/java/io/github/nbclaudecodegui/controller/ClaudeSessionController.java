@@ -14,8 +14,11 @@ import io.github.nbclaudecodegui.settings.ClaudeProfile;
 import io.github.nbclaudecodegui.settings.ClaudeProfileStore;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -335,9 +338,11 @@ public final class ClaudeSessionController {
     /**
      * Writes the user's answer to the PTY.
      *
-     * <p>Handles four cases:
+     * <p>Handles five cases:
      * <ul>
      *   <li>{@code null} — sends ESC (0x1B) and transitions to READY (Cancel path).</li>
+     *   <li>{@code "MULTI:n,m,..."} — toggles checkboxes to reach desired state, then submits with →.</li>
+     *   <li>{@code "MULTI_TYPE:checks:N:text"} — toggles checkboxes, navigates to type-input option N, types text, then submits with →.</li>
      *   <li>{@code "TYPE:digit:text"} — activates the type-input option then sends text + \r.</li>
      *   <li>single digit {@code "0"–"9"} — sends the digit without \r (menu selection).</li>
      *   <li>everything else — sends the text followed by \r.</li>
@@ -351,11 +356,24 @@ public final class ClaudeSessionController {
                 LOG.fine("[PTY write] \\x1b (Cancel/ESC)");
                 sendCancelToPty(new byte[]{0x1b});
             } else if (answer.startsWith("MULTI:")) {
-                String[] digits = answer.substring(6).split(",");
-                LOG.fine("[PTY write] multi-select digits=" + java.util.Arrays.toString(digits));
+                Set<String> wanted = new HashSet<>();
+                for (String d : answer.substring(6).split(",")) wanted.add(d.strip());
+                // Re-read current screen to get actual checkbox states before sending toggles.
+                // Sending a digit toggles the checkbox, so we must only send digits for
+                // options whose current state differs from the desired state.
+                List<String> lines = screenLines.get();
+                Optional<ChoiceMenuModel> currentMenu = screenContentDetector.detectChoiceMenu(lines);
+                List<ChoiceMenuModel.Option> currentOptions = currentMenu
+                        .map(ChoiceMenuModel::options)
+                        .orElseGet(() -> {
+                            ChoiceMenuModel m = model.getActiveChoiceMenu();
+                            return m != null ? m.options() : List.of();
+                        });
+                List<String> toggles = computeCheckboxToggles(wanted, currentOptions);
+                LOG.fine("[PTY write] MULTI wanted=" + wanted + " toggles=" + toggles);
                 Thread t = new Thread(() -> {
                     try {
-                        for (String digit : digits) {
+                        for (String digit : toggles) {
                             connector.write(digit.strip());
                             Thread.sleep(100);
                         }
@@ -369,6 +387,63 @@ public final class ClaudeSessionController {
                 }, "pty-multiselect");
                 t.setDaemon(true);
                 t.start();
+                model.clearChoiceMenu();
+            } else if (answer.startsWith("MULTI_TYPE:")) {
+                // Format: MULTI_TYPE:checks:typeN:text
+                // e.g. MULTI_TYPE:1,3:5:my text  or  MULTI_TYPE::5:my text
+                int sep1 = answer.indexOf(':', 11);
+                int sep2 = answer.indexOf(':', sep1 + 1);
+                String checksStr = answer.substring(11, sep1);
+                int typeN = Integer.parseInt(answer.substring(sep1 + 1, sep2));
+                String typeText = answer.substring(sep2 + 1);
+                Set<String> wanted = checksStr.isBlank() ? Set.of()
+                        : new HashSet<>(List.of(checksStr.split(",")));
+                LOG.fine("[PTY write] MULTI_TYPE wanted=" + wanted + " typeN=" + typeN + " text=" + typeText);
+                Thread t = new Thread(() -> {
+                    try {
+                        // 1. Toggle non-type checkboxes
+                        List<String> lines = screenLines.get();
+                        Optional<ChoiceMenuModel> currentMenu = screenContentDetector.detectChoiceMenu(lines);
+                        List<ChoiceMenuModel.Option> currentOptions = currentMenu
+                                .map(ChoiceMenuModel::options)
+                                .orElseGet(() -> {
+                                    ChoiceMenuModel m = model.getActiveChoiceMenu();
+                                    return m != null ? m.options() : List.of();
+                                });
+                        for (String digit : computeCheckboxToggles(wanted, currentOptions)) {
+                            connector.write(digit.strip());
+                            Thread.sleep(100);
+                        }
+                        // 2. Re-read screen to find current ❯ position
+                        Thread.sleep(200);
+                        int currentN = findCurrentOptionNum(screenLines.get());
+                        // 3. Navigate to type-input option
+                        int delta = typeN - currentN;
+                        byte[] arrow = delta < 0
+                                ? new byte[]{0x1b, '[', 'A'}
+                                : new byte[]{0x1b, '[', 'B'};
+                        for (int i = 0; i < Math.abs(delta); i++) {
+                            connector.write(arrow);
+                            Thread.sleep(80);
+                        }
+                        // 4. Type text
+                        Thread.sleep(100);
+                        connector.write(typeText);
+                        // 5. Move cursor off type-input field (up arrow)
+                        Thread.sleep(100);
+                        connector.write(new byte[]{0x1b, '[', 'A'});
+                        // 6. Submit with right arrow
+                        Thread.sleep(100);
+                        connector.write(new byte[]{0x1b, '[', 'C'});
+                    } catch (IOException ex) {
+                        LOG.warning("writePtyAnswer MULTI_TYPE write failed: " + ex.getMessage());
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }, "pty-multitype");
+                t.setDaemon(true);
+                t.start();
+                model.clearChoiceMenu();
             } else if (answer.startsWith("TYPE:")) {
                 int sep = answer.indexOf(':', 5);
                 String digit = answer.substring(5, sep);
@@ -389,15 +464,54 @@ public final class ClaudeSessionController {
                 }, "pty-typeinput");
                 t.setDaemon(true);
                 t.start();
+                model.clearChoiceMenu();
             } else {
                 boolean isMenuDigit = answer.matches("[0-9]");
                 String toWrite = isMenuDigit ? answer : answer + "\r";
                 LOG.fine("[PTY write] " + toWrite.replace("\r", "\\r").replace("\n", "\\n"));
                 connector.write(toWrite);
+                model.clearChoiceMenu();
             }
         } catch (IOException ex) {
             LOG.warning("writePtyAnswer failed: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Computes which checkbox option responses must be toggled in the PTY to reach
+     * {@code desired} from the current states in {@code currentOptions}.
+     *
+     * <p>Sending a digit to a PTY checkbox menu <em>toggles</em> that item rather
+     * than setting it, so we only send digits for options whose current state differs
+     * from what the user wants.
+     *
+     * @param desired        set of option {@code response} values the user wants checked
+     * @param currentOptions options with their current {@code checked} state read from screen
+     * @return sorted list of option responses to send as toggle keystrokes
+     */
+    /**
+     * Scans screen lines for the currently focused option (❯ marker) and returns its 1-based number.
+     * Returns 1 if the marker is not found.
+     */
+    private int findCurrentOptionNum(List<String> lines) {
+        Pattern p = Pattern.compile("❯\\s*(\\d+)\\.");
+        for (String line : lines) {
+            Matcher m = p.matcher(line);
+            if (m.find()) return Integer.parseInt(m.group(1));
+        }
+        return 1;
+    }
+
+    static List<String> computeCheckboxToggles(Set<String> desired, List<ChoiceMenuModel.Option> currentOptions) {
+        List<String> toggles = new ArrayList<>();
+        for (ChoiceMenuModel.Option opt : currentOptions) {
+            if (!opt.hasCheckbox()) continue;
+            if (opt.checked() != desired.contains(opt.response())) {
+                toggles.add(opt.response());
+            }
+        }
+        toggles.sort(Comparator.comparingInt(s -> Integer.parseInt(s.strip())));
+        return toggles;
     }
 
     // -------------------------------------------------------------------------

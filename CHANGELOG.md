@@ -1,3 +1,5 @@
+- Fixed second choice menu not appearing after the first one is submitted
+- Added support for multi-select menus (AskUserQuestion with multiSelect: true): checkboxes now appear instead of radio buttons
 - Improved process launch error panel
 - Documented status bar in user manual: edit mode selector with all modes, model selector, and right-side labels (session state, active plan, Claude version)
 - Added support for multiple custom models in the model combo: models assigned the "custom" alias in Model Aliases appear in the dropdown and are switched via `/model <id>` command
