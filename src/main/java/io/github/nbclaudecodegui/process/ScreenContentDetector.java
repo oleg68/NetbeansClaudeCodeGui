@@ -351,6 +351,7 @@ public final class ScreenContentDetector {
         // Claude Code uses the alternate screen buffer and draws content from the top,
         // so the input prompt area may be anywhere, not just in the bottom rows.
         boolean inputPromptAreaFound = false;
+        int promptRow = -1;
         for (int i = lines.size() - 1; i >= 0; i--) {
             String line = lines.get(i);
             if (INPUT_PROMPT.matcher(line.trim()).find()) {
@@ -366,6 +367,7 @@ public final class ScreenContentDetector {
                 }
                 if (separatorAbove && separatorBelow) {
                     inputPromptAreaFound = true;
+                    promptRow = i;
                     break;
                 }
             }
@@ -375,8 +377,10 @@ public final class ScreenContentDetector {
             // Interactive picker overlay (⌕ = search box in /resume or history picker).
             // The picker is drawn over the screen while the input prompt area remains in
             // the buffer — detect and report WORKING so the plugin disables the send button.
-            for (String line : lines) {
-                if (line.indexOf('\u2315') >= 0) return DetectedSessionState.WORKING;
+            // Only scan lines BELOW the prompt row: the picker is rendered below the input
+            // area, so ⌕ in lines above (Claude response content) must not trigger this.
+            for (int i = promptRow + 1; i < lines.size(); i++) {
+                if (lines.get(i).indexOf('\u2315') >= 0) return DetectedSessionState.WORKING;
             }
             // Check footer for "  esc to interrupt" (two leading spaces)
             for (String footerLine : bottomNonBlankLines(lines, 3)) {

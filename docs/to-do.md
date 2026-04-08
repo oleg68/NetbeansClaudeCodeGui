@@ -213,8 +213,7 @@
     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       ⏸ plan mode on (shift+tab to cycle) · esc to interrupt                                                              ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code
     ```
-    
-- [ ] не перешло из working в ready
+- [x] не перешло из working в ready
     ```
     ● Bash(mvn package -DskipTests 2>&1 | tail -10)
       ⎿  [WARNING] private List<int[]> ranges = List.of();
@@ -235,7 +234,6 @@
     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       ⏸ plan mode on (shift+tab to cycle)                                                                                 ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code
          ```
-
 
 # Features
 

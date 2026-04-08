@@ -154,6 +154,20 @@ class ScreenContentDetectorTest {
                 detector.detectSessionState(lines));
     }
 
+    @org.junit.jupiter.api.Test
+    void detectSessionState_readyWhenResponseContainsSearchIcon() {
+        // Claude's response content contains ⌕ but the prompt area is present below it.
+        // The ⌕ check must only scan lines BELOW the prompt row, not the response content above.
+        List<String> lines = new java.util.ArrayList<>();
+        lines.add("Claude response: use ⌕ to search files");
+        lines.add("More response content here");
+        lines.add(" ────────────────────────────────");
+        lines.add("❯ ");
+        lines.add(" ────────────────────────────────");
+        assertEquals(ScreenContentDetector.DetectedSessionState.READY,
+                detector.detectSessionState(lines));
+    }
+
     // -------------------------------------------------------------------------
     // detectSessionState — fixture-based parameterized tests
     // -------------------------------------------------------------------------

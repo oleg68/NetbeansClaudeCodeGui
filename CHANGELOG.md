@@ -1,3 +1,4 @@
+- Fixed session getting stuck in Working state after Claude finishes when the response contains the ⌕ character
 - Fixed session incorrectly remaining in Ready state while /resume session picker is open
 - Fixed choice menu items having text in parentheses stripped (e.g. "Bash(find ...)" was shown as "Bash")
 - Added right-click context menu ("Copy URL", "Open in Browser") to the Base URL field in Options → Profiles; items are disabled when the Other API connection type is not selected or the field is blank
