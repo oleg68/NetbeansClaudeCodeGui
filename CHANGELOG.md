@@ -1,7 +1,7 @@
 - Added extra CLI args support: per-profile "Extra CLI args" field in Options → Profiles, plus a per-session override field in the session selector (pre-filled from the profile)
 - Fixed session staying in Starting state when plan mode was active at startup (JediTerm buffer NPE during initialization)
 - Added support for unnumbered choice menus (e.g. /resume session picker): displayed as radio buttons with title and session metadata, submitted via arrow-key navigation
-- Fixed session Ready/Working state detection in several edge cases: plan mode, /resume picker, ⌕ character in response, and post-response transitions
+- Fixed session Ready/Working state detection in several edge cases: plan mode, /resume picker, ⌕ character in response, post-response transitions, and named separator line (plan/branch name) above the input prompt
 - Fixed choice menu not updating when Claude replaces one menu with another (e.g. multi-select → confirm screen)
 - Fixed choice menu items having text in parentheses stripped (e.g. "Bash(find ...)" was shown as "Bash")
 - Added right-click context menu ("Copy URL", "Open in Browser") to the Base URL field in Options → Profiles; items are disabled when the Other API connection type is not selected or the field is blank

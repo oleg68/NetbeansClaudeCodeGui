@@ -1,0 +1,6 @@
+Some output line
+──────────── cli-args-profiles-sessions ──
+❯
+────────────────
+  ? for shortcuts
+

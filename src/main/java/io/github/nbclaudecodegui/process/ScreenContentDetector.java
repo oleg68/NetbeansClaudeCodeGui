@@ -523,7 +523,10 @@ public final class ScreenContentDetector {
         for (int i = lines.size() - 1; i >= 0; i--) {
             String line = lines.get(i);
             if (INPUT_PROMPT.matcher(line.trim()).find()) {
-                boolean separatorAbove = i > 0 && isSeparatorLine(lines.get(i - 1).trim());
+                boolean separatorAbove = i > 0 && (
+                        isSeparatorLine(lines.get(i - 1).trim()) ||
+                        PLAN_NAME_DASHES_PATTERN.matcher(lines.get(i - 1).trim()).find()
+                );
                 // Autocomplete popup lines may appear between ❯ and the separator below —
                 // scan up to 5 lines down to find it.
                 boolean separatorBelow = false;
