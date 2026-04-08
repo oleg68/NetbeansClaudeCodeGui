@@ -144,6 +144,12 @@ public final class ClaudeProfile {
      */
     private List<String> customModels;
 
+    /**
+     * Extra CLI arguments passed to the {@code claude} process on startup.
+     * E.g. {@code "--verbose --dangerously-skip-permissions"}.
+     */
+    private String extraCliArgs;
+
     // -------------------------------------------------------------------------
     // No-arg constructor (Jackson)
     // -------------------------------------------------------------------------
@@ -159,9 +165,10 @@ public final class ClaudeProfile {
         this.httpProxy    = "";
         this.httpsProxy   = "";
         this.noProxy      = "";
-        this.extraEnvVars = new ArrayList<>();
-        this.modelAliases = new HashMap<>();
-        this.customModels = new ArrayList<>();
+        this.extraEnvVars  = new ArrayList<>();
+        this.modelAliases  = new HashMap<>();
+        this.customModels  = new ArrayList<>();
+        this.extraCliArgs  = "";
     }
 
     // -------------------------------------------------------------------------
@@ -522,6 +529,22 @@ public final class ClaudeProfile {
      */
     public void setCustomModels(List<String> ids) {
         this.customModels = ids != null ? new ArrayList<>(ids) : new ArrayList<>();
+    }
+
+    /**
+     * Returns the extra CLI arguments string (e.g. {@code "--verbose"}).
+     *
+     * @return extra CLI args; never {@code null}
+     */
+    public String getExtraCliArgs() { return extraCliArgs != null ? extraCliArgs : ""; }
+
+    /**
+     * Sets the extra CLI arguments string.
+     *
+     * @param extraCliArgs CLI args; {@code null} is treated as empty
+     */
+    public void setExtraCliArgs(String extraCliArgs) {
+        this.extraCliArgs = extraCliArgs != null ? extraCliArgs : "";
     }
 
     // -------------------------------------------------------------------------

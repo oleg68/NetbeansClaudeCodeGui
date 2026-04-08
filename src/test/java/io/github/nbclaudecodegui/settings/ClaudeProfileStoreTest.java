@@ -165,4 +165,22 @@ class ClaudeProfileStoreTest {
             // NbPreferences unavailable in plain JUnit — skip
         }
     }
+
+    // -------------------------------------------------------------------------
+    // extraCliArgs serialization round-trip
+    // -------------------------------------------------------------------------
+
+    @Test
+    void extraCliArgs_jacksonRoundTrip() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        ClaudeProfile p = ClaudeProfile.createNamed("Test");
+        p.setExtraCliArgs("--verbose --model foo");
+
+        String json = mapper.writeValueAsString(java.util.List.of(p));
+        com.fasterxml.jackson.core.type.TypeReference<List<ClaudeProfile>> listType =
+                new com.fasterxml.jackson.core.type.TypeReference<>() {};
+        List<ClaudeProfile> loaded = mapper.readValue(json, listType);
+        assertEquals(1, loaded.size());
+        assertEquals("--verbose --model foo", loaded.get(0).getExtraCliArgs());
+    }
 }

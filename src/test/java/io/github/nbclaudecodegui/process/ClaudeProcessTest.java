@@ -341,4 +341,33 @@ class ClaudeProcessTest {
                 .setClaudeExecutablePath("");
         if (script != null) script.delete();
     }
+
+    // -------------------------------------------------------------------------
+    // parseArgs
+    // -------------------------------------------------------------------------
+
+    @Test
+    void parseArgs_blank_returnsEmpty() {
+        assertTrue(ClaudeProcess.parseArgs("").isEmpty());
+        assertTrue(ClaudeProcess.parseArgs("   ").isEmpty());
+        assertTrue(ClaudeProcess.parseArgs(null).isEmpty());
+    }
+
+    @Test
+    void parseArgs_simple_splitsBySpace() {
+        java.util.List<String> result = ClaudeProcess.parseArgs("--verbose --model foo");
+        assertEquals(java.util.List.of("--verbose", "--model", "foo"), result);
+    }
+
+    @Test
+    void parseArgs_quotedArg_preservesSpaces() {
+        java.util.List<String> result = ClaudeProcess.parseArgs("--model \"claude opus 4\"");
+        assertEquals(java.util.List.of("--model", "claude opus 4"), result);
+    }
+
+    @Test
+    void parseArgs_trailingSpaces_ignored() {
+        java.util.List<String> result = ClaudeProcess.parseArgs("  --verbose  ");
+        assertEquals(java.util.List.of("--verbose"), result);
+    }
 }

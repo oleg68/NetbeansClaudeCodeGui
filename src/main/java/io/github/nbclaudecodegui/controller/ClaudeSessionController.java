@@ -172,13 +172,13 @@ public final class ClaudeSessionController {
      * @param widget      the terminal widget that will render the Claude TUI
      * @throws IOException if the PTY process cannot be started
      */
-    public void startProcess(java.io.File dir, String profileName, JediTermWidget widget)
+    public void startProcess(java.io.File dir, String profileName, String extraCliArgs, JediTermWidget widget)
             throws IOException {
         String tag = "[" + dir.getName() + "] ";
         claudeProcess = new ClaudeProcess();
         ClaudeProfile profile = ClaudeProfileStore.findByName(profileName);
         customModelIds = profile != null ? new ArrayList<>(profile.getCustomModels()) : List.of();
-        PtyProcess process = claudeProcess.start(dir.getAbsolutePath(), profile);
+        PtyProcess process = claudeProcess.start(dir.getAbsolutePath(), profile, extraCliArgs != null ? extraCliArgs : "");
 
         connector = new PtyTtyConnector(process);
         connector.setSessionTag(tag);

@@ -22,6 +22,7 @@ import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import org.netbeans.api.options.OptionsDisplayer;
 import org.netbeans.api.project.Project;
@@ -77,12 +78,13 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
          * Called on the EDT after the selected path has been validated as an
          * existing directory.
          *
-         * @param dir         the selected working directory
-         * @param profileName the selected profile name (never {@code null};
-         *                    use {@link ClaudeProfile#DEFAULT_NAME} to check
-         *                    for the default)
+         * @param dir          the selected working directory
+         * @param profileName  the selected profile name (never {@code null};
+         *                     use {@link ClaudeProfile#DEFAULT_NAME} to check
+         *                     for the default)
+         * @param extraCliArgs extra CLI arguments from the args field (may be empty)
          */
-        void onOpen(File dir, String profileName);
+        void onOpen(File dir, String profileName, String extraCliArgs);
     }
 
     // -------------------------------------------------------------------------
@@ -106,6 +108,9 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
 
     /** Validates the path and fires {@link OpenListener#onOpen}. */
     private final JButton openButton;
+
+    /** Editable field for extra CLI arguments; pre-filled from the selected profile. */
+    private final JTextField extraArgsField;
 
     /** Displays validation errors (path empty, directory not found). */
     private final JLabel errorLabel;
@@ -157,6 +162,14 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
         profileCombo.setToolTipText("Connection profile");
         populateProfileCombo();
 
+        // --- extra args field ---
+        extraArgsField = new JTextField(30);
+        extraArgsField.setToolTipText("Extra CLI arguments for this session (e.g. --verbose)");
+
+        // Pre-fill from selected profile; update when profile changes
+        profileCombo.addActionListener(e -> onProfileSelected());
+        onProfileSelected();
+
         // --- open button ---
         openButton = new JButton(NbBundle.getMessage(ClaudeSessionSelectorPanel.class, "BTN_Open"));
         openButton.addActionListener(e -> onOpen());
@@ -182,9 +195,15 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
         controlBar.add(openButton);
         controlBar.add(settingsButton);
 
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.add(controlBar, BorderLayout.CENTER);
-        wrapper.add(errorLabel, BorderLayout.SOUTH);
+        JPanel argsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        argsRow.add(new JLabel("Extra args:"));
+        argsRow.add(extraArgsField);
+
+        JPanel wrapper = new JPanel();
+        wrapper.setLayout(new javax.swing.BoxLayout(wrapper, javax.swing.BoxLayout.Y_AXIS));
+        wrapper.add(controlBar);
+        wrapper.add(argsRow);
+        wrapper.add(errorLabel);
         wrapper.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
         add(wrapper, BorderLayout.CENTER);
     }
@@ -252,6 +271,7 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
         } else {
             profileCombo.setSelectedIndex(0);
         }
+        onProfileSelected();
     }
 
     /**
@@ -313,6 +333,12 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
     // Event handlers
     // -------------------------------------------------------------------------
 
+    private void onProfileSelected() {
+        String name = getSelectedProfileName();
+        ClaudeProfile p = ClaudeProfileStore.findByName(name);
+        extraArgsField.setText(p != null ? p.getExtraCliArgs() : "");
+    }
+
     private void onProjectSelected() {
         if (suppressProjectListener) return;
         Object sel = projectCombo.getSelectedItem();
@@ -361,7 +387,7 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
         }
 
         errorLabel.setVisible(false);
-        openListener.onOpen(dir, getSelectedProfileName());
+        openListener.onOpen(dir, getSelectedProfileName(), extraArgsField.getText().trim());
     }
 
     // -------------------------------------------------------------------------
@@ -385,6 +411,7 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
         pathCombo.setEnabled(enabled);
         browseButton.setEnabled(enabled);
         openButton.setEnabled(enabled);
+        extraArgsField.setEnabled(enabled);
     }
 
     private boolean isProjectDirectory(File dir) {

@@ -230,7 +230,7 @@ public class ClaudeSessionTab extends TopComponent
         statusBar.setVisible(false);
 
         // --- selector + placeholder ---
-        selectorPanel    = new ClaudeSessionSelectorPanel(dir, this::onDirectoryOpened);
+        selectorPanel    = new ClaudeSessionSelectorPanel(dir, (d, pn, ea) -> onDirectoryOpened(d, pn, ea));
         placeholderLabel = new JLabel(
                 NbBundle.getMessage(ClaudeSessionSelectorPanel.class, "LBL_SelectDir"),
                 SwingConstants.CENTER);
@@ -534,7 +534,7 @@ public class ClaudeSessionTab extends TopComponent
         selectorPanel.setProfile(profileName);
         selectorPanel.preselectForDirectory(dir);
         selectorPanel.lock();
-        startSession(dir, profileName);
+        startSession(dir, profileName, "");
     }
 
     /**
@@ -568,12 +568,12 @@ public class ClaudeSessionTab extends TopComponent
     // -------------------------------------------------------------------------
 
     /** Fired by the selector panel when the user confirms a valid directory. */
-    private void onDirectoryOpened(File dir, String profileName) {
+    private void onDirectoryOpened(File dir, String profileName, String extraCliArgs) {
         selectorPanel.lock();
-        startSession(dir, profileName);
+        startSession(dir, profileName, extraCliArgs);
     }
 
-    private void startSession(File dir, String profileName) {
+    private void startSession(File dir, String profileName, String extraCliArgs) {
         updateDisplayName(dir);
         sessionTag = "[" + dir.getName() + "] ";
         JediTermWidget widget = new JediTermWidget(new NetBeansSettingsProvider());
@@ -585,7 +585,7 @@ public class ClaudeSessionTab extends TopComponent
         }
         showChatLayout(widget);
         try {
-            controller.startProcess(dir, profileName, widget);
+            controller.startProcess(dir, profileName, extraCliArgs, widget);
         } catch (IOException ex) {
             String command = controller.getLastAttemptedCommand();
             String errorMsg = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();

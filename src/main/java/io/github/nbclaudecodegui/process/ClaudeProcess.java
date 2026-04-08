@@ -102,6 +102,20 @@ public final class ClaudeProcess {
      * @throws IOException              if the process cannot be launched
      */
     public PtyProcess start(String workingDir, ClaudeProfile profile) throws IOException {
+        return start(workingDir, profile, "");
+    }
+
+    /**
+     * Starts a Claude CLI PTY process with extra CLI arguments appended to the command.
+     *
+     * @param workingDir    absolute path to the session working directory
+     * @param profile       connection profile; {@code null} uses Default behaviour
+     * @param extraCliArgs  extra CLI arguments string (may be blank)
+     * @return the started {@link PtyProcess}
+     * @throws IllegalArgumentException if {@code workingDir} is blank
+     * @throws IOException              if the process cannot be launched
+     */
+    public PtyProcess start(String workingDir, ClaudeProfile profile, String extraCliArgs) throws IOException {
         if (workingDir == null || workingDir.isBlank()) {
             throw new IllegalArgumentException("workingDir must not be blank");
         }
@@ -138,6 +152,12 @@ public final class ClaudeProcess {
             } catch (IOException e) {
                 LOG.warning("Could not write .claude/settings.local.json: " + e.getMessage());
             }
+        }
+
+        List<String> extra = parseArgs(extraCliArgs);
+        if (!extra.isEmpty()) {
+            cmd.addAll(extra);
+            LOG.info("Extra CLI args appended: " + extra);
         }
 
         lastCommand = String.join(" ", cmd);
@@ -529,6 +549,35 @@ public final class ClaudeProcess {
      */
     static String buildMcpConfigJson(int port) {
         return "{\"mcpServers\":{\"" + OUR_MCP_KEY + "\":{\"type\":\"sse\",\"url\":\"http://localhost:" + port + "/sse\"}}}";
+    }
+
+    /**
+     * Parses a CLI argument string into a list of tokens.
+     * Splits on whitespace; double-quoted tokens are treated as a single token
+     * (quotes are stripped). Returns an empty list for blank input.
+     *
+     * @param args the argument string; may be {@code null} or blank
+     * @return list of parsed tokens; never {@code null}
+     */
+    static List<String> parseArgs(String args) {
+        List<String> result = new ArrayList<>();
+        if (args == null || args.isBlank()) return result;
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        for (char c : args.toCharArray()) {
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ' ' && !inQuotes) {
+                if (!current.isEmpty()) {
+                    result.add(current.toString());
+                    current.setLength(0);
+                }
+            } else {
+                current.append(c);
+            }
+        }
+        if (!current.isEmpty()) result.add(current.toString());
+        return result;
     }
 
     private static String buildSettingsLocalJson(int port) {

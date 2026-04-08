@@ -322,4 +322,28 @@ class ClaudeProfileTest {
         Map<String, String> env = p.toEnvVars();
         assertFalse(env.containsKey("ANTHROPIC_DEFAULT_CUSTOM_MODEL"));
     }
+
+    // -------------------------------------------------------------------------
+    // extraCliArgs
+    // -------------------------------------------------------------------------
+
+    @Test
+    void extraCliArgs_defaultIsEmpty() {
+        assertEquals("", ClaudeProfile.createDefault().getExtraCliArgs());
+        assertEquals("", ClaudeProfile.createNamed("P").getExtraCliArgs());
+    }
+
+    @Test
+    void extraCliArgs_setAndGet() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setExtraCliArgs("--verbose");
+        assertEquals("--verbose", p.getExtraCliArgs());
+    }
+
+    @Test
+    void extraCliArgs_nullTreatedAsEmpty() {
+        ClaudeProfile p = ClaudeProfile.createNamed("P");
+        p.setExtraCliArgs(null);
+        assertEquals("", p.getExtraCliArgs());
+    }
 }

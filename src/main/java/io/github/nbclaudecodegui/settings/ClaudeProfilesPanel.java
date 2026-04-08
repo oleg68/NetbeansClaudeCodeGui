@@ -90,6 +90,8 @@ public final class ClaudeProfilesPanel extends JPanel {
     private JButton deleteButton;
     /** Field showing the configuration directory for the selected profile. */
     private JTextField configDirField;
+    /** Field for extra CLI arguments passed to the claude process. */
+    private JTextField extraCliArgsField;
 
     // Connection type
     /** Radio button for system-managed (Claude account) connection. */
@@ -260,6 +262,15 @@ public final class ClaudeProfilesPanel extends JPanel {
         extraGbc.anchor = GridBagConstraints.WEST;
         extraGbc.insets = new Insets(4, 0, 0, 0);
         mainPanel.add(extraSection, extraGbc);
+        row++;
+
+        // --- Extra CLI args ---
+        extraCliArgsField = new JTextField(40);
+        extraCliArgsField.setToolTipText("Additional command-line arguments passed to the claude process");
+        mainPanel.add(new JLabel("Extra CLI args:"), gbc(0, row, false));
+        GridBagConstraints cliGbc = gbcFill(1, row);
+        cliGbc.gridwidth = 2;
+        mainPanel.add(extraCliArgsField, cliGbc);
 
         add(mainPanel, BorderLayout.CENTER);
     }
@@ -597,6 +608,11 @@ public final class ClaudeProfilesPanel extends JPanel {
             }
         }
         p.setExtraEnvVars(extra);
+
+        // Extra CLI args
+        if (extraCliArgsField != null) {
+            p.setExtraCliArgs(extraCliArgsField.getText().trim());
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -665,6 +681,11 @@ public final class ClaudeProfilesPanel extends JPanel {
         for (String[] kv : p.getExtraEnvVars()) {
             extraEnvModel.addRow(kv);
         }
+
+        // Extra CLI args
+        if (extraCliArgsField != null) {
+            extraCliArgsField.setText(p.getExtraCliArgs());
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -701,6 +722,7 @@ public final class ClaudeProfilesPanel extends JPanel {
         copy.setNoProxy(src.getNoProxy());
         copy.setExtraEnvVars(new ArrayList<>(src.getExtraEnvVars()));
         copy.setModelAliases(new java.util.HashMap<>(src.getModelAliases()));
+        copy.setExtraCliArgs(src.getExtraCliArgs());
         profiles.add(copy);
         suppressProfileChange = true;
         rebuildProfileCombo();
