@@ -173,7 +173,7 @@
 
      Press ↑↓ to navigate · Enter to select · Type to search · Esc to cancel
     ```
-- [ ] Некорректно определяет состояние как Ready, хотя область промпта отсутствует в pty
+- [x] Некорректно определяет состояние как Ready, хотя область промпта отсутствует в pty
     ```
     ❯ /resume                                                                                                                                                                                             
     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -193,26 +193,48 @@
       6 days ago · main · 1.8MB
 
       Ctrl+A to show all projects · Ctrl+B to toggle branch · Ctrl+V to preview · Ctrl+R to rename · Type to search · Esc to cancel · 
+- [ ] некорректно определяет как ready несмотря на "esc to interrupt"
     ```
+      Explore(Explore session state detection and logs)
+      ⎿  Bash(git log --oneline --all -20 -- "*ScreenContentDetector*")                                                                                                         
+         Running…                                                                                                                                                               
+         Bash(git show 2fe54ae --stat)                                                                                                                                                                    
+         Running…                                                                                                                                           
+         Bash(git show 2fe54ae)                                                                                                                                                                           
+         Running…                                                                                                                                                                                         
+         +14 more tool uses (ctrl+o to expand) 
+         (ctrl+b to run in background)                                                                                                                                                                    
+
+    · Orchestrating… (34s · ↓ 913 tokens)                                                                                                                                                                 
+      ⎿  Tip: Use /btw to ask a quick side question without interrupting Claude's current work                                                                                                            
+
+    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    ❯                                                                                                                                                                                                     
+    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+      ⏸ plan mode on (shift+tab to cycle) · esc to interrupt                                                              ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code
+    ```
+    
 - [ ] не перешло из working в ready
     ```
-    ● Background command "java -cp "target/test-classes:target/classes:$(mvn -q dependency:build-classpath -Dmdep.outputFile=/dev/stdout 2&gt;/dev/null)"
-    io.github.nbclaudecodegui.settings.ContextMenuDebugFrame" completed (exit code 0)
+    ● Bash(mvn package -DskipTests 2>&1 | tail -10)
+      ⎿  [WARNING] private List<int[]> ranges = List.of();
+         [WARNING] ^
+         [WARNING] 15 warnings
+         … +7 lines (ctrl+o to expand)
 
-      Read 1 file (ctrl+o to expand)
+    ● Build success. Готово к установке и ручному тесту. Краткое резюме изменений:
 
-    ● Лог подтверждает: setComponentPopupMenu работает — для D и E видно что mousePressed не попадает в наш listener (его перехватил механизм popup), только mouseReleased после закрытия. Меню появлялось
-       корректно.
+      Два исправления в detectSessionState():
 
-      Для сравнения: строка C (MouseListener) видит isPopupTrigger=true явно.
+      1. Пикер с ⌕ (новый /resume пикер): если на экране есть символ ⌕ (U+2315, иконка поиска) при найденной области промпта → WORKING. Пикер перекрывает экран, но область ❯+сепараторы остаётся в
+      буфере.
+      2. Пикер без ⌕ (старый history picker, любой интерактивный экран без промпта): return UNKNOWN → return WORKING. Если экран не пустой, но промпта нет — Клод занят.
 
-      Итог: setComponentPopupMenu — правильный и чистый подход. Плагин 0.19.33 должен работать. Ждём результатов ручного тестирования.
-
-    ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── add-context-menu-base-url ──
+    ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── fix-false-ready-state-picker ──
     ❯  
     ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
       ⏸ plan mode on (shift+tab to cycle)                                                                                 ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code
-    ```
+         ```
 
 
 # Features

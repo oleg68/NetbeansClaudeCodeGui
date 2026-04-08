@@ -372,6 +372,12 @@ public final class ScreenContentDetector {
         }
 
         if (inputPromptAreaFound) {
+            // Interactive picker overlay (⌕ = search box in /resume or history picker).
+            // The picker is drawn over the screen while the input prompt area remains in
+            // the buffer — detect and report WORKING so the plugin disables the send button.
+            for (String line : lines) {
+                if (line.indexOf('\u2315') >= 0) return DetectedSessionState.WORKING;
+            }
             // Check footer for "  esc to interrupt" (two leading spaces)
             for (String footerLine : bottomNonBlankLines(lines, 3)) {
                 if (footerLine.startsWith("  esc to interrupt")) {
@@ -387,7 +393,9 @@ public final class ScreenContentDetector {
                 if (line.indexOf(c) >= 0) return DetectedSessionState.WORKING;
             }
         }
-        return DetectedSessionState.UNKNOWN;
+        // Non-empty screen with no prompt and no spinner: Claude is in some interactive
+        // state (picker, transition) — report WORKING so READY state is cleared.
+        return DetectedSessionState.WORKING;
     }
 
     /**

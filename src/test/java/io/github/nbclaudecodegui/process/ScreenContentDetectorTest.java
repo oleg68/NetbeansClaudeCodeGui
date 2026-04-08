@@ -123,12 +123,34 @@ class ScreenContentDetectorTest {
     }
 
     @org.junit.jupiter.api.Test
-    void detectSessionStateUnknownWhenNoPromptNoSpinner() {
+    void detectSessionStateWorkingWhenNoPromptNoSpinner() {
+        // Non-empty screen with no input prompt area and no spinner → WORKING
+        // (Claude is in some interactive/transitional state, not idle at the prompt)
         List<String> lines = List.of(
                 "Some output line",
                 "Another line without any pattern"
         );
-        assertEquals(ScreenContentDetector.DetectedSessionState.UNKNOWN,
+        assertEquals(ScreenContentDetector.DetectedSessionState.WORKING,
+                detector.detectSessionState(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectSessionState_resumePicker_returnsWorking() throws Exception {
+        java.net.URL url = getClass().getClassLoader().getResource(
+                SESSION_STATE_RESOURCE_DIR + "/working-resume-picker.src.txt");
+        assertNotNull(url);
+        List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Path.of(url.toURI()));
+        assertEquals(ScreenContentDetector.DetectedSessionState.WORKING,
+                detector.detectSessionState(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectSessionState_historyPicker_returnsWorking() throws Exception {
+        java.net.URL url = getClass().getClassLoader().getResource(
+                SESSION_STATE_RESOURCE_DIR + "/unknown-history-picker.src.txt");
+        assertNotNull(url);
+        List<String> lines = java.nio.file.Files.readAllLines(java.nio.file.Path.of(url.toURI()));
+        assertEquals(ScreenContentDetector.DetectedSessionState.WORKING,
                 detector.detectSessionState(lines));
     }
 
