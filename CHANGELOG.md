@@ -1,3 +1,4 @@
+- Fixed session staying in Starting state when plan mode was active at startup (JediTerm buffer NPE during initialization)
 - Added support for unnumbered choice menus (e.g. /resume session picker): displayed as radio buttons with title and session metadata, submitted via arrow-key navigation
 - Fixed session Ready/Working state detection in several edge cases: plan mode, /resume picker, ⌕ character in response, and post-response transitions
 - Fixed choice menu not updating when Claude replaces one menu with another (e.g. multi-select → confirm screen)

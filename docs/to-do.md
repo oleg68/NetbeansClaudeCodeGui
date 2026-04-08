@@ -270,7 +270,7 @@
 - [x] MCP server: исправлены ошибки подключения — "1 MCP server failed" при нескольких одновременных сессиях (изолированные очереди) и недоступность инструментов в Claude Code 2.x (переход на --mcp-config)
 - [x] MCP Tools: написать раздел в user-manual.md с описанием инструментов и примерами промптов — добавлен раздел 13 "IDE Tools (MCP)"
 - [ ] Добавить возможность добавлять произвольные параметры командной строки: настройка - в профилях, временное переопределение - в окне запуска сессии
-- [ ] Поддержать ненумерованные choice menu
+- [x] Поддержать ненумерованные choice menu
     ```
     ❯ Что нужно включить в конфигурации testdata/agnostic/examples/replication/agnostic/conf/application , чтобы LOGICAL_RESERVATION (если conf.changeLog.objects.enabled) ?                                                                                                        
       23 hours ago · bugfix/new-kafka · 1MB
