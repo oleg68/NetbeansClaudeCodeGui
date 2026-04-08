@@ -366,10 +366,18 @@ class ScreenContentDetectorTest {
     }
 
     @org.junit.jupiter.api.Test
-    void extractOptionStripsParenthetical() {
+    void extractOptionPreservesParenthetical() {
         ChoiceMenuModel.Option opt = ScreenContentDetector.extractOption("3. No (esc)", 3);
-        assertEquals("No", opt.display());
+        assertEquals("No (esc)", opt.display());
         assertEquals("3", opt.response());
+    }
+
+    @org.junit.jupiter.api.Test
+    void extractOptionPreservesBashWithArgs() {
+        ChoiceMenuModel.Option opt = ScreenContentDetector.extractOption(
+                "2. Bash(find /home/oleg/my-projects -name ptr_vector*)", 2);
+        assertEquals("Bash(find /home/oleg/my-projects -name ptr_vector*)", opt.display());
+        assertEquals("2", opt.response());
     }
 
     @org.junit.jupiter.api.Test

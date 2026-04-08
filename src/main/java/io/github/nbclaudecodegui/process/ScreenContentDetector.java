@@ -528,11 +528,6 @@ public final class ScreenContentDetector {
             checked = true;
             afterDot = afterDot.substring(3).stripLeading();
         }
-        // Remove trailing parenthetical hint like "(shift+tab)"
-        int parenPos = afterDot.lastIndexOf('(');
-        if (parenPos > 0 && afterDot.endsWith(")")) {
-            afterDot = afterDot.substring(0, parenPos).stripTrailing();
-        }
         return new ChoiceMenuModel.Option(afterDot.strip(), String.valueOf(num), null, checked, hasCheckbox);
     }
 
