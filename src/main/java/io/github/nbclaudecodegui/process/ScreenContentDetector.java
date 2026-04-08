@@ -74,12 +74,26 @@ public final class ScreenContentDetector {
     // Session state
     // -------------------------------------------------------------------------
 
-    /** Represents Claude's current activity state. */
+    /** Represents Claude's current activity state (legacy — use {@link DetectedSessionState}). */
     public enum SessionState {
         /** Claude is idle and ready for a new prompt. */
         READY,
         /** Claude is currently processing a request. */
         WORKING
+    }
+
+    /**
+     * Richer session state returned by TTY-layout-based detection.
+     * Unlike the legacy {@link SessionState}, this enum includes {@link #UNKNOWN}
+     * for blank or transitioning screens where the state cannot be determined.
+     */
+    public enum DetectedSessionState {
+        /** Claude is idle and ready for a new prompt (input prompt area visible, no interrupt footer). */
+        READY,
+        /** Claude is currently processing a request. */
+        WORKING,
+        /** Screen is blank or transitioning — state cannot be determined. */
+        UNKNOWN
     }
 
     // -------------------------------------------------------------------------
@@ -290,8 +304,11 @@ public final class ScreenContentDetector {
      * @param lines rendered screen lines
      * @return {@link SessionState#WORKING} if a spinner char is visible in the bottom 3 lines,
      *         otherwise {@link SessionState#READY}
+     * @deprecated Use {@link #detectSessionState(List)} which returns {@link DetectedSessionState}
+     *             and includes an {@code UNKNOWN} state for blank/transitioning screens.
      */
-    public SessionState detectSessionState(List<String> lines) {
+    @Deprecated
+    public SessionState detectSessionStateLegacy(List<String> lines) {
         if (lines == null || lines.isEmpty()) return SessionState.READY;
         for (String line : bottomNonBlankLines(lines, 3)) {
             for (char c : SPINNER_CHARS.toCharArray()) {
@@ -299,6 +316,77 @@ public final class ScreenContentDetector {
             }
         }
         return SessionState.READY;
+    }
+
+    /**
+     * Detect Claude's session state using TTY layout heuristics.
+     *
+     * <p>Algorithm:
+     * <ol>
+     *   <li>If {@code lines} is null/empty → {@link DetectedSessionState#UNKNOWN}</li>
+     *   <li>Search bottom 15 lines for an input-prompt area: a {@code ❯} line that has
+     *       a separator line directly above or directly below it.</li>
+     *   <li>If input-prompt area found:
+     *     <ul>
+     *       <li>Footer (bottom 3 non-blank lines) contains a line starting with
+     *           {@code "  esc to interrupt"} (two leading spaces) → {@link DetectedSessionState#WORKING}</li>
+     *       <li>Otherwise → {@link DetectedSessionState#READY}</li>
+     *     </ul>
+     *   </li>
+     *   <li>If no input-prompt area found:
+     *     <ul>
+     *       <li>Spinner character in bottom 3 lines → {@link DetectedSessionState#WORKING}</li>
+     *       <li>Otherwise → {@link DetectedSessionState#UNKNOWN}</li>
+     *     </ul>
+     *   </li>
+     * </ol>
+     *
+     * @param lines rendered screen lines from {@code TerminalTextBuffer}
+     * @return the detected {@link DetectedSessionState}
+     */
+    public DetectedSessionState detectSessionState(List<String> lines) {
+        if (lines == null || lines.isEmpty()) return DetectedSessionState.UNKNOWN;
+
+        // Search bottom 15 lines for an input prompt adjacent to a separator line
+        int bottomStart = Math.max(0, lines.size() - 15);
+        boolean inputPromptAreaFound = false;
+        for (int i = lines.size() - 1; i >= bottomStart; i--) {
+            String line = lines.get(i);
+            if (INPUT_PROMPT.matcher(line.trim()).find()) {
+                boolean separatorAbove = i > 0 && isSeparatorLine(lines.get(i - 1).trim());
+                // Autocomplete popup lines may appear between ❯ and the separator below —
+                // scan up to 5 lines down to find it.
+                boolean separatorBelow = false;
+                for (int j = i + 1; j < lines.size() && j <= i + 5; j++) {
+                    if (isSeparatorLine(lines.get(j).trim())) {
+                        separatorBelow = true;
+                        break;
+                    }
+                }
+                if (separatorAbove && separatorBelow) {
+                    inputPromptAreaFound = true;
+                    break;
+                }
+            }
+        }
+
+        if (inputPromptAreaFound) {
+            // Check footer for "  esc to interrupt" (two leading spaces)
+            for (String footerLine : bottomNonBlankLines(lines, 3)) {
+                if (footerLine.startsWith("  esc to interrupt")) {
+                    return DetectedSessionState.WORKING;
+                }
+            }
+            return DetectedSessionState.READY;
+        }
+
+        // No input prompt area — fall back to spinner detection
+        for (String line : bottomNonBlankLines(lines, 3)) {
+            for (char c : SPINNER_CHARS.toCharArray()) {
+                if (line.indexOf(c) >= 0) return DetectedSessionState.WORKING;
+            }
+        }
+        return DetectedSessionState.UNKNOWN;
     }
 
     /**

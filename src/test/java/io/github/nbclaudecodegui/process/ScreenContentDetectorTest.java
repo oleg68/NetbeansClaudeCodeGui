@@ -81,13 +81,15 @@ class ScreenContentDetectorTest {
     // -------------------------------------------------------------------------
 
     @org.junit.jupiter.api.Test
-    void detectSessionStateReadyWhenNoSpinner() {
+    void detectSessionStateReadyWhenPromptBetweenSeparators() {
         List<String> lines = List.of(
                 "Some output line",
-                "claude> ",
-                "esc to interrupt"
+                "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+                "\u276F  ",
+                "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+                "  ? for shortcuts"
         );
-        assertEquals(ScreenContentDetector.SessionState.READY,
+        assertEquals(ScreenContentDetector.DetectedSessionState.READY,
                 detector.detectSessionState(lines));
     }
 
@@ -97,14 +99,69 @@ class ScreenContentDetectorTest {
                 "Some output line",
                 "\u280B Running tool..."
         );
-        assertEquals(ScreenContentDetector.SessionState.WORKING,
+        assertEquals(ScreenContentDetector.DetectedSessionState.WORKING,
                 detector.detectSessionState(lines));
     }
 
     @org.junit.jupiter.api.Test
-    void detectSessionStateReadyWhenNullOrEmpty() {
-        assertEquals(ScreenContentDetector.SessionState.READY, detector.detectSessionState(null));
-        assertEquals(ScreenContentDetector.SessionState.READY, detector.detectSessionState(List.of()));
+    void detectSessionStateWorkingWhenEscToInterruptInFooter() {
+        List<String> lines = List.of(
+                "Some output",
+                "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+                "\u276F  ",
+                "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+                "  esc to interrupt"
+        );
+        assertEquals(ScreenContentDetector.DetectedSessionState.WORKING,
+                detector.detectSessionState(lines));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectSessionStateUnknownWhenNullOrEmpty() {
+        assertEquals(ScreenContentDetector.DetectedSessionState.UNKNOWN, detector.detectSessionState(null));
+        assertEquals(ScreenContentDetector.DetectedSessionState.UNKNOWN, detector.detectSessionState(List.of()));
+    }
+
+    @org.junit.jupiter.api.Test
+    void detectSessionStateUnknownWhenNoPromptNoSpinner() {
+        List<String> lines = List.of(
+                "Some output line",
+                "Another line without any pattern"
+        );
+        assertEquals(ScreenContentDetector.DetectedSessionState.UNKNOWN,
+                detector.detectSessionState(lines));
+    }
+
+    // -------------------------------------------------------------------------
+    // detectSessionState — fixture-based parameterized tests
+    // -------------------------------------------------------------------------
+
+    private static final String SESSION_STATE_RESOURCE_DIR =
+            "io/github/nbclaudecodegui/process/screen-content-detector/detect-session-state";
+
+    static Stream<Object[]> sessionStateTestCases() throws Exception {
+        URL dirUrl = ScreenContentDetectorTest.class.getClassLoader().getResource(SESSION_STATE_RESOURCE_DIR);
+        assertNotNull(dirUrl, "Resource directory not found: " + SESSION_STATE_RESOURCE_DIR);
+        File dir = new File(dirUrl.toURI());
+        List<Object[]> cases = new ArrayList<>();
+        File[] srcFiles = dir.listFiles((d, name) -> name.endsWith(".src.txt"));
+        assertNotNull(srcFiles);
+        for (File src : srcFiles) {
+            String caseName = src.getName().replace(".src.txt", "");
+            Path expectedPath = src.toPath().resolveSibling(caseName + ".expectedState.txt");
+            cases.add(new Object[]{caseName, src.toPath(), expectedPath});
+        }
+        return cases.stream();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("sessionStateTestCases")
+    void detectSessionStateFromFixtures(String caseName, Path srcFile, Path expectedFile) throws Exception {
+        List<String> lines = Files.readAllLines(srcFile);
+        ScreenContentDetector.DetectedSessionState expected =
+                ScreenContentDetector.DetectedSessionState.valueOf(Files.readString(expectedFile).trim());
+        ScreenContentDetector.DetectedSessionState result = detector.detectSessionState(lines);
+        assertEquals(expected, result, "State mismatch for case '" + caseName + "'");
     }
 
     // -------------------------------------------------------------------------

@@ -158,6 +158,21 @@
 - [x] JediTerm не наследует настройки темы из Tools->Options->Appearance->Look and Feel
 - [x] Markdown preview в тёмной теме не читаемы. Нужно брать цвета выделений тоже из темы
 - [x] Если есть отмеченные опции, то они отображаются как радиокнопки вместо чекбоксов
+- [ ] Не убирать текст в скобках из choice menu
+    ```
+    ❯ 1.  Add a new rule…
+      2.  Bash(1 podman:*)
+      3.  Bash(find /home/oleg/my-projects/grandorgue/GrandOrgue/src -name ptr_vector* -o -name *ptr_vector*)
+      4.  Bash(git -C /home/oleg/my-projects/grandorgue/GrandOrgue log --all --oneline --grep=diag)
+      5.  Bash(git:*)
+      6.  Bash(grep:*)
+      7.  Bash(LANG=C make -C /home/oleg/my-projects/grandorgue/GrandOrgue/build/current -k -j16)
+      8.  Bash(LANG=C make -k -j16)
+      9.  Bash(ldd grandorgue-3.17.1-0.local.linux.x86_64/lib/libGrandOrgueCore.so.3.17.1)
+    ↓ 10. Bash(ls src/grandorgue/GOImageCache* src/grandorgue/gui/GOGuiImageCache*)
+
+     Press ↑↓ to navigate · Enter to select · Type to search · Esc to cancel
+    ```
 
 # Features
 
@@ -194,3 +209,24 @@
 - [x] MCP server: исправлены ошибки подключения — "1 MCP server failed" при нескольких одновременных сессиях (изолированные очереди) и недоступность инструментов в Claude Code 2.x (переход на --mcp-config)
 - [x] MCP Tools: написать раздел в user-manual.md с описанием инструментов и примерами промптов — добавлен раздел 13 "IDE Tools (MCP)"
 - [ ] Добавить возможность добавлять произвольные параметры командной строки: настройка - в профилях, временное переопределение - в окне запуска сессии
+- [ ] Поддержать ненумерованные choice menu
+    ```
+    ❯ Что нужно включить в конфигурации testdata/agnostic/examples/replication/agnostic/conf/application , чтобы LOGICAL_RESERVATION (если conf.changeLog.objects.enabled) ?                                                                                                        
+      23 hours ago · bugfix/new-kafka · 1MB
+
+      Привет
+      2 days ago · bugfix/new-kafka · 107.7KB
+
+      Implement the following plan: # Plan: Migrate podreplication.yaml from Zookeeper Kafka to KRaft Kafka ## Context `testdata/agnostic/examples/replication/start.sh` запускает pod через `podman play k…
+      4 days ago · master · 49.9KB
+
+      Разобраться, почему не работает testdata/agnostic/examples/replication/start.sh Очищать следы неудачного запуска с помощью testdata/agnostic/examples/replication/stop.sh
+      4 days ago · master · 237KB
+
+      Ctrl+A to show all projects · Ctrl+B to toggle branch · Ctrl+V to preview · Ctrl+R to rename · Type to search · Esc to cancel · 
+    ```
+    Каждая опция состоит из двух строк: екст и поддтекст. Между опциями - пустые строки. Внизу - одиночная строка. Первая опция отмечена маркером.
+
+    Выводить радиокнопки. Во время открытого меню, не перерисовывать новое меню при движении маркера вниз.
+
+    Отправлять ответ путём движения маркера стрелками вверх-вниз, пока не маркер не будет у нужного пункта. Затем - <CR>.

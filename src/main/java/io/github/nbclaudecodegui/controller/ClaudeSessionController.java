@@ -781,6 +781,26 @@ public final class ClaudeSessionController {
             }
         }
 
+        // Screen-based state sync (bidirectional READY ↔ WORKING)
+        if (model.getLifecycle() != SessionLifecycle.STARTING) {
+            ScreenContentDetector.DetectedSessionState detectedScreenState =
+                    screenContentDetector.detectSessionState(lines);
+            if (detectedScreenState == ScreenContentDetector.DetectedSessionState.READY
+                    && model.getLifecycle() == SessionLifecycle.WORKING) {
+                LOG.fine("[pollScreenState] screen-detected READY, transitioning WORKING→READY");
+                model.setLifecycle(SessionLifecycle.READY);
+            } else if (detectedScreenState == ScreenContentDetector.DetectedSessionState.WORKING
+                    && model.getLifecycle() == SessionLifecycle.READY) {
+                LOG.fine("[pollScreenState] screen-detected WORKING, transitioning READY→WORKING");
+                model.setLifecycle(SessionLifecycle.WORKING);
+            } else if (model.getLifecycle() == SessionLifecycle.WORKING
+                    && detectedScreenState != ScreenContentDetector.DetectedSessionState.READY) {
+                LOG.fine("[pollScreenState] stuck WORKING, detected=" + detectedScreenState
+                        + " nonBlank=" + lines.stream().filter(s -> !s.trim().isEmpty()).count()
+                        + " total=" + lines.size());
+            }
+        }
+
         // Continuously sync CC screen mode → model (skip during switches and discovery)
         if (modelComboPopulated && !modeSwitchInProgress && !modelDiscoveryInProgress) {
             Optional<String> detected = screenContentDetector.detectEditMode(lines);

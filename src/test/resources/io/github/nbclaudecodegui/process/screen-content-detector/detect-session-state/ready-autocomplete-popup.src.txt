@@ -1,0 +1,7 @@
+Some previous Claude output here
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ /clear
+/clear                          Clear conversation history and free up context
+/compact                        Clear conversation history but keep a summary in context. Optional: /compact [instructions for summarization]
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ? for shortcuts                                                          ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code

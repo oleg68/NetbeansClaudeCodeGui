@@ -1,3 +1,4 @@
+- Improved Working/Ready session state detection using TTY layout parsing; fixed false Ready detection on the project history picker screen; fixed Ready not detected when the autocomplete popup is visible in the input area
 - Added IDE Tools (MCP) section to the user manual with a full tool reference and example prompts
 - Fixed MCP server connection failures that prevented Claude from using IDE tools (affected both Claude Code 2.x and multiple simultaneous sessions)
 - Fixed terminal scrolling to the beginning when a choice menu or diff panel appears; the terminal now stays scrolled to the bottom
