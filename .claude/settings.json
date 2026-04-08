@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /home/oleg/my-projects/NetbeansClaudeCodeGui* *)",
+      "Bash(grep * /home/oleg/my-projects/NetbeansClaudeCodeGui* *)"
+    ]
+  }
+}

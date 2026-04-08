@@ -145,7 +145,7 @@
       Enter to confirm · Esc to exit
     ```
     должно выбираться [ "Sonnet 4.6", "Opus 4.6", "Haiku 4.5" ], а из списка
-- [ ] Добавить контекстное меню "Copy URL" и "Open in Browser" на url в Options->Profiles. 
+- [x] Добавить контекстное меню "Copy URL" и "Open in Browser" на url в Options->Profiles. 
     Дизейблить эти url если выбран неподходящий Connection Type.
 - [x] Кастомная модель "codex/openai/gpt5.4" не выбирается в /model. Проверить на питоновском тесте.
 - [x] При невозможности стартовать процесс
@@ -153,8 +153,8 @@
     - В заголовке окна нет имени проекта
     - И командная строка, и сообщение - растянуты по высоте на пол окна.
     Завести панель ошибок из трёх строк: Error running Claude Code, Command Line: <>, Error Message: <message> которую показывать в центре таба, растягивая только по горизонтали.
-- [ ] Улучшить определение Working/Ready
-- [ ] После появления контекстного меню или FileFdiff иногда jediterm скролится к началу. Принудительно скролить в конец.
+- [x] Улучшить определение Working/Ready
+- [x] После появления контекстного меню или FileFdiff иногда jediterm скролится к началу. Принудительно скролить в конец.
 - [x] JediTerm не наследует настройки темы из Tools->Options->Appearance->Look and Feel
 - [x] Markdown preview в тёмной теме не читаемы. Нужно брать цвета выделений тоже из темы
 - [x] Если есть отмеченные опции, то они отображаются как радиокнопки вместо чекбоксов
@@ -173,6 +173,47 @@
 
      Press ↑↓ to navigate · Enter to select · Type to search · Esc to cancel
     ```
+- [ ] Некорректно определяет состояние как Ready, хотя область промпта отсутствует в pty
+    ```
+    ❯ /resume                                                                                                                                                                                             
+    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Resume Session                                                                                                                                                                                        
+    ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+    │ ⌕ Search…                                                                                                                                                                                          │
+    ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+    ❯ add-context-menu-base-url                                                                                                                                                                           
+      3 minutes ago · main · 1.3MB                                                                                                                                                                        
+
+      restructure-docs-alpha-warning                                                                                                                                                                      
+      6 days ago · main · 627.7KB
+
+      fix-choice-menu-detection
+      6 days ago · main · 1.8MB
+
+      Ctrl+A to show all projects · Ctrl+B to toggle branch · Ctrl+V to preview · Ctrl+R to rename · Type to search · Esc to cancel · 
+    ```
+- [ ] не перешло из working в ready
+    ```
+    ● Background command "java -cp "target/test-classes:target/classes:$(mvn -q dependency:build-classpath -Dmdep.outputFile=/dev/stdout 2&gt;/dev/null)"
+    io.github.nbclaudecodegui.settings.ContextMenuDebugFrame" completed (exit code 0)
+
+      Read 1 file (ctrl+o to expand)
+
+    ● Лог подтверждает: setComponentPopupMenu работает — для D и E видно что mousePressed не попадает в наш listener (его перехватил механизм popup), только mouseReleased после закрытия. Меню появлялось
+       корректно.
+
+      Для сравнения: строка C (MouseListener) видит isPopupTrigger=true явно.
+
+      Итог: setComponentPopupMenu — правильный и чистый подход. Плагин 0.19.33 должен работать. Ждём результатов ручного тестирования.
+
+    ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── add-context-menu-base-url ──
+    ❯  
+    ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+      ⏸ plan mode on (shift+tab to cycle)                                                                                 ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code
+    ```
+
 
 # Features
 

@@ -1,3 +1,4 @@
+- Added right-click context menu ("Copy URL", "Open in Browser") to the Base URL field in Options → Profiles; items are disabled when the Other API connection type is not selected or the field is blank
 - Improved session state detection reliability; fixed cases where the Ready state was not detected correctly
 - Added IDE Tools (MCP) section to the user manual with a full tool reference and example prompts
 - Fixed MCP server connection failures that prevented Claude from using IDE tools (affected both Claude Code 2.x and multiple simultaneous sessions)

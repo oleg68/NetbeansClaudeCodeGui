@@ -23,9 +23,11 @@ import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
@@ -110,6 +112,16 @@ public final class ClaudeProfilesPanel extends JPanel {
     private JButton tokenShowBtn;
     /** Button to toggle visibility of the API key field. */
     private JButton apiKeyShowBtn;
+    /** Context menu item to copy the Base URL to clipboard. */
+    private JMenuItem copyUrlItem;
+    /** Context menu item to open the Base URL in the browser. */
+    private JMenuItem openInBrowserItem;
+    /** Popup menu attached to baseUrlField. */
+    private JPopupMenu baseUrlMenu;
+    /** Link button opening claude.ai — shown only for Subscription type. */
+    private JButton claudeAiBtn;
+    /** Link button opening console.anthropic.com — shown only for Claude API type. */
+    private JButton consoleAnthropicBtn;
 
     // Proxy
     /** Radio button for system-managed proxy. */
@@ -268,6 +280,32 @@ public final class ClaudeProfilesPanel extends JPanel {
         modelAliasesBtn = new JButton("Model Aliases\u2026");
         modelAliasesBtn.addActionListener(e -> onModelAliases());
 
+        // Context menu for baseUrlField
+        baseUrlMenu = new JPopupMenu();
+        copyUrlItem       = new JMenuItem("Copy URL");
+        openInBrowserItem = new JMenuItem("Open in Browser");
+        baseUrlMenu.add(copyUrlItem);
+        baseUrlMenu.add(openInBrowserItem);
+        copyUrlItem.addActionListener(e -> {
+            String text = baseUrlField.getText().trim();
+            if (!text.isBlank()) {
+                java.awt.Toolkit.getDefaultToolkit()
+                    .getSystemClipboard()
+                    .setContents(new java.awt.datatransfer.StringSelection(text), null);
+            }
+        });
+        openInBrowserItem.addActionListener(e -> {
+            String text = baseUrlField.getText().trim();
+            if (!text.isBlank()) {
+                try {
+                    HtmlBrowser.URLDisplayer.getDefault().showURL(new URI(text).toURL());
+                } catch (Exception ex) {
+                    LOG.warning("Could not open URL: " + text + " — " + ex.getMessage());
+                }
+            }
+        });
+        baseUrlField.setComponentPopupMenu(baseUrlMenu);
+
         DocumentListener docL = new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e)  { updateModelAliasesBtn(); }
             @Override public void removeUpdate(DocumentEvent e)  { updateModelAliasesBtn(); }
@@ -298,7 +336,8 @@ public final class ClaudeProfilesPanel extends JPanel {
         grid.add(tokenField, inlineFieldGbc(2, 1));
         tokenShowBtn = buildShowHideButton(tokenField);
         grid.add(tokenShowBtn, inlineBtnGbc(3, 1));
-        grid.add(buildLinkButton("claude.ai", "https://claude.ai"), inlineBtnGbc(4, 1));
+        claudeAiBtn = buildLinkButton("claude.ai", "https://claude.ai");
+        grid.add(claudeAiBtn, inlineBtnGbc(4, 1));
 
         // row 2: rbClaudeApi + API Key label + apiKeyField + [Show] + [console.anthropic.com]
         grid.add(rbClaudeApi, inlineRbGbc(0, 2));
@@ -306,7 +345,8 @@ public final class ClaudeProfilesPanel extends JPanel {
         grid.add(apiKeyField, inlineFieldGbc(2, 2));
         apiKeyShowBtn = buildShowHideButton(apiKeyField);
         grid.add(apiKeyShowBtn, inlineBtnGbc(3, 2));
-        grid.add(buildLinkButton("console.anthropic.com", "https://console.anthropic.com"), inlineBtnGbc(4, 2));
+        consoleAnthropicBtn = buildLinkButton("console.anthropic.com", "https://console.anthropic.com");
+        grid.add(consoleAnthropicBtn, inlineBtnGbc(4, 2));
 
         // row 3: rbOtherApi + Base URL label + baseUrlField + [Custom Models…]
         grid.add(rbOtherApi, inlineRbGbc(0, 3));
@@ -321,13 +361,18 @@ public final class ClaudeProfilesPanel extends JPanel {
     }
 
     private void updateFieldEnablement() {
-        boolean sub = rbSubscription.isSelected();
-        boolean api = rbClaudeApi.isSelected() || rbOtherApi.isSelected();
+        boolean sub      = rbSubscription.isSelected();
+        boolean api      = rbClaudeApi.isSelected() || rbOtherApi.isSelected();
+        boolean otherApi = rbOtherApi.isSelected();
         tokenField.setEnabled(sub);
         tokenShowBtn.setEnabled(sub);
         apiKeyField.setEnabled(api);
         apiKeyShowBtn.setEnabled(api);
-        baseUrlField.setEnabled(rbOtherApi.isSelected());
+        baseUrlField.setEditable(otherApi);
+        if (claudeAiBtn != null) {
+            claudeAiBtn.setVisible(sub);
+            consoleAnthropicBtn.setVisible(rbClaudeApi.isSelected());
+        }
         updateModelAliasesBtn();
     }
 
@@ -892,14 +937,28 @@ public final class ClaudeProfilesPanel extends JPanel {
         btn.setOpaque(false);
         btn.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         btn.setToolTipText(url);
-        btn.addActionListener(e -> {
-            try {
-                HtmlBrowser.URLDisplayer.getDefault().showURL(new URI(url).toURL());
-            } catch (Exception ex) {
-                LOG.warning("Could not open URL: " + url + " — " + ex.getMessage());
-            }
-        });
+        btn.addActionListener(e -> openUrl(url));
+
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem copyItem = new JMenuItem("Copy URL");
+        JMenuItem openItem = new JMenuItem("Open in Browser");
+        copyItem.addActionListener(e ->
+                java.awt.Toolkit.getDefaultToolkit()
+                        .getSystemClipboard()
+                        .setContents(new java.awt.datatransfer.StringSelection(url), null));
+        openItem.addActionListener(e -> openUrl(url));
+        menu.add(copyItem);
+        menu.add(openItem);
+        btn.setComponentPopupMenu(menu);
         return btn;
+    }
+
+    private static void openUrl(String url) {
+        try {
+            HtmlBrowser.URLDisplayer.getDefault().showURL(new URI(url).toURL());
+        } catch (Exception ex) {
+            LOG.warning("Could not open URL: " + url + " — " + ex.getMessage());
+        }
     }
 
     private static GridBagConstraints inlineBtnGbc(int col, int row) {
