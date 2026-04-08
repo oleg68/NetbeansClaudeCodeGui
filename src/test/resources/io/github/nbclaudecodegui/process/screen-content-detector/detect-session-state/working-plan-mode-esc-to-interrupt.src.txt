@@ -1,0 +1,5 @@
+Some output
+────────────────
+❯  
+────────────────
+⏸ plan mode on (shift+tab to cycle) · esc to interrupt

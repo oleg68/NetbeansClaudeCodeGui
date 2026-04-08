@@ -382,9 +382,11 @@ public final class ScreenContentDetector {
             for (int i = promptRow + 1; i < lines.size(); i++) {
                 if (lines.get(i).indexOf('\u2315') >= 0) return DetectedSessionState.WORKING;
             }
-            // Check footer for "  esc to interrupt" (two leading spaces)
+            // "esc to interrupt" anywhere in a footer line means Claude is working.
+            // Default/ask mode: "  esc to interrupt" (two leading spaces).
+            // Plan mode: "⏸ plan mode on (shift+tab to cycle) · esc to interrupt".
             for (String footerLine : bottomNonBlankLines(lines, 3)) {
-                if (footerLine.startsWith("  esc to interrupt")) {
+                if (footerLine.toLowerCase().contains("esc to interrupt")) {
                     return DetectedSessionState.WORKING;
                 }
             }

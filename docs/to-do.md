@@ -193,7 +193,7 @@
       6 days ago · main · 1.8MB
 
       Ctrl+A to show all projects · Ctrl+B to toggle branch · Ctrl+V to preview · Ctrl+R to rename · Type to search · Esc to cancel · 
-- [ ] некорректно определяет как ready несмотря на "esc to interrupt"
+- [x] некорректно определяет как ready несмотря на "esc to interrupt"
     ```
       Explore(Explore session state detection and logs)
       ⎿  Bash(git log --oneline --all -20 -- "*ScreenContentDetector*")                                                                                                         

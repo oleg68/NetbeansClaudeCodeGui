@@ -1,0 +1,5 @@
+Claude response: use ⌕ to search files
+More response content here
+ ────────────────────────────────
+❯ 
+ ────────────────────────────────

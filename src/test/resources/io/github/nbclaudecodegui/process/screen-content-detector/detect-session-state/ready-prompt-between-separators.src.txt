@@ -1,0 +1,5 @@
+Some output line
+────────────────
+❯  
+────────────────
+  ? for shortcuts

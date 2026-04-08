@@ -1,9 +1,7 @@
+- Fixed session Ready/Working state detection in several edge cases: plan mode, /resume picker, ⌕ character in response, and post-response transitions
 - Fixed choice menu not updating when Claude replaces one menu with another (e.g. multi-select → confirm screen)
-- Fixed session getting stuck in Working state after Claude finishes when the response contains the ⌕ character
-- Fixed session incorrectly remaining in Ready state while /resume session picker is open
 - Fixed choice menu items having text in parentheses stripped (e.g. "Bash(find ...)" was shown as "Bash")
 - Added right-click context menu ("Copy URL", "Open in Browser") to the Base URL field in Options → Profiles; items are disabled when the Other API connection type is not selected or the field is blank
-- Improved session state detection reliability; fixed cases where the Ready state was not detected correctly
 - Added IDE Tools (MCP) section to the user manual with a full tool reference and example prompts
 - Fixed MCP server connection failures that prevented Claude from using IDE tools (affected both Claude Code 2.x and multiple simultaneous sessions)
 - Fixed terminal scrolling to the beginning when a choice menu or diff panel appears; the terminal now stays scrolled to the bottom
