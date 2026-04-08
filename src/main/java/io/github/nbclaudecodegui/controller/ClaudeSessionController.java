@@ -769,12 +769,14 @@ public final class ClaudeSessionController {
         // may never fire if the spinner continuously restarts promptFlushTimer.
         if (!modelDiscoveryInProgress) {
             Optional<ChoiceMenuModel> menuOpt = screenContentDetector.detectChoiceMenu(lines);
-            if (model.getActiveChoiceMenu() == null) {
-                menuOpt.ifPresent(m -> {
-                    LOG.fine("[pollScreenState] setting choice menu: \"" + m.text() + "\"");
-                    model.setActiveChoiceMenu(m);
-                });
-            } else if (menuOpt.isEmpty() && !screenContentDetector.detectYesNoPrompt(lines)) {
+            if (menuOpt.isPresent()) {
+                ChoiceMenuModel newMenu = menuOpt.get();
+                ChoiceMenuModel current = model.getActiveChoiceMenu();
+                if (current == null || !newMenu.text().equals(current.text()) || !newMenu.options().equals(current.options())) {
+                    LOG.fine("[pollScreenState] setting choice menu: \"" + newMenu.text() + "\"");
+                    model.setActiveChoiceMenu(newMenu);
+                }
+            } else if (model.getActiveChoiceMenu() != null && !screenContentDetector.detectYesNoPrompt(lines)) {
                 // Menu was set but no longer on screen and no Y/n fallback — clear it.
                 LOG.fine("[pollScreenState] menu gone from screen, dismissing");
                 model.clearChoiceMenu();
@@ -866,7 +868,14 @@ public final class ClaudeSessionController {
                 LOG.fine("[screen prompt] menu gone from screen, dismissing");
                 model.clearChoiceMenu();
             } else {
-                LOG.fine("[screen prompt] menu still on screen, keeping (req=" + req.get().text() + ")");
+                ChoiceMenuModel newMenu = req.get();
+                ChoiceMenuModel current = model.getActiveChoiceMenu();
+                if (!newMenu.text().equals(current.text()) || !newMenu.options().equals(current.options())) {
+                    LOG.fine("[screen prompt] menu changed, updating (req=" + newMenu.text() + ")");
+                    model.setActiveChoiceMenu(newMenu);
+                } else {
+                    LOG.fine("[screen prompt] menu still on screen, keeping (req=" + newMenu.text() + ")");
+                }
             }
             return;
         }

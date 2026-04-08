@@ -1,3 +1,4 @@
+- Fixed choice menu not updating when Claude replaces one menu with another (e.g. multi-select → confirm screen)
 - Fixed session getting stuck in Working state after Claude finishes when the response contains the ⌕ character
 - Fixed session incorrectly remaining in Ready state while /resume session picker is open
 - Fixed choice menu items having text in parentheses stripped (e.g. "Bash(find ...)" was shown as "Bash")
