@@ -793,12 +793,8 @@ public final class ClaudeSessionController {
                     && model.getLifecycle() == SessionLifecycle.READY) {
                 LOG.fine("[pollScreenState] screen-detected WORKING, transitioning READY→WORKING");
                 model.setLifecycle(SessionLifecycle.WORKING);
-            } else if (model.getLifecycle() == SessionLifecycle.WORKING
-                    && detectedScreenState != ScreenContentDetector.DetectedSessionState.READY) {
-                LOG.fine("[pollScreenState] stuck WORKING, detected=" + detectedScreenState
-                        + " nonBlank=" + lines.stream().filter(s -> !s.trim().isEmpty()).count()
-                        + " total=" + lines.size());
             }
+            // UNKNOWN → no transition
         }
 
         // Continuously sync CC screen mode → model (skip during switches and discovery)

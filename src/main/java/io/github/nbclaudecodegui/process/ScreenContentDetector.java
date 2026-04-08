@@ -347,10 +347,11 @@ public final class ScreenContentDetector {
     public DetectedSessionState detectSessionState(List<String> lines) {
         if (lines == null || lines.isEmpty()) return DetectedSessionState.UNKNOWN;
 
-        // Search bottom 15 lines for an input prompt adjacent to a separator line
-        int bottomStart = Math.max(0, lines.size() - 15);
+        // Search all lines (bottom-up) for an input prompt adjacent to a separator line.
+        // Claude Code uses the alternate screen buffer and draws content from the top,
+        // so the input prompt area may be anywhere, not just in the bottom rows.
         boolean inputPromptAreaFound = false;
-        for (int i = lines.size() - 1; i >= bottomStart; i--) {
+        for (int i = lines.size() - 1; i >= 0; i--) {
             String line = lines.get(i);
             if (INPUT_PROMPT.matcher(line.trim()).find()) {
                 boolean separatorAbove = i > 0 && isSeparatorLine(lines.get(i - 1).trim());
