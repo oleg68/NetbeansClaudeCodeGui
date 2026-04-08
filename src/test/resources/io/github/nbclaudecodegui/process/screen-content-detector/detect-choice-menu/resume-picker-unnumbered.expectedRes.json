@@ -1,0 +1,9 @@
+{
+  "text": "Resume Session (3 of 11)",
+  "options": [
+    {"display": "Что нужно включить в конфигурации testdata/agnostic/examples", "response": "ARROW:0", "description": "23 hours ago · bugfix/new-kafka · 1MB"},
+    {"display": "Привет", "response": "ARROW:1", "description": "2 days ago · bugfix/new-kafka · 107.7KB"},
+    {"display": "Implement the following plan", "response": "ARROW:2", "description": "4 days ago · master · 49.9KB"}
+  ],
+  "defaultOptionIndex": 0
+}

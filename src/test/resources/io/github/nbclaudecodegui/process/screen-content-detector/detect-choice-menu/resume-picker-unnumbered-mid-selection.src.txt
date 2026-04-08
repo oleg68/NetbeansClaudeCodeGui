@@ -1,0 +1,11 @@
+Resume Session (3 of 11)
+╭──────────────────────────────────────────────────────────╮
+│ ⌕ Search…                                                │
+╰──────────────────────────────────────────────────────────╯
+  Что нужно включить в конфигурации testdata/agnostic/examples
+  23 hours ago · bugfix/new-kafka · 1MB
+❯ Привет
+  2 days ago · bugfix/new-kafka · 107.7KB
+  Implement the following plan
+  4 days ago · master · 49.9KB
+Ctrl+A to show all projects · Ctrl+B to toggle branch · Type to search · Esc to cancel ·

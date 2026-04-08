@@ -465,6 +465,33 @@ public final class ClaudeSessionController {
                 t.setDaemon(true);
                 t.start();
                 model.clearChoiceMenu();
+            } else if (answer.startsWith("ARROW:")) {
+                int targetIdx = Integer.parseInt(answer.substring(6));
+                ChoiceMenuModel current = model.getActiveChoiceMenu();
+                int currentIdx = current != null ? current.defaultOptionIndex() : 0;
+                int delta = targetIdx - currentIdx;
+                LOG.fine("[PTY write] ARROW targetIdx=" + targetIdx + " currentIdx=" + currentIdx + " delta=" + delta);
+                model.clearChoiceMenu();
+                if (delta == 0) {
+                    connector.write("\r");
+                } else {
+                    byte[] arrow = delta < 0 ? new byte[]{0x1b, '[', 'A'} : new byte[]{0x1b, '[', 'B'};
+                    Thread t = new Thread(() -> {
+                        try {
+                            for (int idx = 0; idx < Math.abs(delta); idx++) {
+                                connector.write(arrow);
+                                Thread.sleep(80);
+                            }
+                            connector.write("\r");
+                        } catch (IOException ex) {
+                            LOG.warning("writePtyAnswer ARROW write failed: " + ex.getMessage());
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }, "pty-arrow-select");
+                    t.setDaemon(true);
+                    t.start();
+                }
             } else {
                 boolean isMenuDigit = answer.matches("[0-9]");
                 String toWrite = isMenuDigit ? answer : answer + "\r";
@@ -772,14 +799,23 @@ public final class ClaudeSessionController {
             if (menuOpt.isPresent()) {
                 ChoiceMenuModel newMenu = menuOpt.get();
                 ChoiceMenuModel current = model.getActiveChoiceMenu();
-                if (current == null || !newMenu.text().equals(current.text()) || !newMenu.options().equals(current.options())) {
+                if (current == null || !newMenu.text().equals(current.text()) || !optionsEqual(newMenu.options(), current.options())) {
                     LOG.fine("[pollScreenState] setting choice menu: \"" + newMenu.text() + "\"");
                     model.setActiveChoiceMenu(newMenu);
                 }
             } else if (model.getActiveChoiceMenu() != null && !screenContentDetector.detectYesNoPrompt(lines)) {
-                // Menu was set but no longer on screen and no Y/n fallback — clear it.
-                LOG.fine("[pollScreenState] menu gone from screen, dismissing");
-                model.clearChoiceMenu();
+                // For unnumbered menus (ARROW: responses), don't dismiss from the screen-poll timer.
+                // The /resume picker redraws itself during PTY resize (when the choice panel
+                // appears and shrinks the terminal), creating a transient state with no ❯ cursor
+                // on screen. flushPendingPrompt waits for 400 ms of PTY silence, at which point
+                // the screen is stable — let it handle unnumbered menu dismissal exclusively.
+                ChoiceMenuModel active = model.getActiveChoiceMenu();
+                boolean isUnnumbered = !active.options().isEmpty()
+                        && active.options().get(0).response().startsWith("ARROW:");
+                if (!isUnnumbered) {
+                    LOG.fine("[pollScreenState] menu gone from screen, dismissing");
+                    model.clearChoiceMenu();
+                }
             }
         }
 
@@ -870,7 +906,7 @@ public final class ClaudeSessionController {
             } else {
                 ChoiceMenuModel newMenu = req.get();
                 ChoiceMenuModel current = model.getActiveChoiceMenu();
-                if (!newMenu.text().equals(current.text()) || !newMenu.options().equals(current.options())) {
+                if (!newMenu.text().equals(current.text()) || !optionsEqual(newMenu.options(), current.options())) {
                     LOG.fine("[screen prompt] menu changed, updating (req=" + newMenu.text() + ")");
                     model.setActiveChoiceMenu(newMenu);
                 } else {
@@ -906,6 +942,31 @@ public final class ClaudeSessionController {
      * Extracts the question text from lines above the Y/n prompt line.
      * Returns the last non-blank, non-Y/n line before the prompt.
      */
+    /**
+     * Compares two option lists for equality.
+     *
+     * <p>For unnumbered menus (responses starting with {@code "ARROW:"}), only
+     * {@code display} and {@code response} are compared — description is ignored.
+     * This suppresses re-renders caused by transient description changes during
+     * mid-render footer redraws (the picker redraws the footer using cursor-movement
+     * sequences, and a screen poll during that window may see the footer at a
+     * non-bottom position, causing the last option's description to flicker).
+     *
+     * <p>For numbered menus, full {@link java.util.Objects#equals} semantics apply.
+     */
+    private static boolean optionsEqual(List<ChoiceMenuModel.Option> a, List<ChoiceMenuModel.Option> b) {
+        if (a.size() != b.size()) return false;
+        if (!a.isEmpty() && a.get(0).response().startsWith("ARROW:")) {
+            // Unnumbered menu: compare by display+response only
+            for (int i = 0; i < a.size(); i++) {
+                if (!a.get(i).display().equals(b.get(i).display())) return false;
+                if (!a.get(i).response().equals(b.get(i).response())) return false;
+            }
+            return true;
+        }
+        return a.equals(b);
+    }
+
     private static final java.util.regex.Pattern YN_LINE_PATTERN =
             java.util.regex.Pattern.compile(
                     "\\[Y/n\\]|\\[y/N\\]|\\[yes/no\\]|\\(y/n\\)",

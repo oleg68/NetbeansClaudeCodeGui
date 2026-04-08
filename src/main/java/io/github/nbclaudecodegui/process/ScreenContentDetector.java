@@ -121,7 +121,7 @@ public final class ScreenContentDetector {
                 break;
             }
         }
-        if (lastOptionRow < 0) return Optional.empty();
+        if (lastOptionRow < 0) return detectUnnumberedChoiceMenu(screenLines);
         LOG.fine(tag + "[ScreenContentDetector] lastOptionRow=" + lastOptionRow
                 + " line=" + screenLines.get(lastOptionRow).trim());
 
@@ -261,6 +261,174 @@ public final class ScreenContentDetector {
 
         LOG.fine(tag + "[ScreenContentDetector] detected prompt: \"" + question + "\" options=" + options);
         return Optional.of(new ChoiceMenuModel(question, options, 0));
+    }
+
+    // -------------------------------------------------------------------------
+    // Unnumbered menu detection
+    // -------------------------------------------------------------------------
+
+    /**
+     * Scan the visible screen lines for an unnumbered menu prompt (e.g. the {@code /resume}
+     * session picker).
+     *
+     * <p>Unnumbered menus have no {@code N.} option prefix. Each option occupies two
+     * consecutive non-blank lines (main text + metadata/description). The selected option is
+     * prefixed with {@code ❯} (no indent); all others are indented with leading spaces.
+     * A search box (box-drawing borders + ⌕) and a title line appear above the options.
+     * A footer hint line containing {@code ·} and navigation keywords appears at the bottom.
+     *
+     * <p>Responses are encoded as {@code "ARROW:N"} (0-based index). The controller
+     * navigates to option N using arrow keys then sends {@code \r}.
+     *
+     * @param screenLines lines from {@code TerminalTextBuffer.getScreenBuffer().getLineTexts()}
+     * @return a detected {@link ChoiceMenuModel}, or empty if no unnumbered menu is visible
+     */
+    Optional<ChoiceMenuModel> detectUnnumberedChoiceMenu(List<String> screenLines) {
+        if (screenLines == null || screenLines.isEmpty()) return Optional.empty();
+
+        // Step 1: find footer — last non-blank line containing '·' and navigation/Esc keywords
+        int footerRow = -1;
+        for (int i = screenLines.size() - 1; i >= 0; i--) {
+            String line = screenLines.get(i);
+            if (line.isBlank()) continue;
+            String trimmed = line.trim();
+            if (isUnnumberedFooterLine(trimmed)) {
+                footerRow = i;
+                break;
+            }
+            // First non-blank line from bottom is not a footer → no unnumbered menu
+            break;
+        }
+        if (footerRow < 0) return Optional.empty();
+
+        // Step 2: walk upward from footer collecting option blocks (pairs: desc + main, bottom-up).
+        // Stop when we hit a non-option line (search box, separator, 0-indent title, numbered option).
+        // Also stop if we encounter a footer-like line mid-screen (handles mid-render footer redraws).
+        List<String> blockMainLines = new ArrayList<>();
+        List<String> blockDescLines = new ArrayList<>();
+        int stopRow = -1; // row where we stopped (first non-option line above options)
+
+        int i = footerRow - 1;
+        while (i >= 0) {
+            // Skip blank lines between blocks
+            while (i >= 0 && screenLines.get(i).isBlank()) i--;
+            if (i < 0) break;
+
+            String raw = screenLines.get(i);
+            String trimmed = raw.trim();
+
+            // Stop conditions — record stop row for header search
+            if (isSeparatorLine(trimmed) || OPTION_LINE.matcher(trimmed).matches()) {
+                break; // separator or numbered option → not an unnumbered menu above
+            }
+            if (isBoxDrawingLine(trimmed) || trimmed.contains("\u2315")) { // ⌕
+                // Search box / box border → stop options, continue upward for header
+                stopRow = i;
+                break;
+            }
+            if (isUnnumberedFooterLine(trimmed)) {
+                // Footer appeared mid-screen (cursor-movement redraw) → treat as footer, stop
+                break;
+            }
+            // Line with no leading indent and no ❯ → title / non-option line
+            boolean startsWithCursor = !raw.isEmpty() && "\u276F\u25B6>".indexOf(raw.charAt(0)) >= 0;
+            boolean hasIndent = !raw.isEmpty() && Character.isWhitespace(raw.charAt(0));
+            if (!startsWithCursor && !hasIndent) {
+                // This is the title line itself
+                stopRow = i;
+                break;
+            }
+
+            // Collect this block: desc = current line, main = line above (if non-blank)
+            String desc = trimmed;
+            i--;
+            String main = null;
+            if (i >= 0 && !screenLines.get(i).isBlank()) {
+                String raw2 = screenLines.get(i);
+                String trimmed2 = raw2.trim();
+                if (!isSeparatorLine(trimmed2) && !OPTION_LINE.matcher(trimmed2).matches()
+                        && !isBoxDrawingLine(trimmed2) && !trimmed2.contains("\u2315")
+                        && !isUnnumberedFooterLine(trimmed2)) {
+                    main = trimmed2;
+                    i--;
+                }
+            }
+            if (main == null) {
+                // Single-line block — treat as main with no description
+                main = desc;
+                desc = null;
+            }
+            blockMainLines.add(0, main);
+            blockDescLines.add(0, desc);
+        }
+
+        if (blockMainLines.size() < 2) return Optional.empty();
+
+        // Step 3: build options, detect selected (❯)
+        List<ChoiceMenuModel.Option> options = new ArrayList<>();
+        int defaultIdx = 0;
+        boolean foundCursor = false;
+        for (int oi = 0; oi < blockMainLines.size(); oi++) {
+            String main = blockMainLines.get(oi);
+            String desc = blockDescLines.get(oi);
+            if (!main.isEmpty() && "\u276F\u25B6>".indexOf(main.charAt(0)) >= 0) {
+                main = main.substring(1).stripLeading();
+                if (!foundCursor) {
+                    defaultIdx = oi;
+                    foundCursor = true;
+                }
+            }
+            options.add(new ChoiceMenuModel.Option(main, "ARROW:" + oi, desc));
+        }
+        if (!foundCursor) {
+            LOG.fine(tag + "[ScreenContentDetector] unnumbered: no cursor glyph found");
+            return Optional.empty();
+        }
+
+        // Step 4: find header — walk upward from stopRow past search box / box-drawing lines
+        String header = "";
+        if (stopRow >= 0) {
+            for (int h = stopRow; h >= 0; h--) {
+                String line = screenLines.get(h).trim();
+                if (line.isBlank() || isSeparatorLine(line) || isBoxDrawingLine(line)
+                        || line.contains("\u2315")) {
+                    continue;
+                }
+                // First non-blank, non-separator, non-box line above the options region
+                header = line;
+                break;
+            }
+        }
+
+        LOG.fine(tag + "[ScreenContentDetector] unnumbered menu: header=\"" + header
+                + "\" options=" + options + " defaultIdx=" + defaultIdx);
+        return Optional.of(new ChoiceMenuModel(header, options, defaultIdx));
+    }
+
+    /**
+     * Returns {@code true} if the (trimmed) line is an unnumbered-picker footer hint:
+     * contains {@code ·} and at least one of: Esc, cancel, ↑, ↓, Ctrl+.
+     */
+    private static boolean isUnnumberedFooterLine(String trimmed) {
+        if (!trimmed.contains("\u00B7")) return false; // ·
+        String lower = trimmed.toLowerCase();
+        return lower.contains("esc") || lower.contains("cancel")
+                || lower.contains("\u2191") || lower.contains("\u2193")
+                || lower.contains("ctrl+");
+    }
+
+    /**
+     * Returns {@code true} if the (trimmed) line consists primarily of box-drawing characters
+     * (╭, ╰, │, ─, ┌, └, etc.) used for search-box borders or similar UI chrome.
+     */
+    private static boolean isBoxDrawingLine(String trimmed) {
+        if (trimmed.isEmpty()) return false;
+        char first = trimmed.charAt(0);
+        // Box-drawing corner/side characters: ╭ ╰ │ ┌ └ ├ ┤ ╔ ╚ ║
+        return first == '\u256D' || first == '\u2570' || first == '\u2502'
+                || first == '\u250C' || first == '\u2514' || first == '\u251C'
+                || first == '\u2524' || first == '\u2554' || first == '\u255A'
+                || first == '\u2551';
     }
 
     // -------------------------------------------------------------------------
