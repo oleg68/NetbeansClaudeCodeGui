@@ -1,3 +1,5 @@
+- Added Maven Central publication support: `release` Maven profile with GPG signing and Sonatype Central Portal deployment, plus CI `deploy` job that publishes artifacts on release builds
+
 # 0.19 (2026-04-09)
 
 - Fixed edit mode switch from plan mode to Ask on edit overshooting into acceptEdits/plan again

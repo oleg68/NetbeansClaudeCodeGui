@@ -16,11 +16,11 @@ The `claude` executable must be on your system `PATH` **or** its absolute path m
 
 ### Recommended: download from GitHub Releases
 
-Download the latest `.nbm` file from the [Releases page](https://github.com/oleg68/NetbeansClaudeCodeGui/releases/latest).
+Download the latest `.nbm` file from the [Releases page](https://github.com/nbclaudecodegui/NetbeansClaudeCodeGui/releases/latest).
 
 ### Intermediate builds
 
-Builds between releases are available as artifacts on the [Actions](https://github.com/oleg68/NetbeansClaudeCodeGui/actions) page — open the latest successful workflow run and download the `nbm` artifact (delivered as a zip file; extract the `.nbm` before installing).
+Builds between releases are available as artifacts on the [Actions](https://github.com/nbclaudecodegui/NetbeansClaudeCodeGui/actions) page — open the latest successful workflow run and download the `nbm` artifact (delivered as a zip file; extract the `.nbm` before installing).
 
 ### Install into NetBeans
 
