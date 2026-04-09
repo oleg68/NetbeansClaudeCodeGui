@@ -1,3 +1,5 @@
+# 0.19 (2026-04-09)
+
 - Fixed edit mode switch from plan mode to Ask on edit overshooting into acceptEdits/plan again
 - Improved discovering model names
 - Added extra CLI args support: per-profile "Extra CLI args" field in Options → Profiles, plus a per-session override field in the session selector (pre-filled from the profile)
