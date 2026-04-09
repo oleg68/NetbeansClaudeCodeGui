@@ -1,3 +1,4 @@
+- Improved discovering model names
 - Added extra CLI args support: per-profile "Extra CLI args" field in Options → Profiles, plus a per-session override field in the session selector (pre-filled from the profile)
 - Added support for unnumbered choice menus (e.g. /resume session picker): displayed as radio buttons with title and session metadata, submitted via arrow-key navigation
 - Fixed session Ready/Working state detection in several edge cases: plan mode, /resume picker, ⌕ character in response, post-response transitions, and named separator line (plan/branch name) above the input prompt

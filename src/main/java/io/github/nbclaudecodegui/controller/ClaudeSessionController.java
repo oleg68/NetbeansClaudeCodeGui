@@ -7,6 +7,7 @@ import io.github.nbclaudecodegui.model.ChoiceMenuModel;
 import io.github.nbclaudecodegui.model.ClaudeSessionModel;
 import io.github.nbclaudecodegui.model.SessionLifecycle;
 import io.github.nbclaudecodegui.process.ClaudeProcess;
+import io.github.nbclaudecodegui.process.ModelMenuParser;
 import io.github.nbclaudecodegui.process.PtyTtyConnector;
 import io.github.nbclaudecodegui.process.ScreenContentDetector;
 import io.github.nbclaudecodegui.settings.ClaudeCodePreferences;
@@ -44,20 +45,6 @@ import javax.swing.SwingUtilities;
  * </ul>
  */
 public final class ClaudeSessionController {
-
-    // -------------------------------------------------------------------------
-    // ModelDiscovery record
-    // -------------------------------------------------------------------------
-
-    /**
-     * Result of {@link #parseModelDiscovery}: all detected model names plus the
-     * zero-based index of the model that was active when the screen was captured.
-     *
-     * @param models       list of model display names; never {@code null}
-     * @param currentIndex zero-based index of the active model, or {@code -1} if
-     *                     no active model could be determined
-     */
-    public record ModelDiscovery(List<String> models, int currentIndex) {}
 
     // -------------------------------------------------------------------------
     // Fields
@@ -702,29 +689,58 @@ public final class ClaudeSessionController {
                 openModelMenu();
                 List<String> lines = screenLines.get();
 
+                // Scan the rolling PTY line buffer for the /model hint line, which is
+                // shorter and never truncated (e.g. "/model  … (currently anthropic/claude-sonnet-4.6)").
+                String hintCurrentModel = null;
+                Pattern hintPat = Pattern.compile("\\(currently\\s+([\\w/.-]+)\\)");
+                synchronized (recentPtyLines) {
+                    for (String ptyLine : recentPtyLines) {
+                        Matcher hm = hintPat.matcher(ptyLine);
+                        if (hm.find()) { hintCurrentModel = hm.group(1); break; }
+                    }
+                }
+
                 List<String> models;
                 int selIdx;
                 Optional<ChoiceMenuModel> menuOpt = screenContentDetector.detectChoiceMenu(lines);
                 if (menuOpt.isPresent() && !menuOpt.get().options().isEmpty()) {
                     List<ChoiceMenuModel.Option> opts = menuOpt.get().options();
-                    Pattern labelPat = Pattern.compile("^(.*?)(?:\\s{3,}|\u2714)");
+                    Pattern descPat = Pattern.compile("(?:\u2714\\s+|\\s{3,})(.+?)(?:\\s*[·\u00b7].*)?$");
+                    Pattern currentlyPat = Pattern.compile("\\(currently\\s+([\\w/.-]+)\\)");
                     models = new ArrayList<>();
                     selIdx = -1;
                     for (int i = 0; i < opts.size(); i++) {
                         String display = opts.get(i).display();
-                        Matcher lm = labelPat.matcher(display);
-                        String label = lm.find() ? lm.group(1).strip() : display.strip();
-                        if (label.isEmpty()) label = display.strip();
-                        models.add(label);
+                        Matcher dm = descPat.matcher(display);
+                        String modelId;
+                        if (dm.find()) {
+                            String desc = dm.group(1).trim();
+                            Matcher cm = currentlyPat.matcher(desc);
+                            modelId = cm.find() ? cm.group(1) : desc;
+                        } else {
+                            modelId = display.strip();
+                        }
+                        if (modelId.isEmpty()) modelId = display.strip();
+                        models.add(modelId);
                         if (display.contains("\u2714")) selIdx = i;
                     }
                 } else {
-                    ModelDiscovery discovery = parseModelDiscovery(lines);
+                    ModelMenuParser.ModelDiscovery discovery = new ModelMenuParser().parse(lines);
                     models = discovery.models();
                     selIdx = discovery.currentIndex();
                 }
 
                 connector.write(new byte[]{0x1b});  // Esc — dismiss model menu
+
+                // If a menu entry contains "(currently" but is incomplete (truncated at terminal
+                // width), replace it with the model name extracted from the hint line above.
+                if (hintCurrentModel != null) {
+                    for (int i = 0; i < models.size(); i++) {
+                        if (models.get(i).contains("(currently")) {
+                            models.set(i, hintCurrentModel);
+                        }
+                    }
+                }
 
                 standardModelCount = models.size();
                 if (!customModelIds.isEmpty()) {
@@ -1014,76 +1030,6 @@ public final class ClaudeSessionController {
     public String readVersion() {
         ClaudeProcess cp = claudeProcess;
         return cp != null ? cp.readVersion() : "";
-    }
-
-    // -------------------------------------------------------------------------
-    // Model parsing
-    // -------------------------------------------------------------------------
-
-    /**
-     * Parses model names from the rendered screen after {@code /model} was sent,
-     * and identifies the currently selected model.
-     *
-     * <p>Supports two formats:
-     * <ul>
-     *   <li><b>New numbered menu:</b>
-     *       {@code ❯ 1. Default (recommended) ✔  Sonnet 4.6 · Best for everyday tasks}
-     *       → extracts the version string {@code Sonnet 4.6}; the entry with {@code ✔}
-     *       is the current one.</li>
-     *   <li><b>Legacy:</b> {@code claude-xxx} — lines starting with {@code claude-};
-     *       the entry prefixed with a cursor glyph (❯ ▶ >) is the current one.</li>
-     * </ul>
-     *
-     * <p>Lines that do not match either format (e.g. "Select a model",
-     * "Use arrow keys") are silently ignored.
-     *
-     * @param lines terminal screen lines to parse
-     * @return {@link ModelDiscovery} with all model names and the index of the
-     *         active model ({@code -1} if not detected)
-     */
-    public static ModelDiscovery parseModelDiscovery(List<String> lines) {
-        List<String> models = new ArrayList<>();
-        int currentIndex = -1;
-        Pattern versionTailPat =
-                Pattern.compile("([A-Z][a-z]+\\s+\\d+\\.\\d+)\\s*$");
-        for (String line : lines) {
-            boolean hasCursor = line.trim().matches("^[❯▶>].*");
-            boolean hasCheck  = line.contains("\u2714");
-            String trimmed = line.trim().replaceFirst("^[❯▶>]\\s*", "").trim();
-            // New numbered format: "N. DisplayName ✔  VersionStr · Description"
-            if (trimmed.matches("^\\d+\\..*")) {
-                String leftPart = trimmed.split("[·\u00b7]", 2)[0];
-                Matcher m = versionTailPat.matcher(leftPart);
-                if (m.find()) {
-                    if (hasCheck) currentIndex = models.size();
-                    models.add(m.group(1).trim());
-                    continue;
-                }
-            }
-            // Legacy format: claude-xxx
-            if (trimmed.startsWith("claude-") && !trimmed.contains(" ")) {
-                if (hasCursor) currentIndex = models.size();
-                models.add(trimmed);
-            } else if (trimmed.matches("(?i)claude[\\-/][\\w\\-\\.]+")) {
-                if (hasCursor) currentIndex = models.size();
-                models.add(trimmed);
-            }
-        }
-        return new ModelDiscovery(models, currentIndex);
-    }
-
-    /**
-     * Convenience wrapper that returns only the model name list.
-     *
-     * <p>Kept for backward compatibility with code that only needs the list
-     * and not the selected index. Delegates entirely to
-     * {@link #parseModelDiscovery(List)}.
-     *
-     * @param lines terminal screen lines to parse
-     * @return list of model name strings (may be empty; never {@code null})
-     */
-    public static List<String> parseModelList(List<String> lines) {
-        return parseModelDiscovery(lines).models();
     }
 
     // -------------------------------------------------------------------------

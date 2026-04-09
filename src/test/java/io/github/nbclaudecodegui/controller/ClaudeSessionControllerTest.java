@@ -191,30 +191,6 @@ class ClaudeSessionControllerTest {
     }
 
     // -------------------------------------------------------------------------
-    // parseModelDiscovery — representative cases (see full suite in
-    // ClaudeSessionControllerParseModelTest)
-    // -------------------------------------------------------------------------
-
-    @Test
-    void parseModelDiscoveryEmptyLinesReturnsEmpty() {
-        ClaudeSessionController.ModelDiscovery d =
-                ClaudeSessionController.parseModelDiscovery(Collections.emptyList());
-        assertTrue(d.models().isEmpty());
-        assertEquals(-1, d.currentIndex());
-    }
-
-    @Test
-    void parseModelListDelegatesToParseModelDiscovery() {
-        List<String> lines = Arrays.asList(
-                "❯ 1. Default (recommended) \u2714  Sonnet 4.6 \u00b7 Best for everyday tasks",
-                "  2. Opus                     Opus 4.6 \u00b7 Most capable for complex work"
-        );
-        List<String> fromList = ClaudeSessionController.parseModelList(lines);
-        List<String> fromDiscovery = ClaudeSessionController.parseModelDiscovery(lines).models();
-        assertEquals(fromDiscovery, fromList);
-    }
-
-    // -------------------------------------------------------------------------
     // setWorkingDirectory — propagated to listeners (required for tab title fix)
     // -------------------------------------------------------------------------
 

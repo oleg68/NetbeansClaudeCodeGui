@@ -1,0 +1,4 @@
+❯ 1. Default (recommended) ✔  Use the default model (currently anthropic/claud
+  2. Sonnet (1M context)      Sonnet 4.6 for long sessions · $3/$15 per Mtok
+  3. Opus (1M context)        Opus 4.6 with 1M context · Most capable for complex work
+  4. Haiku                    Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok
