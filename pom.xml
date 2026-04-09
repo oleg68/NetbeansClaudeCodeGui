@@ -6,10 +6,33 @@
 
     <groupId>io.github.nbclaudecodegui</groupId>
     <artifactId>netbeans-claude-code-gui</artifactId>
-    <version>0.19.51-SNAPSHOT</version>
+    <version>0.20.0-SNAPSHOT</version>
     <packaging>nbm</packaging>
     <name>Netbeans Claude Code GUI</name>
     <description>NetBeans plugin that provides a GUI for Claude Code CLI — run claude code sessions directly inside the IDE.</description>
+    <url>https://github.com/nbclaudecodegui/NetbeansClaudeCodeGui</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>nbclaudecodegui</id>
+            <name>nbclaudecodegui</name>
+            <url>https://github.com/nbclaudecodegui</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/nbclaudecodegui/NetbeansClaudeCodeGui.git</connection>
+        <developerConnection>scm:git:ssh://github.com/nbclaudecodegui/NetbeansClaudeCodeGui.git</developerConnection>
+        <url>https://github.com/nbclaudecodegui/NetbeansClaudeCodeGui</url>
+    </scm>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -207,6 +230,17 @@
                     <forkCount>1</forkCount>
                     <reuseForks>false</reuseForks>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals><goal>jar-no-fork</goal></goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -458,5 +492,38 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.4</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.5.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
