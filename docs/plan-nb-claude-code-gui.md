@@ -510,15 +510,77 @@ Extra environment variables
 
 ---
 
-### Stage 19 — Choice menu improvements (planned)
+### Stage 19 — Extra CLI args + model discovery refactor ✅ (v0.19.x-SNAPSHOT)
 
-**Goal:** fix outstanding choice menu detection bugs; support checkbox menus.
+**Goal:** allow per-profile and per-session extra command-line arguments to the `claude` process; refactor model menu parsing; fix auto-start and plan-state bugs.
 
-**Bug fixes:**
-- Two unreproduced choice menu non-detection cases (screenshots in to-do.md)
+**Extra CLI arguments** (`e93fd18`):
+- `ClaudeProfile.extraCliArgs` — stored field; Default profile persisted via `ClaudeCodePreferences.KEY_DEFAULT_EXTRA_CLI_ARGS`
+- `ClaudeProcess.start(workingDir, profile, extraCliArgs)` — parses quoted args via `parseArgs(String)`, appends them to the command list
+- `ClaudeProfilesPanel` — `extraCliArgsField` (JTextField, 40 cols) after the Extra env vars section
+- `ClaudeSessionSelectorPanel` — `extraArgsField` pre-filled from profile; editable per-session
+- `ClaudeSessionTab` — persists `extraCliArgs` in `writeExternal`/`readExternal`; restores on IDE restart
 
-**New features:**
-- Checkbox menus (`[ ] option` multi-select) — send selected numbers then `→`
+**Fixes:**
+- `5b70796` — Default profile extra CLI args not persisting; extra CLI args not serialised across IDE restarts
+- `c02c830` — Session not transitioning to READY state when a named plan was active
+- `bfa9a98` — Auto-start race condition: `autoStart` wrapped in `invokeWhenUIReady`
+
+**Model discovery refactor** (`f2f27df`):
+- Extracted `ModelMenuParser` class from `ClaudeSessionController.parseModelDiscovery`
+
+---
+
+### Stage 20 — NetBeans Plugin Portal publication (planned)
+
+**Goal:** make the plugin discoverable and installable directly from the NetBeans Plugin Manager via the official Plugin Portal.
+
+**Prerequisites (must be done in order):**
+
+1. **Repository migration** — transfer the GitHub repository to the `nbclaudecodegui` organisation (or rename the user repo to match the new group ID). Update the repository URL in `pom.xml` (`<scm>`, `<url>`).
+
+2. **Documentation link updates** — update all hardcoded GitHub links in `README.md`, `docs/installation.md`, `docs/user-manual.md`, and `CHANGELOG.md` to point to the new repository URL. Update CI badge URLs in `README.md`.
+
+3. **License file** — add `LICENSE` (Apache 2.0 full text) to the repository root. Ensure `pom.xml` `<licenses>` section is present and correct. Required by Maven Central.
+
+4. **Maven Central publication** — configure `pom.xml` for Sonatype OSSRH / Central Portal:
+   - Add `<developers>`, `<scm>`, `<licenses>` sections if missing
+   - Configure `maven-gpg-plugin` for artifact signing
+   - Configure `nexus-staging-maven-plugin` or `central-publishing-maven-plugin`
+   - Add CI secrets: `MAVEN_GPG_KEY`, `OSSRH_USERNAME`, `OSSRH_PASSWORD` (or Central Portal token)
+   - Publish: `mvn deploy -P release` → artifacts land on Maven Central under the new group ID
+
+5. **Plugin Portal upload** — register/claim the plugin entry at [https://plugins.netbeans.apache.org/](https://plugins.netbeans.apache.org/):
+   - The Portal can pull NBM artifacts from Maven Central automatically once the group ID / artifact ID are registered
+   - Alternatively, upload the `.nbm` manually for each release
+   - Fill in plugin metadata: name, description, categories, homepage URL, license
+
+---
+
+### Stage 21 — Saved sessions: resume, new, switch (planned)
+
+**Goal:** give users full control over Claude Code sessions — including resuming a previous conversation, starting fresh, and switching between saved sessions within the same project.
+
+**Background:** Claude Code CLI supports `--resume <session-id>` to continue a previous conversation and `--continue` to continue the most recent one. Session IDs are written to `~/.claude/projects/<hashed-path>/` as JSONL files.
+
+**Features:**
+
+- **Auto-resume** — when re-opening a session for a project that was closed with an active Claude process, offer to resume the last session (pass `--resume <last-session-id>`) instead of always starting fresh.
+- **New session** — explicit "New session" button / action that starts `claude` without `--resume`, even if a previous session exists.
+- **Session list** — show saved sessions for the current working directory (parsed from the JSONL files in `~/.claude/projects/<hashed-path>/`): timestamp, first/last prompt preview. Allow the user to select one and resume it.
+- **Session switcher UI** — a dialog or sidebar panel listing saved sessions; accessible from the session tab toolbar.
+- **Session naming** — optionally allow the user to assign a label to a session for easier identification in the list.
+
+**Implementation sketch:**
+
+| Component | Responsibility |
+|-----------|---------------|
+| `process/ClaudeSessionStore.java` | Reads JSONL session files from `~/.claude/projects/<hashed-path>/`; returns list of `SavedSession` records (id, timestamp, first/last message preview) |
+| `model/SavedSession.java` | Record: session ID, creation timestamp, last-message timestamp, preview text |
+| `ui/SessionListDialog.java` | Dialog showing saved sessions for the current directory; buttons: Resume / Delete |
+| `ClaudeProcess.start(…, resumeSessionId)` | Appends `--resume <id>` or `--continue` when a session ID is provided |
+| `ClaudeSessionTab` | On open: if previous session ID stored, offer Resume/New choice; persists last session ID |
+| `ClaudeSessionSelectorPanel` | "Resume last session" checkbox (default on); link to open `SessionListDialog` |
 
 ---
 
@@ -567,6 +629,7 @@ Settings are stored via `NbPreferences.forModule(ClaudeCodePreferences.class)`:
 | `profilesDir` | String | `~/.netbeans/claude-profiles` | 13 |
 | `historyMaxDepth` | int | `200` | 14 |
 | `historyTtlDays` | int | `0` | 14 |
+| `defaultExtraCliArgs` | String | `""` | 19 |
 
 ---
 

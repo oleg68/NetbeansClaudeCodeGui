@@ -459,6 +459,22 @@ Arbitrary `KEY=VALUE` pairs injected into the Claude process environment. Applie
 
 See the [Claude Code environment variables reference](https://code.claude.com/docs/en/env-vars) for the full list of supported variables, and [third-party integrations](https://code.claude.com/docs/en/third-party-integrations) for compatible API providers (Amazon Bedrock, Google Vertex AI, Microsoft Foundry, and others).
 
+### Extra CLI arguments
+
+An optional space-separated list of command-line flags and values appended to the `claude` command when starting a session. Use this for flags that are not exposed elsewhere in the plugin settings.
+
+Example:
+```
+--debug --max-turns 5
+```
+
+Arguments that contain spaces can be wrapped in double quotes:
+```
+--system "You are a concise assistant"
+```
+
+Arguments are appended after all internally generated arguments. Refer to `claude --help` for the full list of supported flags.
+
 ### Per-project profile assignment
 
 By default, Claude Code sessions use the **Default** profile.
@@ -477,6 +493,8 @@ If the assigned profile no longer exists, the plugin falls back to the Default p
 #### Temporary profile for one session
 
 Click the **Claude Code** button in the toolbar to open the session selector. In the selector bar, choose a project or a working directory and select a profile from the **Profile** combo, then click **Open**. The selected profile is used for that session only and does not affect project settings.
+
+The **Extra args** field is pre-filled with the selected profile's extra CLI arguments. You can edit it to add or override arguments for this session only — the change does not affect the profile.
 
 ---
 

@@ -36,29 +36,9 @@ See the [User Manual](docs/user-manual.md) for full documentation of all plugin 
 ---
 
 
-## Development Stages
+## Development
 
-| Stage | Feature | Status |
-|-------|---------|--------|
-| 1 | Dummy NBM — installable plugin skeleton | ✅ |
-| 2 | Settings page with Claude icon | ✅ |
-| 3 | Toolbar button + empty window | ✅ |
-| 4 | Per-project tabbed window, context menu, session persistence | ✅ |
-| 5 | First working chat (subprocess, multi-line input, send-key pref) | ✅ |
-| 6 | Stream-JSON parsing + markdown output + PromptResponsePanel | ✅ |
-| 7 | Embedded JediTerm terminal (PTY, full Claude TUI) | ✅ |
-| 8 | Refactor: each session = independent TopComponent | ✅ |
-| 9 | PromptResponsePanel fixes (visibility, flush timer, ESC/Cancel) | ✅ |
-| 10 | MCP SSE server, NetBeans IDE tools for Claude CLI — [test plan](docs/manual-test-mcp.md) | ✅ |
-| 11 | Unified diff viewer with Accept/Reject/Cancel (`FileDiffTab`, `PermissionPanel`) | ✅ |
-| 12 | Model picker, edit-mode selector, split pane input, status bar | ✅ |
-| 13 | Named profiles: isolated `CLAUDE_CONFIG_DIR`, auth credentials, proxy, extra env vars; per-project assignment | ✅ |
-| 14 | Prompt history & favorites: persistent history (Ctrl+Up/Down), popup list, global/per-project favorites, hotkey assignment | ✅ |
-| 15 | File attachments: @path token insertion, DnD + Ctrl+V, @-completion popup, blue token highlight, `ui/common/` shared components | ✅ |
-| 16 | FileDiff location config: inline panel or separate tab (boolean preference) | ✅ |
-| 17 | GitHub CI/CD + NBM publishing | ✅ |
-| 18 | User manual, installation guide, docs HTML artifact | ✅ |
-| 19 | Choice menu improvements (checkbox menus, detection fixes) | 🔧 |
+See [docs/plan-nb-claude-code-gui.md](docs/plan-nb-claude-code-gui.md) for the full development plan and stage history.
 
 ---
 
