@@ -249,6 +249,14 @@ public final class ClaudeSessionSelectorPanel extends JPanel {
         return sel != null ? sel.toString() : ClaudeProfile.DEFAULT_NAME;
     }
 
+    public String getExtraCliArgs() {
+        return extraArgsField.getText().trim();
+    }
+
+    public void setExtraCliArgs(String args) {
+        extraArgsField.setText(args != null ? args : "");
+    }
+
     /**
      * Sets the path combo to the given path string without triggering validation.
      * Used by {@code autoStart} to pre-populate the combo before locking.

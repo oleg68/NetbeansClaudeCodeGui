@@ -122,6 +122,9 @@ public class ClaudeSessionTab extends TopComponent
     /** Profile name restored from serialized state; {@code null} = Default. */
     private String savedProfileName;
 
+    /** Extra CLI args restored from serialized state after an IDE restart. */
+    private String savedExtraCliArgs;
+
     // -------------------------------------------------------------------------
     // MVC
     // -------------------------------------------------------------------------
@@ -327,14 +330,16 @@ public class ClaudeSessionTab extends TopComponent
         super.componentOpened();
         String path        = savedPath != null ? savedPath : pathToRestore;
         String profileName = savedProfileName;
+        String extraCliArgs = savedExtraCliArgs;
         savedPath        = null;
         pathToRestore    = null;
         savedProfileName = null;
+        savedExtraCliArgs = null;
 
         if (path != null && !path.isBlank()) {
             File dir = new File(path);
             if (dir.isDirectory()) {
-                autoStart(dir, profileName);
+                autoStart(dir, profileName, extraCliArgs);
                 return;
             }
         }
@@ -379,6 +384,7 @@ public class ClaudeSessionTab extends TopComponent
         File dir = model.getWorkingDirectory();
         out.writeUTF(dir != null ? dir.getAbsolutePath() : "");
         out.writeUTF(selectorPanel.getSelectedProfileName());
+        out.writeUTF(selectorPanel.getExtraCliArgs());
     }
 
     @Override
@@ -389,6 +395,11 @@ public class ClaudeSessionTab extends TopComponent
             savedProfileName = in.readUTF();
         } catch (java.io.EOFException ignored) {
             savedProfileName = null;
+        }
+        try {
+            savedExtraCliArgs = in.readUTF();
+        } catch (java.io.EOFException ignored) {
+            savedExtraCliArgs = null;
         }
     }
 
@@ -529,12 +540,17 @@ public class ClaudeSessionTab extends TopComponent
      * @param profileName profile name, or {@code null} for Default
      */
     public void autoStart(File dir, String profileName) {
+        autoStart(dir, profileName, null);
+    }
+
+    public void autoStart(File dir, String profileName, String extraCliArgs) {
         if (dir == null || !dir.isDirectory()) return;
         selectorPanel.setPath(dir.getAbsolutePath());
         selectorPanel.setProfile(profileName);
         selectorPanel.preselectForDirectory(dir);
+        selectorPanel.setExtraCliArgs(extraCliArgs);
         selectorPanel.lock();
-        startSession(dir, profileName, "");
+        startSession(dir, profileName, extraCliArgs != null ? extraCliArgs : "");
     }
 
     /**

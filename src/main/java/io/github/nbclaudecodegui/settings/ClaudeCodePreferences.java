@@ -405,6 +405,23 @@ public final class ClaudeCodePreferences {
         NbPreferences.forModule(ClaudeCodePreferences.class).putBoolean(KEY_MD_PREVIEW_IN_DIFF, v);
     }
 
+    // -------------------------------------------------------------------------
+    // defaultExtraCliArgs
+    // -------------------------------------------------------------------------
+
+    /** Preference key: extra CLI args for the Default profile. */
+    public static final String KEY_DEFAULT_EXTRA_CLI_ARGS = "defaultExtraCliArgs";
+
+    public static String getDefaultExtraCliArgs() {
+        return NbPreferences.forModule(ClaudeCodePreferences.class)
+                .get(KEY_DEFAULT_EXTRA_CLI_ARGS, "");
+    }
+
+    public static void setDefaultExtraCliArgs(String v) {
+        NbPreferences.forModule(ClaudeCodePreferences.class)
+                .put(KEY_DEFAULT_EXTRA_CLI_ARGS, v != null ? v : "");
+    }
+
     private static String validated(String value, String fallback) {
         return ENTER.equals(value) || SHIFT_ENTER.equals(value)
                 || CTRL_ENTER.equals(value) || ALT_ENTER.equals(value)

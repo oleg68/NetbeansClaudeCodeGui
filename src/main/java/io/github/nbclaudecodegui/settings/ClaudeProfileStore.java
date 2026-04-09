@@ -55,7 +55,9 @@ public final class ClaudeProfileStore {
      */
     public static List<ClaudeProfile> getProfiles() {
         List<ClaudeProfile> result = new ArrayList<>();
-        result.add(ClaudeProfile.createDefault());
+        ClaudeProfile def = ClaudeProfile.createDefault();
+        def.setExtraCliArgs(ClaudeCodePreferences.getDefaultExtraCliArgs());
+        result.add(def);
 
         String json = NbPreferences.forModule(ClaudeProfileStore.class)
                 .get(KEY_PROFILES, "[]");
@@ -105,7 +107,9 @@ public final class ClaudeProfileStore {
         List<ClaudeProfile> toSave = new ArrayList<>();
         if (profiles != null) {
             for (ClaudeProfile p : profiles) {
-                if (!p.isDefault()) {
+                if (p.isDefault()) {
+                    ClaudeCodePreferences.setDefaultExtraCliArgs(p.getExtraCliArgs());
+                } else {
                     toSave.add(p);
                 }
             }

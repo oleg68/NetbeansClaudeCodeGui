@@ -167,6 +167,25 @@ class ClaudeProfileStoreTest {
     }
 
     // -------------------------------------------------------------------------
+    // Default profile extraCliArgs persistence
+    // -------------------------------------------------------------------------
+
+    @Test
+    void defaultProfile_extraCliArgs_roundTrip() {
+        try {
+            ClaudeProfile def = ClaudeProfile.createDefault();
+            def.setExtraCliArgs("--verbose");
+            ClaudeProfileStore.saveProfiles(java.util.List.of(def));
+
+            List<ClaudeProfile> loaded = ClaudeProfileStore.getProfiles();
+            assertTrue(loaded.get(0).isDefault());
+            assertEquals("--verbose", loaded.get(0).getExtraCliArgs());
+        } catch (Exception e) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "NbPreferences not available");
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // extraCliArgs serialization round-trip
     // -------------------------------------------------------------------------
 
