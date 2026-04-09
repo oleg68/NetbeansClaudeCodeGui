@@ -1,3 +1,4 @@
+- Fixed edit mode switch from plan mode to Ask on edit overshooting into acceptEdits/plan again
 - Improved discovering model names
 - Added extra CLI args support: per-profile "Extra CLI args" field in Options → Profiles, plus a per-session override field in the session selector (pre-filled from the profile)
 - Added support for unnumbered choice menus (e.g. /resume session picker): displayed as radio buttons with title and session metadata, submitted via arrow-key navigation

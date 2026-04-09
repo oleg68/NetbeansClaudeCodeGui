@@ -511,6 +511,48 @@ class ClaudeSessionControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // sendShiftTabsUntilMode — empty detectEditMode must be treated as "default"
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression: when switching from plan mode to default, the first shift-tab
+     * leaves Claude in default (idle) mode.  The idle default screen has no footer
+     * marker, so detectEditMode() returns Optional.empty().  The loop must treat
+     * empty as "reached default" and stop — otherwise it overshoots into acceptEdits
+     * then back to plan, and never reaches default.
+     *
+     * Log evidence (messages.log.err3):
+     *   target=default currentModel=default
+     *   attempt=0: detected=(empty)   ← already in default, but was treated as "not reached"
+     *   attempt=1: detected=acceptEdits
+     *   attempt=2: detected=plan
+     *   WARNING: did not reach default after 3 attempts
+     *
+     * Fix: in sendShiftTabsUntilMode, when targetMode=="default" and detected is
+     * empty (no plan/acceptEdits marker on screen), treat this as success and return.
+     *
+     * This test validates the detectEditMode precondition: an idle default screen
+     * produces Optional.empty(), which must be interpreted as "default".
+     */
+    @Test
+    void detectEditMode_emptyResultMeansDefaultModeOnIdleScreen() {
+        // Idle "Ask on edit" / default screen: no mode footer at all
+        io.github.nbclaudecodegui.process.ScreenContentDetector detector =
+                new io.github.nbclaudecodegui.process.ScreenContentDetector();
+        java.util.List<String> idleDefaultScreen = java.util.Arrays.asList(
+                "Some output from Claude",
+                "\u276F Ask anything...",
+                "────────────────────────────────────────"
+        );
+        java.util.Optional<String> result = detector.detectEditMode(idleDefaultScreen);
+        // detectEditMode returns empty for idle default screen (no "plan mode" / "accept edits" /
+        // "  esc to interrupt" present).  sendShiftTabsUntilMode must treat this as "default".
+        assertTrue(result.isEmpty(),
+                "Idle default screen must produce empty detectEditMode — "
+                + "sendShiftTabsUntilMode uses empty+target=default as success condition");
+    }
+
+    // -------------------------------------------------------------------------
     // No-op listener base class
     // -------------------------------------------------------------------------
 

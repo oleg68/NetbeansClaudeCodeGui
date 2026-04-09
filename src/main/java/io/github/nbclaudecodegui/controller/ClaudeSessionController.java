@@ -589,12 +589,22 @@ public final class ClaudeSessionController {
         modeSwitchInProgress = true;
         Thread t = new Thread(() -> {
             try {
+                LOG.info("sendShiftTabsUntilMode: target=" + targetMode
+                        + " currentModel=" + model.getEditMode());
                 for (int attempt = 0; attempt < 3; attempt++) {
                     connector.write(new byte[]{0x1b, '[', 'Z'});
                     Thread.sleep(200);
                     Optional<String> detected =
                             screenContentDetector.detectEditMode(screenLines.get());
+                    LOG.fine("sendShiftTabsUntilMode: attempt=" + attempt
+                            + " detected=" + detected.orElse("(empty)"));
                     if (detected.isPresent() && detected.get().equals(targetMode)) {
+                        LOG.fine("sendShiftTabsUntilMode: reached target on attempt=" + attempt);
+                        return;
+                    }
+                    // "default" mode has no idle-screen marker — empty detection means we are in default
+                    if ("default".equals(targetMode) && !detected.isPresent()) {
+                        LOG.fine("sendShiftTabsUntilMode: no mode marker → treating as default on attempt=" + attempt);
                         return;
                     }
                 }
