@@ -339,7 +339,8 @@ public class ClaudeSessionTab extends TopComponent
         if (path != null && !path.isBlank()) {
             File dir = new File(path);
             if (dir.isDirectory()) {
-                autoStart(dir, profileName, extraCliArgs);
+                WindowManager.getDefault().invokeWhenUIReady(
+                        () -> autoStart(dir, profileName, extraCliArgs));
                 return;
             }
         }
