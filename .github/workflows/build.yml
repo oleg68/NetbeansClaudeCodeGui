@@ -124,3 +124,32 @@ jobs:
           gh release edit "${{ needs.calc_ver.outputs.release_tag }}" \
             --draft=false \
             --repo ${{ github.repository }}
+
+  deploy:
+    needs: [calc_ver, build]
+    if: needs.calc_ver.outputs.release_flag == 'ON'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          cache: maven
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Set version
+        run: mvn versions:set -DnewVersion=${{ needs.calc_ver.outputs.project_ver }} --batch-mode
+      - name: Deploy to Maven Central
+        run: mvn deploy -P release -DskipTests --batch-mode
+        env:
+          MAVEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}

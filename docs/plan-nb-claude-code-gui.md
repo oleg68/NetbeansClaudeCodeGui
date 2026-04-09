@@ -531,7 +531,7 @@ Extra environment variables
 
 ---
 
-### Stage 20 — NetBeans Plugin Portal publication (planned)
+### Stage 20 — NetBeans Plugin Portal publication (in progress)
 
 **Goal:** make the plugin discoverable and installable directly from the NetBeans Plugin Manager via the official Plugin Portal.
 
