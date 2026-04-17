@@ -1,4 +1,4 @@
-# 0.21
+# 0.21.44 (2026-04-17)
 
 - Fixed Maven Central publication being skipped after upload
 
