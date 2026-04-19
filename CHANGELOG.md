@@ -1,4 +1,4 @@
-# 0.21
+# 0.21.50 (2026-04-19)
 
 - Fixed diff panel appearing at wrong height (nearly invisible) after Reset Windows or on first use
 - Fixed second diff in the same Claude session being invisible (stale card accumulation)
