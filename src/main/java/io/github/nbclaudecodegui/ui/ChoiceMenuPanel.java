@@ -422,11 +422,14 @@ public final class ChoiceMenuPanel extends JPanel {
             }
         }
 
-        // Arrow key navigation between radio buttons (needed because some radios are
-        // wrapped in a sub-JPanel, breaking BasicRadioButtonUI's sibling traversal).
-        // Navigation is cyclic: wraps around at top/bottom.
-        // Invisible radio buttons (type-input options) are skipped; their text field gets focus instead.
+        // Arrow key navigation for radio buttons.
+        // UP/DOWN: cyclic among enabled, visible, non-null radios.
+        // LEFT: focus Send if enabled, else Cancel if enabled.
+        // RIGHT: focus adjacent text field if present and enabled; otherwise Send/Cancel.
+        final JButton finalSendForNav = sendBtn;
+        final JButton finalCancelForNav = cancelBtn;
         final JTextField[] finalTypeFieldsNav = typeFields;
+        final java.util.List<JButton> finalYesNoBtnsForRb = yesNoBtns;
         for (int i = 0; i < radioButtons.length; i++) {
             if (radioButtons[i] == null) continue;
             final int idx = i;
@@ -434,15 +437,21 @@ public final class ChoiceMenuPanel extends JPanel {
                 @Override public void actionPerformed(java.awt.event.ActionEvent e) {
                     int n = radioButtons.length;
                     int target = (idx - 1 + n) % n;
-                    while (target != idx && (radioButtons[target] == null || !radioButtons[target].isVisible())) {
+                    while (target != idx && (radioButtons[target] == null
+                            || !radioButtons[target].isVisible() || !radioButtons[target].isEnabled())) {
                         target = (target - 1 + n) % n;
                     }
-                    if (target != idx && radioButtons[target] != null) {
+                    if (target != idx && radioButtons[target] != null && radioButtons[target].isEnabled()) {
                         radioButtons[target].setSelected(true);
-                        if (finalTypeFieldsNav[target] != null) {
+                        if (finalTypeFieldsNav[target] != null && finalTypeFieldsNav[target].isEnabled()) {
                             finalTypeFieldsNav[target].requestFocusInWindow();
                         } else {
                             radioButtons[target].requestFocusInWindow();
+                        }
+                    } else {
+                        // No other radio to go to — fall back to first enabled Yes/No button (Yes)
+                        for (int j = 0; j < finalYesNoBtnsForRb.size(); j++) {
+                            if (finalYesNoBtnsForRb.get(j).isEnabled()) { finalYesNoBtnsForRb.get(j).requestFocusInWindow(); return; }
                         }
                     }
                 }
@@ -451,40 +460,295 @@ public final class ChoiceMenuPanel extends JPanel {
                 @Override public void actionPerformed(java.awt.event.ActionEvent e) {
                     int n = radioButtons.length;
                     int target = (idx + 1) % n;
-                    while (target != idx && (radioButtons[target] == null || !radioButtons[target].isVisible())) {
+                    while (target != idx && (radioButtons[target] == null
+                            || !radioButtons[target].isVisible() || !radioButtons[target].isEnabled())) {
                         target = (target + 1) % n;
                     }
-                    if (target != idx && radioButtons[target] != null) {
+                    if (target != idx && radioButtons[target] != null && radioButtons[target].isEnabled()) {
                         radioButtons[target].setSelected(true);
-                        if (finalTypeFieldsNav[target] != null) {
+                        if (finalTypeFieldsNav[target] != null && finalTypeFieldsNav[target].isEnabled()) {
                             finalTypeFieldsNav[target].requestFocusInWindow();
                         } else {
                             radioButtons[target].requestFocusInWindow();
                         }
+                    } else {
+                        // No other radio to go to — fall back to first enabled Send/Cancel
+                        focusFirstEnabled(finalSendForNav, finalCancelForNav);
                     }
                 }
             };
             radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
                     .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "prev");
             radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
-                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "prev");
-            radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
                     .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "next");
-            radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
-                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "next");
             radioButtons[i].getActionMap().put("prev", prevAction);
             radioButtons[i].getActionMap().put("next", nextAction);
+            if (finalSendForNav != null || finalCancelForNav != null) {
+                radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "rbLeft");
+                radioButtons[i].getActionMap().put("rbLeft", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        focusFirstEnabled(finalSendForNav, finalCancelForNav);
+                    }
+                });
+            }
+            if (typeFields[i] != null) {
+                final JTextField tfForRight = typeFields[i];
+                radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "rbRight");
+                radioButtons[i].getActionMap().put("rbRight", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        if (tfForRight.isEnabled()) {
+                            tfForRight.requestFocusInWindow();
+                        } else {
+                            focusFirstEnabled(finalSendForNav, finalCancelForNav);
+                        }
+                    }
+                });
+            } else if (finalSendForNav != null || finalCancelForNav != null) {
+                radioButtons[i].getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "rbRight");
+                radioButtons[i].getActionMap().put("rbRight", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        focusFirstEnabled(finalSendForNav, finalCancelForNav);
+                    }
+                });
+            }
         }
 
-        // Bug 3: explicit Tab order: Yes/No → checkboxes → radios (+ type-fields) → Submit/Send → Cancel
+        // Left/Right cycle: Yes / No / Cancel (all in one ring) — skips disabled buttons.
+        // Up/Down from Yes/No buttons only (not Cancel) → last/first enabled radio or checkbox.
+        final java.util.List<JButton> allLRBtns = new java.util.ArrayList<>(yesNoBtns);
+        allLRBtns.add(cancelBtn);
+        if (allLRBtns.size() > 1) {
+            final int lrCount = allLRBtns.size();
+            final JRadioButton[] finalRadiosYN = radioButtons;
+            final JCheckBox[] finalCheckBoxesYN = checkBoxes;
+            for (int i = 0; i < lrCount; i++) {
+                JButton btn = allLRBtns.get(i);
+                final int lrIdx = i;
+                btn.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "lrPrev");
+                btn.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "lrNext");
+                btn.getActionMap().put("lrPrev", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        int target = (lrIdx - 1 + lrCount) % lrCount;
+                        while (target != lrIdx && !allLRBtns.get(target).isEnabled()) {
+                            target = (target - 1 + lrCount) % lrCount;
+                        }
+                        if (allLRBtns.get(target).isEnabled()) allLRBtns.get(target).requestFocusInWindow();
+                    }
+                });
+                btn.getActionMap().put("lrNext", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        int target = (lrIdx + 1) % lrCount;
+                        while (target != lrIdx && !allLRBtns.get(target).isEnabled()) {
+                            target = (target + 1) % lrCount;
+                        }
+                        if (allLRBtns.get(target).isEnabled()) allLRBtns.get(target).requestFocusInWindow();
+                    }
+                });
+            }
+            for (JButton btn : yesNoBtns) {
+                btn.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "ynUp");
+                btn.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "ynDown");
+                btn.getActionMap().put("ynUp", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        for (int j = finalRadiosYN.length - 1; j >= 0; j--) {
+                            if (finalRadiosYN[j] != null && finalRadiosYN[j].isEnabled()) { finalRadiosYN[j].requestFocusInWindow(); return; }
+                            if (finalCheckBoxesYN[j] != null && finalCheckBoxesYN[j].isEnabled()) { finalCheckBoxesYN[j].requestFocusInWindow(); return; }
+                        }
+                    }
+                });
+                btn.getActionMap().put("ynDown", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        for (int j = 0; j < finalRadiosYN.length; j++) {
+                            if (finalRadiosYN[j] != null && finalRadiosYN[j].isEnabled()) { finalRadiosYN[j].requestFocusInWindow(); return; }
+                            if (finalCheckBoxesYN[j] != null && finalCheckBoxesYN[j].isEnabled()) { finalCheckBoxesYN[j].requestFocusInWindow(); return; }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Checkbox UP/DOWN/LEFT/RIGHT navigation.
+        // UP: previous enabled radio/checkbox; if none, last enabled Yes/No button.
+        // DOWN: next enabled radio/checkbox; if none, first enabled Send/Cancel.
+        // LEFT: focus Send/Cancel (first enabled).
+        // RIGHT: adjacent text field if enabled; else Send/Cancel.
+        final JButton finalSendForCb = sendBtn;
+        final JButton finalCancelForCb = cancelBtn;
+        final java.util.List<JButton> finalYesNoBtnsForCb = yesNoBtns;
+        final JRadioButton[] finalRadiosForCb = radioButtons;
+        final JCheckBox[] finalCbsForCb = checkBoxes;
+        for (int i = 0; i < checkBoxes.length; i++) {
+            if (checkBoxes[i] == null) continue;
+            final int cbIdx = i;
+            // UP
+            checkBoxes[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "cbUp");
+            checkBoxes[i].getActionMap().put("cbUp", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    for (int j = cbIdx - 1; j >= 0; j--) {
+                        if (finalRadiosForCb[j] != null && finalRadiosForCb[j].isEnabled()) { finalRadiosForCb[j].requestFocusInWindow(); return; }
+                        if (finalCbsForCb[j] != null && finalCbsForCb[j].isEnabled()) { finalCbsForCb[j].requestFocusInWindow(); return; }
+                    }
+                    for (int j = 0; j < finalYesNoBtnsForCb.size(); j++) {
+                        if (finalYesNoBtnsForCb.get(j).isEnabled()) { finalYesNoBtnsForCb.get(j).requestFocusInWindow(); return; }
+                    }
+                }
+            });
+            // DOWN
+            checkBoxes[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "cbDown");
+            checkBoxes[i].getActionMap().put("cbDown", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    for (int j = cbIdx + 1; j < finalCbsForCb.length; j++) {
+                        if (finalRadiosForCb[j] != null && finalRadiosForCb[j].isEnabled()) { finalRadiosForCb[j].requestFocusInWindow(); return; }
+                        if (finalCbsForCb[j] != null && finalCbsForCb[j].isEnabled()) { finalCbsForCb[j].requestFocusInWindow(); return; }
+                    }
+                    focusFirstEnabled(finalSendForCb, finalCancelForCb);
+                }
+            });
+            // LEFT
+            if (finalSendForCb != null || finalCancelForCb != null) {
+                checkBoxes[i].getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "cbLeft");
+                checkBoxes[i].getActionMap().put("cbLeft", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        focusFirstEnabled(finalSendForCb, finalCancelForCb);
+                    }
+                });
+            }
+            // RIGHT
+            if (typeFields[i] != null) {
+                final JTextField tfForRight = typeFields[i];
+                checkBoxes[i].getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "cbRight");
+                checkBoxes[i].getActionMap().put("cbRight", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        if (tfForRight.isEnabled()) {
+                            tfForRight.requestFocusInWindow();
+                        } else {
+                            focusFirstEnabled(finalSendForCb, finalCancelForCb);
+                        }
+                    }
+                });
+            } else if (finalSendForCb != null || finalCancelForCb != null) {
+                checkBoxes[i].getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "cbRight");
+                checkBoxes[i].getActionMap().put("cbRight", new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        focusFirstEnabled(finalSendForCb, finalCancelForCb);
+                    }
+                });
+            }
+        }
+
+        // Send ↔ Cancel Up/Down (skip if target disabled); Send Left/Right → first enabled radio/checkbox.
+        if (sendBtn != null) {
+            final JButton finalCancelForSend = cancelBtn;
+            sendBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "sendUp");
+            sendBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "sendDown");
+            sendBtn.getActionMap().put("sendUp", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (finalCancelForSend.isEnabled()) finalCancelForSend.requestFocusInWindow();
+                }
+            });
+            sendBtn.getActionMap().put("sendDown", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (finalCancelForSend.isEnabled()) finalCancelForSend.requestFocusInWindow();
+                }
+            });
+
+            final JButton finalSendForCancel = sendBtn;
+            cancelBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "cancelUp");
+            cancelBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "cancelDown");
+            cancelBtn.getActionMap().put("cancelUp", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (finalSendForCancel.isEnabled()) finalSendForCancel.requestFocusInWindow();
+                }
+            });
+            cancelBtn.getActionMap().put("cancelDown", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (finalSendForCancel.isEnabled()) finalSendForCancel.requestFocusInWindow();
+                }
+            });
+
+            boolean hasToggle = false;
+            for (int j = 0; j < radioButtons.length; j++) {
+                if (radioButtons[j] != null || checkBoxes[j] != null) { hasToggle = true; break; }
+            }
+            if (hasToggle) {
+                final JRadioButton[] finalRadiosSend = radioButtons;
+                final JCheckBox[] finalCbSend = checkBoxes;
+                AbstractAction sendToFirst = new AbstractAction() {
+                    @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                        for (int j = 0; j < finalRadiosSend.length; j++) {
+                            if (finalRadiosSend[j] != null && finalRadiosSend[j].isEnabled()) { finalRadiosSend[j].requestFocusInWindow(); return; }
+                            if (finalCbSend[j] != null && finalCbSend[j].isEnabled())         { finalCbSend[j].requestFocusInWindow();         return; }
+                        }
+                    }
+                };
+                sendBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "sendLR");
+                sendBtn.getInputMap(JComponent.WHEN_FOCUSED)
+                        .put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "sendLR");
+                sendBtn.getActionMap().put("sendLR", sendToFirst);
+            }
+        }
+
+        // Text field UP/DOWN → navigate to the adjacent enabled option's toggle (radio/checkbox)
+        final java.util.List<JButton> finalYesNoBtns = yesNoBtns;
+        final JRadioButton[] finalRadiosTF = radioButtons;
+        final JCheckBox[] finalCheckBoxesTF = checkBoxes;
+        for (int i = 0; i < typeFields.length; i++) {
+            if (typeFields[i] == null) continue;
+            final int tfIdx = i;
+            typeFields[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "tfUp");
+            typeFields[i].getInputMap(JComponent.WHEN_FOCUSED)
+                    .put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "tfDown");
+            typeFields[i].getActionMap().put("tfUp", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    for (int j = tfIdx - 1; j >= 0; j--) {
+                        if (finalRadiosTF[j] != null && finalRadiosTF[j].isEnabled()) { finalRadiosTF[j].requestFocusInWindow(); return; }
+                        if (finalCheckBoxesTF[j] != null && finalCheckBoxesTF[j].isEnabled()) { finalCheckBoxesTF[j].requestFocusInWindow(); return; }
+                    }
+                    for (int j = 0; j < finalYesNoBtns.size(); j++) {
+                        if (finalYesNoBtns.get(j).isEnabled()) { finalYesNoBtns.get(j).requestFocusInWindow(); return; }
+                    }
+                }
+            });
+            typeFields[i].getActionMap().put("tfDown", new AbstractAction() {
+                @Override public void actionPerformed(java.awt.event.ActionEvent e) {
+                    for (int j = tfIdx + 1; j < finalRadiosTF.length; j++) {
+                        if (finalRadiosTF[j] != null && finalRadiosTF[j].isEnabled()) { finalRadiosTF[j].requestFocusInWindow(); return; }
+                        if (finalCheckBoxesTF[j] != null && finalCheckBoxesTF[j].isEnabled()) { finalCheckBoxesTF[j].requestFocusInWindow(); return; }
+                    }
+                    for (JButton yb : finalYesNoBtns) {
+                        if (yb.isEnabled()) { yb.requestFocusInWindow(); return; }
+                    }
+                }
+            });
+        }
+
+        // Tab order: Yes/No → options in otherOptions index order (toggle + text field) → Send → Cancel
         java.util.List<java.awt.Component> tabOrder = new java.util.ArrayList<>();
         tabOrder.addAll(yesNoBtns);
-        for (JCheckBox cb : checkBoxes) {
-            if (cb != null) tabOrder.add(cb);
-        }
-        for (int i = 0; i < radioButtons.length; i++) {
+        for (int i = 0; i < otherOptions.size(); i++) {
             if (radioButtons[i] != null) {
                 tabOrder.add(radioButtons[i]);
+                if (typeFields[i] != null) tabOrder.add(typeFields[i]);
+            } else if (checkBoxes[i] != null) {
+                tabOrder.add(checkBoxes[i]);
                 if (typeFields[i] != null) tabOrder.add(typeFields[i]);
             }
         }
@@ -602,6 +866,13 @@ public final class ChoiceMenuPanel extends JPanel {
                 }
             }
         });
+    }
+
+    /** Focuses the first of the given buttons that is non-null and enabled; does nothing if none qualifies. */
+    private static void focusFirstEnabled(JButton... buttons) {
+        for (JButton b : buttons) {
+            if (b != null && b.isEnabled()) { b.requestFocusInWindow(); return; }
+        }
     }
 
     private static String escapeHtml(String s) {

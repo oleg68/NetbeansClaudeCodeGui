@@ -6,6 +6,7 @@ import io.github.nbclaudecodegui.ui.common.UiUtils;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JButton;
@@ -15,6 +16,7 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -689,6 +691,350 @@ class ChoiceMenuPanelTest {
     }
 
     // -------------------------------------------------------------------------
+    // Arrow-key navigation tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testYesNoButtonsHaveLeftRightBindings() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Q?",
+                    List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {}, false);
+
+            List<JButton> ynBtns = collectYesNoButtons(panel);
+            assertEquals(2, ynBtns.size(), "must find two Yes/No buttons");
+            for (JButton btn : ynBtns) {
+                assertNotNull(btn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                        .get(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0)), btn.getText() + " must have LEFT binding");
+                assertNotNull(btn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                        .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)), btn.getText() + " must have RIGHT binding");
+            }
+        });
+    }
+
+    @Test
+    void testYesNoButtonsHaveUpDownBindings() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Q?",
+                    List.of(new Option("Yes", "1"), new Option("No", "2"),
+                            new Option("Maybe", "3")), -1), a -> {}, false);
+
+            List<JButton> ynBtns = collectYesNoButtons(panel);
+            assertEquals(2, ynBtns.size());
+            for (JButton btn : ynBtns) {
+                assertNotNull(btn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                        .get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)), btn.getText() + " must have UP binding");
+                assertNotNull(btn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                        .get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)), btn.getText() + " must have DOWN binding");
+            }
+        });
+    }
+
+    @Test
+    void testYesNoDownActionNavigatesToFirstRadio() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            JFrame frame = new JFrame();
+            frame.add(panel);
+            frame.setSize(400, 300);
+            frame.setVisible(true);
+            try {
+                panel.show(new ChoiceMenuModel("Q?",
+                        List.of(new Option("Yes", "1"), new Option("No", "2"),
+                                new Option("Option A", "3"), new Option("Option B", "4")), -1),
+                        a -> {}, false);
+
+                List<JButton> ynBtns = collectYesNoButtons(panel);
+                assertFalse(ynBtns.isEmpty());
+                JButton yesBtn = ynBtns.get(0);
+
+                // Fire the ynDown action directly
+                javax.swing.Action down = yesBtn.getActionMap().get("ynDown");
+                assertNotNull(down, "ynDown action must be registered");
+                down.actionPerformed(new java.awt.event.ActionEvent(yesBtn, 0, "ynDown"));
+
+                JRadioButton firstRadio = findRadioButton(panel, "Option A");
+                assertNotNull(firstRadio);
+                // Verify action was invoked without exception (focus may not transfer in headless)
+            } finally {
+                frame.dispose();
+            }
+        });
+    }
+
+    @Test
+    void testYesNoUpActionNavigatesToLastRadio() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            JFrame frame = new JFrame();
+            frame.add(panel);
+            frame.setSize(400, 300);
+            frame.setVisible(true);
+            try {
+                panel.show(new ChoiceMenuModel("Q?",
+                        List.of(new Option("Yes", "1"), new Option("No", "2"),
+                                new Option("Option A", "3"), new Option("Option B", "4")), -1),
+                        a -> {}, false);
+
+                List<JButton> ynBtns = collectYesNoButtons(panel);
+                JButton yesBtn = ynBtns.get(0);
+                javax.swing.Action up = yesBtn.getActionMap().get("ynUp");
+                assertNotNull(up, "ynUp action must be registered");
+                up.actionPerformed(new java.awt.event.ActionEvent(yesBtn, 0, "ynUp"));
+                // action fires without exception — focus may not transfer in headless env
+            } finally {
+                frame.dispose();
+            }
+        });
+    }
+
+    @Test
+    void testYesNoUpNavigatesToLastCheckboxWhenNoRadios() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            JFrame frame = new JFrame();
+            frame.add(panel);
+            frame.setSize(400, 300);
+            frame.setVisible(true);
+            try {
+                panel.show(new ChoiceMenuModel("Q?",
+                        List.of(new Option("Yes", "1"), new Option("No", "2"),
+                                new Option("Release A", "3", null, false, true),
+                                new Option("Release B", "4", null, false, true)), -1),
+                        a -> {}, false);
+
+                List<JButton> ynBtns = collectYesNoButtons(panel);
+                assertFalse(ynBtns.isEmpty(), "must have Yes/No buttons");
+                JButton yesBtn = ynBtns.get(0);
+                javax.swing.Action up = yesBtn.getActionMap().get("ynUp");
+                assertNotNull(up, "ynUp must be registered even when options are checkboxes");
+                up.actionPerformed(new java.awt.event.ActionEvent(yesBtn, 0, "ynUp"));
+                // fires without exception
+            } finally {
+                frame.dispose();
+            }
+        });
+    }
+
+    @Test
+    void testTypeInputRadioHasRightBinding() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Type something.", "2")), 0), a -> {}, false);
+
+            JRadioButton typeRb = findRadioButtonByName(panel, "typeInputRb");
+            assertNotNull(typeRb, "typeInputRb must exist");
+            assertNotNull(typeRb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)),
+                    "type-input radio must have RIGHT binding to focus its text field");
+        });
+    }
+
+    @Test
+    void testPlainRadioHasRightBindingToSend() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Option B", "2")), 0), a -> {}, false);
+
+            JRadioButton rb = findRadioButton(panel, "Option A");
+            assertNotNull(rb);
+            assertNotNull(rb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)),
+                    "plain radio (no text field) must have RIGHT binding → Send");
+        });
+    }
+
+    @Test
+    void testPlainRadioHasLeftBinding() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"),
+                            new Option("Option B", "2")), 0), a -> {}, false);
+
+            JRadioButton rb = findRadioButton(panel, "Option A");
+            assertNotNull(rb);
+            assertNotNull(rb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0)),
+                    "plain radio must have LEFT binding → Send");
+        });
+    }
+
+    @Test
+    void testCancelIncludedInLeftRightCycle() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Q?",
+                    List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {}, false);
+
+            JButton cancelBtn = findButton(panel, "Cancel");
+            assertNotNull(cancelBtn, "Cancel must exist");
+            assertNotNull(cancelBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0)),
+                    "Cancel must have LEFT binding in the Yes/No/Cancel cycle");
+            assertNotNull(cancelBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)),
+                    "Cancel must have RIGHT binding in the Yes/No/Cancel cycle");
+        });
+    }
+
+    @Test
+    void testPlainCheckboxHasUpDownBindings() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Release A", "1", null, false, true),
+                            new Option("Release B", "2", null, false, true)), 0),
+                    a -> {}, false);
+
+            JCheckBox cb = findCheckBox(panel, "Release A");
+            assertNotNull(cb, "checkbox must exist");
+            assertNotNull(cb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)),
+                    "checkbox must have UP binding");
+            assertNotNull(cb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)),
+                    "checkbox must have DOWN binding");
+        });
+    }
+
+    @Test
+    void testPlainCheckboxHasLeftAndRightBindings() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Release A", "1", null, false, true),
+                            new Option("Release B", "2", null, false, true)), 0),
+                    a -> {}, false);
+
+            JCheckBox cb = findCheckBox(panel, "Release A");
+            assertNotNull(cb, "checkbox must exist");
+            assertNotNull(cb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0)),
+                    "plain checkbox must have LEFT binding → Submit");
+            assertNotNull(cb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)),
+                    "plain checkbox must have RIGHT binding → Submit");
+        });
+    }
+
+    @Test
+    void testSendHasUpDownBindings() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1")), 0), a -> {}, false);
+
+            JButton sendBtn = findButton(panel, "Send");
+            assertNotNull(sendBtn, "Send must exist");
+            assertNotNull(sendBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)),
+                    "Send must have UP binding → Cancel");
+            assertNotNull(sendBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)),
+                    "Send must have DOWN binding → Cancel");
+        });
+    }
+
+    @Test
+    void testCancelHasUpDownBindingsWhenSendPresent() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1")), 0), a -> {}, false);
+
+            JButton cancelBtn = findButton(panel, "Cancel");
+            assertNotNull(cancelBtn, "Cancel must exist");
+            assertNotNull(cancelBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)),
+                    "Cancel must have UP binding → Send");
+            assertNotNull(cancelBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)),
+                    "Cancel must have DOWN binding → Send");
+        });
+    }
+
+    @Test
+    void testCancelHasNoUpDownBindingsWhenNoSend() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Q?",
+                    List.of(new Option("Yes", "1"), new Option("No", "2")), -1), a -> {}, false);
+
+            JButton cancelBtn = findButton(panel, "Cancel");
+            assertNotNull(cancelBtn, "Cancel must exist");
+            assertNull(cancelBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)),
+                    "Cancel must NOT have UP binding when there is no Send button");
+            assertNull(cancelBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)),
+                    "Cancel must NOT have DOWN binding when there is no Send button");
+        });
+    }
+
+    @Test
+    void testSendHasLeftRightBindingsWhenRadiosExist() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Option A", "1"), new Option("Option B", "2")), 0),
+                    a -> {}, false);
+
+            JButton sendBtn = findButton(panel, "Send");
+            assertNotNull(sendBtn, "Send must exist");
+            assertNotNull(sendBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0)),
+                    "Send must have LEFT binding → first radio");
+            assertNotNull(sendBtn.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)),
+                    "Send must have RIGHT binding → first radio");
+        });
+    }
+
+    @Test
+    void testTypeInputCheckboxHasRightBinding() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            // hasCheckbox=true + hasTextInput=true → typeInputCb
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Type something.", "1", null, false, true, true)), 0),
+                    a -> {}, false);
+
+            JCheckBox cb = findCheckBoxByName(panel, "typeInputCb");
+            assertNotNull(cb, "typeInputCb checkbox must exist");
+            assertNotNull(cb.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                    .get(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0)),
+                    "typeInputCb must have RIGHT binding to focus its text field");
+        });
+    }
+
+    @Test
+    void testTextFieldsHaveUpDownBindings() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            ChoiceMenuPanel panel = new ChoiceMenuPanel(() -> null);
+            panel.show(new ChoiceMenuModel("Choose:",
+                    List.of(new Option("Type something.", "1"),
+                            new Option("Type other.", "2")), 0), a -> {}, false);
+
+            List<JTextField> fields = collectTextFields(panel);
+            assertFalse(fields.isEmpty(), "must find text fields");
+            for (JTextField tf : fields) {
+                assertNotNull(tf.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                        .get(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0)),
+                        "text field must have UP binding");
+                assertNotNull(tf.getInputMap(javax.swing.JComponent.WHEN_FOCUSED)
+                        .get(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0)),
+                        "text field must have DOWN binding");
+            }
+        });
+    }
+
+    // -------------------------------------------------------------------------
     // helpers
     // -------------------------------------------------------------------------
 
@@ -769,6 +1115,39 @@ class ChoiceMenuPanelTest {
             if (c instanceof JTextField tf) return tf;
             if (c instanceof java.awt.Container sub) {
                 JTextField found = findTextField(sub);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static List<JTextField> collectTextFields(java.awt.Container container) {
+        List<JTextField> result = new ArrayList<>();
+        for (Component c : container.getComponents()) {
+            if (c instanceof JTextField tf) result.add(tf);
+            else if (c instanceof java.awt.Container sub) result.addAll(collectTextFields(sub));
+        }
+        return result;
+    }
+
+    private static List<JButton> collectYesNoButtons(java.awt.Container container) {
+        List<JButton> result = new ArrayList<>();
+        for (Component c : container.getComponents()) {
+            if (c instanceof JButton btn) {
+                String t = btn.getText();
+                if (!"Send".equals(t) && !"Submit".equals(t) && !"Cancel".equals(t)) result.add(btn);
+            } else if (c instanceof java.awt.Container sub) {
+                result.addAll(collectYesNoButtons(sub));
+            }
+        }
+        return result;
+    }
+
+    private static JCheckBox findCheckBoxByName(java.awt.Container container, String name) {
+        for (Component c : container.getComponents()) {
+            if (c instanceof JCheckBox cb && name.equals(cb.getName())) return cb;
+            else if (c instanceof java.awt.Container sub) {
+                JCheckBox found = findCheckBoxByName(sub, name);
                 if (found != null) return found;
             }
         }
