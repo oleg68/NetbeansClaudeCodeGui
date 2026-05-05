@@ -177,8 +177,12 @@ public final class ChoiceMenuPanel extends JPanel {
                     leftCol.add(typeRow);
 
                 } else if (isTypeInputOption(opt)) {
-                    // Type-input: radio button + adjacent text field
-                    JRadioButton rb = new JRadioButton(" ");
+                    // Type-input: radio button + adjacent text field.
+                    // When description is set, display is a label ("Yes") and description is
+                    // the input hint ("and tell Claude what to do next"). Otherwise display
+                    // itself is the hint ("Type something.") and the radio gets a blank label.
+                    boolean hasLabel = opt.description() != null && !opt.description().isBlank();
+                    JRadioButton rb = new JRadioButton(hasLabel ? opt.display().trim() : " ");
                     rb.setAlignmentX(Component.LEFT_ALIGNMENT);
                     rb.setName("typeInputRb");
                     group.add(rb);
@@ -188,7 +192,8 @@ public final class ChoiceMenuPanel extends JPanel {
                     tf.setMaximumSize(new java.awt.Dimension(
                             Integer.MAX_VALUE, tf.getPreferredSize().height));
                     tf.setEnabled(false);
-                    setPlaceholder(tf, opt.display().trim());
+                    String hintText = hasLabel ? opt.description().trim() : opt.display().trim();
+                    setPlaceholder(tf, hintText);
                     rb.addChangeListener(e -> tf.setEnabled(rb.isSelected()));
                     tf.addFocusListener(new java.awt.event.FocusAdapter() {
                         @Override public void focusGained(java.awt.event.FocusEvent e) {
@@ -221,8 +226,8 @@ public final class ChoiceMenuPanel extends JPanel {
                     leftCol.add(rb);
                 }
 
-                // Description subtitle
-                if (opt.description() != null && !opt.description().isBlank()) {
+                // Description subtitle — skip for type-input options (description is the field hint)
+                if (opt.description() != null && !opt.description().isBlank() && !isTypeInputOption(opt)) {
                     JLabel desc = new JLabel("<html><small>" + escapeHtml(opt.description()) + "</small></html>");
                     desc.setForeground(Color.GRAY);
                     desc.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -313,14 +318,16 @@ public final class ChoiceMenuPanel extends JPanel {
                     if (rb != null && rb.isSelected()) {
                         ChoiceMenuModel.Option opt = otherOptions.get(i);
                         if (isTypeInputOption(opt) && finalTypeFields[i] != null) {
-                            String hint = opt.display().trim();
+                            boolean hasLabel = opt.description() != null && !opt.description().isBlank();
+                            String hint = hasLabel ? opt.description().trim() : opt.display().trim();
                             String typed = finalTypeFields[i].getText().trim();
                             if (!typed.isEmpty() && !typed.equals(hint)) {
-                                // Bug 4: Claude needs the option number sent first to activate
-                                // text-entry mode, then the typed text + \r.
                                 // Encode as "TYPE:N:text" for writePtyAnswer to handle.
                                 int optNum = finalModel.options().indexOf(opt) + 1;
                                 submitAnswer("TYPE:" + optNum + ":" + typed);
+                            } else if (hasLabel) {
+                                // "Yes" label with no text typed — select the option with no text.
+                                submitAnswer(opt.response());
                             }
                         } else {
                             submitAnswer(opt.response());

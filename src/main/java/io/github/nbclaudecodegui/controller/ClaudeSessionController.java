@@ -515,12 +515,13 @@ public class ClaudeSessionController {
                 int sep = answer.indexOf(':', 5);
                 String digit = answer.substring(5, sep);
                 String text = answer.substring(sep + 1);
-                ChoiceMenuModel current = model.getActiveChoiceMenu();
+                ChoiceMenuModel current = detectCurrentMenu();
                 int targetIdx = Integer.parseInt(digit) - 1;
-                // Scan for the text-input option index (same logic as plain-digit branch)
-                int typeIdx = findTextInputIdx(current);
-                final int currentIdx = typeIdx >= 0 ? typeIdx : targetIdx;
-                boolean currentHasTextInput = typeIdx >= 0;
+                // currentIdx = actual PTY cursor position (re-read from screen); currentHasTextInput
+                // = cursor is on a text-input option (digits go to its text field, not to navigation).
+                final int currentIdx = current != null ? current.defaultOptionIndex() : targetIdx;
+                boolean currentHasTextInput = current != null
+                        && isTextInputOption(current.options().get(currentIdx));
                 LOG.fine("[PTY write] type-input digit=" + digit + " text=" + text
                         + " currentHasTextInput=" + currentHasTextInput);
                 Thread t = new Thread(() -> {
@@ -582,17 +583,16 @@ public class ClaudeSessionController {
                     t.start();
                 }
             } else {
-                ChoiceMenuModel current = model.getActiveChoiceMenu();
-                // Find the text-input option index (if any). Claude Code routes ALL digit input
-                // to the text field regardless of which option the ❯ cursor is on, so we must
-                // check the whole option list, not just defaultOptionIndex.
-                int textInputIdx = findTextInputIdx(current);
-                boolean currentHasTextInput = textInputIdx >= 0;
-                LOG.fine("[PTY write] else-branch answer=" + answer + " textInputIdx=" + textInputIdx);
+                ChoiceMenuModel current = detectCurrentMenu();
+                // currentHasTextInput = PTY cursor (❯) is on a text-input option (re-read from
+                // screen); digits go into its text field, so use arrow-key navigation instead.
+                int currentIdx2 = current != null ? current.defaultOptionIndex() : 0;
+                boolean currentHasTextInput = current != null
+                        && isTextInputOption(current.options().get(currentIdx2));
+                LOG.fine("[PTY write] else-branch answer=" + answer + " currentIdx=" + currentIdx2 + " currentHasTextInput=" + currentHasTextInput);
                 if (currentHasTextInput && answer.matches("[0-9]")) {
-                    // Claude Code routes digits to the text-input field — navigate with arrow keys instead
                     int targetIdx = answer.charAt(0) - '1';
-                    int currentIdx = textInputIdx;  // assume cursor is at the text-input option
+                    int currentIdx = currentIdx2;
                     int delta = targetIdx - currentIdx;
                     LOG.fine("[PTY write] ARROW-digit targetIdx=" + targetIdx + " currentIdx=" + currentIdx + " delta=" + delta);
                     model.clearChoiceMenu();
@@ -1260,14 +1260,10 @@ public class ClaudeSessionController {
         return opt.hasTextInput() || opt.display().trim().toLowerCase().startsWith("type");
     }
 
-    /** Returns the 0-based index of the first text-input option in the menu, or -1 if none. */
-    private static int findTextInputIdx(ChoiceMenuModel menu) {
-        if (menu == null) return -1;
-        List<ChoiceMenuModel.Option> opts = menu.options();
-        for (int i = 0; i < opts.size(); i++) {
-            if (isTextInputOption(opts.get(i))) return i;
-        }
-        return -1;
+    /** Re-reads the current screen to get the up-to-date choice menu (PTY cursor may have moved). */
+    private ChoiceMenuModel detectCurrentMenu() {
+        List<String> lines = screenLines.get();
+        return screenContentDetector.detectChoiceMenu(lines).orElse(model.getActiveChoiceMenu());
     }
 
     private static boolean optionsEqual(List<ChoiceMenuModel.Option> a, List<ChoiceMenuModel.Option> b) {
